@@ -1,11 +1,11 @@
 name: Deploy Supabase functions
 
-# Deploys the three Edge Functions from CI, so none of this needs the Supabase
-# CLI installed locally.
+# Deploys the Edge Functions from CI, so none of this needs the Supabase CLI
+# installed locally.
 on:
   workflow_dispatch:
   push:
-    branches: [claude/household-management-app-di6hp4, main]
+    branches: [claude/household-launcher-app-dc15ox, main]
     paths: ['supabase/functions/**', '.github/workflows/deploy-functions.yml']
 
 jobs:
@@ -21,6 +21,7 @@ jobs:
       VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
       VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
       FCM_SERVICE_ACCOUNT: ${{ secrets.FCM_SERVICE_ACCOUNT }}
+      HOUSEHOLD_CODE_PEPPER: ${{ secrets.HOUSEHOLD_CODE_PEPPER }}
     steps:
       - uses: actions/checkout@v4
 
@@ -52,10 +53,15 @@ jobs:
       # has to be off or the call is rejected before the code runs.
       - name: Deploy functions
         run: |
-          supabase functions deploy calendar --project-ref "$PROJECT_REF" --no-verify-jwt
-          supabase functions deploy unfurl   --project-ref "$PROJECT_REF" --no-verify-jwt
-          supabase functions deploy notify   --project-ref "$PROJECT_REF" --no-verify-jwt
-          supabase functions deploy add      --project-ref "$PROJECT_REF" --no-verify-jwt
+          supabase functions deploy calendar  --project-ref "$PROJECT_REF" --no-verify-jwt
+          supabase functions deploy unfurl    --project-ref "$PROJECT_REF" --no-verify-jwt
+          supabase functions deploy notify    --project-ref "$PROJECT_REF" --no-verify-jwt
+          supabase functions deploy add       --project-ref "$PROJECT_REF" --no-verify-jwt
+          # `household` also runs without JWT verification, and has to: the
+          # `redeem` action is called by someone with no session yet, which is
+          # the entire point of it. Every other action authenticates the caller
+          # itself — see the identify() function in its source.
+          supabase functions deploy household --project-ref "$PROJECT_REF" --no-verify-jwt
 
       # Only the sender needs secrets, and only once they exist. Skipping this
       # leaves the other two functions perfectly usable.
@@ -72,3 +78,16 @@ jobs:
         run: |
           supabase secrets set --project-ref "$PROJECT_REF" \
             FCM_SERVICE_ACCOUNT="$FCM_SERVICE_ACCOUNT"
+
+      # The pepper mixed into every household-code hash. Without it the
+      # function falls back to a known constant, which still works but offers
+      # no protection to a stolen credentials table — so this is a warning
+      # rather than a silent skip.
+      - name: Push household code pepper
+        run: |
+          if [ -z "$HOUSEHOLD_CODE_PEPPER" ]; then
+            echo "::warning::HOUSEHOLD_CODE_PEPPER is not set — household codes are hashed with a public default. Set the repository secret."
+          else
+            supabase secrets set --project-ref "$PROJECT_REF" \
+              HOUSEHOLD_CODE_PEPPER="$HOUSEHOLD_CODE_PEPPER"
+          fi

@@ -128,24 +128,91 @@ async function sendWebPush(sub: Subscription, push: Push): Promise<boolean> {
   }
 }
 
-async function deliver(profileIds: string[], event: NotifyEvent, push: Push) {
-  if (profileIds.length === 0) return { sent: 0, skipped: 0 }
+/**
+ * Deliver one event to a set of people.
+ *
+ * Two separate outcomes, and they are deliberately not the same decision:
+ *
+ *   1. A row in `notifications`, which is what the launcher's notification
+ *      centre lists and what its badges are counted from.
+ *   2. A push to the phone.
+ *
+ * `app_notify_prefs.enabled` governs (1) and `.push` governs (2), because
+ * "badge me but don't buzz me at work" is the setting people actually want and
+ * one boolean cannot say it. The recorded row also matters on its own: a push
+ * can be swiped away, arrive while the app is force-stopped, or never be
+ * permitted at all, and then the fact that a chore came due is simply lost.
+ */
+async function deliver(
+  profileIds: string[],
+  event: NotifyEvent,
+  push: Push,
+  appId: string,
+  actorId: string | null = null,
+) {
+  if (profileIds.length === 0) return { sent: 0, skipped: 0, recorded: 0 }
 
   const { data: settings } = await db
     .from('profile_settings')
     .select('profile_id, notify_events')
     .in('profile_id', profileIds)
 
-  const allowed = (settings ?? [])
-    .filter((s) => (s.notify_events ?? {})[event] !== false)
-    .map((s) => s.profile_id)
+  // Things' original per-event mutes still apply, so an existing "stop telling
+  // me about edits" survives the move to per-app preferences.
+  const allowed = profileIds.filter((id) => {
+    const row = (settings ?? []).find((s) => s.profile_id === id)
+    return (row?.notify_events ?? {})[event] !== false
+  })
 
-  if (allowed.length === 0) return { sent: 0, skipped: profileIds.length }
+  const { data: appPrefs } = await db
+    .from('app_notify_prefs')
+    .select('profile_id, enabled, push, events')
+    .eq('app_id', appId)
+    .in('profile_id', allowed.length > 0 ? allowed : ['00000000-0000-0000-0000-000000000000'])
+
+  // Absent rows mean "not configured", which is on — a member who has never
+  // opened the alerts screen should still hear about things.
+  const prefFor = (id: string) =>
+    (appPrefs ?? []).find((p) => p.profile_id === id) ?? {
+      enabled: true,
+      push: true,
+      events: {} as Record<string, boolean>,
+    }
+
+  const wanted = allowed.filter((id) => {
+    const pref = prefFor(id)
+    return pref.enabled !== false && (pref.events ?? {})[event] !== false
+  })
+
+  if (wanted.length === 0) {
+    return { sent: 0, skipped: profileIds.length, recorded: 0 }
+  }
+
+  // Recorded first, so the centre is right even if delivery falls over.
+  const { data: recorded } = await db
+    .from('notifications')
+    .insert(
+      wanted.map((profileId) => ({
+        profile_id: profileId,
+        app_id: appId,
+        event,
+        title: push.title,
+        body: push.body,
+        deep_link: push.tab ? { tab: push.tab, id: push.itemId ?? null } : null,
+        actor_id: actorId,
+      })),
+    )
+    .select('id')
+
+  const pushable = wanted.filter((id) => prefFor(id).push !== false)
+  if (pushable.length === 0) {
+    return { sent: 0, skipped: profileIds.length - wanted.length, recorded: recorded?.length ?? 0 }
+  }
 
   const { data: subs } = await db
     .from('push_subscriptions')
     .select('id, platform, token, endpoint, p256dh, auth, profile_id')
-    .in('profile_id', allowed)
+    .in('profile_id', pushable)
 
   let sent = 0
   for (const sub of (subs ?? []) as (Subscription & { profile_id: string })[]) {
@@ -155,14 +222,55 @@ async function deliver(profileIds: string[], event: NotifyEvent, push: Push) {
         : await sendWebPush(sub, push)
     if (ok) sent++
   }
-  return { sent, skipped: profileIds.length - allowed.length }
+  return {
+    sent,
+    skipped: profileIds.length - wanted.length,
+    recorded: recorded?.length ?? 0,
+  }
 }
 
-/** Everyone except the person who caused the change. */
-async function recipients(actorId: string | null, explicitTarget: string | null) {
-  if (explicitTarget && explicitTarget !== actorId) return [explicitTarget]
-  const { data } = await db.from('profiles').select('id')
-  return (data ?? []).map((p) => p.id).filter((id) => id !== actorId)
+/**
+ * Who should hear about this: everyone except whoever caused it.
+ *
+ * Filtered by app access as well as by identity. A guest who was never given
+ * the Owe list must not be told a debt was added — the database already
+ * refuses to show them the row, and a notification naming it would leak
+ * exactly what the grant exists to withhold.
+ */
+async function recipients(
+  actorId: string | null,
+  explicitTarget: string | null,
+  appId: string,
+) {
+  const { data: profiles } = await db
+    .from('profiles')
+    .select('id, role, is_active')
+
+  const { data: grants } = await db
+    .from('app_access')
+    .select('profile_id, granted')
+    .eq('app_id', appId)
+
+  // Things is the one app everyone gets by default, matching the registry's
+  // defaultForEveryone flag. Keeping the list here rather than importing it
+  // avoids the function depending on the app bundle.
+  const openToAll = appId === 'things'
+
+  const eligible = (profiles ?? [])
+    .filter((p) => p.is_active !== false)
+    .filter((p) => {
+      // A profile with no role predates the launcher migration — Avi and
+      // Jackie — and is treated as an owner.
+      if (p.role === undefined || p.role === null || p.role === 'owner') return true
+      const grant = (grants ?? []).find((g) => g.profile_id === p.id)
+      return grant ? grant.granted : openToAll
+    })
+    .map((p) => p.id)
+
+  if (explicitTarget && explicitTarget !== actorId) {
+    return eligible.includes(explicitTarget) ? [explicitTarget] : []
+  }
+  return eligible.filter((id) => id !== actorId)
 }
 
 // --- cooldown sweep ---------------------------------------------------------
@@ -184,7 +292,7 @@ async function sweepCooldowns() {
 
   // Hoisted: this returned the same two ids on every iteration, so a sweep of
   // twenty chores made twenty identical round-trips before sending anything.
-  const ids = await recipients(null, null)
+  const ids = await recipients(null, null, 'things')
 
   let total = 0
   for (const chore of due ?? []) {
@@ -208,13 +316,18 @@ async function sweepCooldowns() {
 
     if (!claimed || claimed.length === 0) continue
 
-    const { sent } = await deliver(ids, 'cooldown_ready', {
-      title: 'Ready again',
-      body: chore.title,
-      tab: 'chores',
-      itemId: chore.id,
-      tag: `cooldown-${chore.id}`,
-    })
+    const { sent } = await deliver(
+      ids,
+      'cooldown_ready',
+      {
+        title: 'Ready again',
+        body: chore.title,
+        tab: 'chores',
+        itemId: chore.id,
+        tag: `cooldown-${chore.id}`,
+      },
+      'things',
+    )
     total += sent
   }
   return total
@@ -292,10 +405,16 @@ Deno.serve(async (req) => {
     const classified = classify(body as WebhookBody)
     if (!classified) return reply({ ok: true, skipped: 'no-op' })
 
-    const ids = await recipients(classified.actorId, classified.targetId)
-    const result = await deliver(ids, classified.event, classified.push)
+    const ids = await recipients(classified.actorId, classified.targetId, classified.appId)
+    const result = await deliver(
+      ids,
+      classified.event,
+      classified.push,
+      classified.appId,
+      classified.actorId,
+    )
 
-    return reply({ ok: true, event: classified.event, ...result })
+    return reply({ ok: true, event: classified.event, app: classified.appId, ...result })
   } catch (err) {
     console.error(err)
     return reply({ ok: false, error: String(err) }, 500)

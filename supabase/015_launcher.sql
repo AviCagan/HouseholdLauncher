@@ -405,3 +405,28 @@ begin
     end;
   end loop;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- Notifications for the Owe list
+--
+-- Reuses notify_change() from 005_notifications.sql, which posts the row to
+-- the `notify` Edge Function. Guarded because 005 is optional: without it
+-- there is no function to attach, and the whole launcher still works — you
+-- just don't get told about anything until it's run.
+--
+-- Only INSERT and UPDATE, matching Things' tables. A deleted debt announces
+-- nothing: removing an entry is usually a correction, and "$40 from Sam was
+-- deleted" is a worse notification than silence.
+-- ---------------------------------------------------------------------------
+do $$
+begin
+  if exists (select 1 from pg_proc where proname = 'notify_change') then
+    drop trigger if exists debts_notify on debts;
+    create trigger debts_notify
+      after insert or update on debts
+      for each row execute function notify_change();
+  else
+    raise notice
+      'notify_change() not found — run 005_notifications.sql to get notifications.';
+  end if;
+end $$;

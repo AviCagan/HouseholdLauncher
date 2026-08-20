@@ -131,6 +131,71 @@ Each device asks for the PIN exactly once, ever. After that it's tap-your-name.
 
 ---
 
+## 6. Turn on the launcher
+
+Everything above is the Things backend, and the launcher runs on top of it.
+
+### Run the migration
+
+SQL editor → paste **`015_launcher.sql`** → Run. Safe to re-run. It adds member
+roles and codes, per-app access, notifications and the Owe list, and rewrites
+row-level security to ask who the session actually belongs to.
+
+Nothing breaks when you run it: the old shared PIN keeps working, on purpose.
+See *the bootstrap* below.
+
+### Deploy the household function
+
+This is what turns a typed code into a session. It holds the service-role key,
+so none of its decisions can be made in the browser.
+
+```bash
+# A long random string. It's mixed into every code hash, so a stolen
+# credentials table can't be run through a wordlist offline.
+supabase secrets set HOUSEHOLD_CODE_PEPPER="$(openssl rand -hex 32)"
+
+supabase functions deploy household --no-verify-jwt
+```
+
+> `--no-verify-jwt` is required, not a shortcut. The `redeem` action is called
+> by someone who has no session yet — that is the entire point of it. Every
+> other action authenticates the caller itself before doing anything.
+
+Save the pepper as a GitHub secret `HOUSEHOLD_CODE_PEPPER` too, so CI
+redeploys don't reset it. **Changing the pepper invalidates every existing
+code**, which is a fine emergency reset and a bad accident.
+
+### The bootstrap
+
+Handing out the first code needs an owner session, and getting an owner session
+needs a code that only that call can create. The old PIN is the bridge:
+
+1. Open the app and sign in with the old four-digit PIN, as usual.
+2. **Settings → General → Your household code** → pick one, or generate one.
+3. **Settings → People** → tap Jackie → **New code** → give it to her.
+4. Once you've both signed in with your own codes:
+   **Settings → General → Stop accepting the old PIN.**
+
+Step 4 is the one that makes per-app access mean anything. Until it runs,
+anyone holding the old PIN reaches every table regardless of what their grants
+say — and the app refuses to run it while no owner has a code yet, so it can't
+lock you out.
+
+### Adding people
+
+**Settings → People → Add someone.** Pick a role, tick the apps they get, and
+either type a code or let one be generated. The code is shown once and never
+again — only its hash is stored, so it can be replaced but never looked up.
+
+- **Owner** — everything, including People. For whoever lives here.
+- **Member** / **Guest** — only the apps explicitly ticked. Both are enforced in
+  the database, not just hidden in the UI.
+
+Removing someone deactivates them and revokes their sessions immediately; their
+name stays on the entries they're part of.
+
+---
+
 ## Notifications (optional)
 
 Everything above works without this. Add it when you want alerts.
@@ -147,7 +212,13 @@ private key for the next step.
 ### FCM (Avi)
 
 1. Create a free project at [console.firebase.google.com](https://console.firebase.google.com).
-2. Add an **Android** app with package name `com.avicagan.things`.
+2. Add an **Android** app with package name `com.avicagan.household`.
+
+   > **If you already did this for Things, redo it.** The launcher's package id
+   > is `com.avicagan.household`, and a `google-services.json` is bound to the
+   > package it was generated for — the old one makes the build fail outright
+   > rather than quietly falling back. Add a second Android app in the same
+   > Firebase project and download a fresh file; the old Things entry can stay.
 3. Download `google-services.json` → paste its contents into a GitHub secret
    named `GOOGLE_SERVICES_JSON`.
 4. **Project settings → Service accounts → Generate new private key** — that

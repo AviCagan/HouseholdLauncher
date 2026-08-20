@@ -2,7 +2,7 @@ name: Deploy web app to Pages
 
 on:
   push:
-    branches: [claude/household-management-app-di6hp4, main]
+    branches: [claude/household-launcher-app-dc15ox, main]
   workflow_dispatch:
 
 permissions:
@@ -38,6 +38,7 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
           VITE_HOUSEHOLD_EMAIL: ${{ secrets.VITE_HOUSEHOLD_EMAIL }}
           VITE_VAPID_PUBLIC_KEY: ${{ secrets.VITE_VAPID_PUBLIC_KEY }}
         run: npm run build:web

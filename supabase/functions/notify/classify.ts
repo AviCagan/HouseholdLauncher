@@ -13,6 +13,9 @@ export type NotifyEvent =
   | 'urgent_added'
   | 'any_added'
   | 'item_edited'
+  // Owe & Owed
+  | 'debt_added'
+  | 'debt_paid'
 
 export interface Push {
   title: string
@@ -36,9 +39,26 @@ const NOUN: Record<string, string> = {
   wishlist_items: 'wish',
 }
 
+/**
+ * Which launcher app a table belongs to.
+ *
+ * The launcher routes by app, not by table: badges are per app, the
+ * notification centre groups by app, and `app_notify_prefs` is keyed on app.
+ * A table missing from here has no owning app, so nothing is announced for it
+ * at all — which is the right default for a new table nobody has decided how
+ * to surface yet.
+ */
+export const APP_FOR: Record<string, string> = {
+  todos: 'things',
+  chores: 'things',
+  shopping_items: 'things',
+  wishlist_items: 'things',
+  debts: 'owe',
+}
+
 export interface Row {
   id: string
-  title: string
+  title?: string
   urgency?: number
   claimed_by?: string | null
   created_by?: string | null
@@ -46,6 +66,14 @@ export interface Row {
   completed_by?: string | null
   is_done?: boolean
   last_completed_by?: string | null
+
+  // debts
+  counterparty?: string
+  amount_cents?: number
+  direction?: 'owed_to_us' | 'we_owe'
+  is_paid?: boolean
+  paid_by?: string | null
+  reason?: string | null
 }
 
 export interface WebhookBody {
@@ -57,6 +85,8 @@ export interface WebhookBody {
 
 export interface Classified {
   event: NotifyEvent
+  /** The launcher app this belongs to — see APP_FOR. */
+  appId: string
   actorId: string | null
   targetId: string | null
   push: Push
@@ -79,18 +109,26 @@ export function classify(body: WebhookBody): Classified | null {
   const { type, table, record, old_record } = body
   if (!record) return null
 
+  const appId = APP_FOR[table]
+  // No owning app means nothing knows how to display it, so nothing is sent.
+  if (!appId) return null
+
+  if (table === 'debts') return classifyDebt(type, record, old_record)
+
   const tab = TAB_FOR[table]
   const noun = NOUN[table] ?? 'item'
+  const title = record.title ?? 'Something'
 
   if (type === 'INSERT') {
     const urgent = (record.urgency ?? 0) >= URGENT_LEVEL
     return {
       event: urgent ? 'urgent_added' : 'any_added',
+      appId,
       actorId: record.created_by ?? null,
       targetId: null, // the other person, resolved later
       push: {
         title: urgent ? `Urgent ${noun}` : `New ${noun}`,
-        body: record.title,
+        body: title,
         tab,
         itemId: record.id,
         tag: `add-${record.id}`,
@@ -103,11 +141,12 @@ export function classify(body: WebhookBody): Classified | null {
     if (!old_record.claimed_by && record.claimed_by) {
       return {
         event: 'claim_complete',
+        appId,
         actorId: record.claimed_by,
         targetId: record.created_by ?? null,
         push: {
           title: 'Claimed',
-          body: record.title,
+          body: title,
           tab,
           itemId: record.id,
           tag: `claim-${record.id}`,
@@ -118,6 +157,7 @@ export function classify(body: WebhookBody): Classified | null {
     if (!old_record.is_done && record.is_done) {
       return {
         event: 'claim_complete',
+        appId,
         // `completed_by` is written by toggleTodo/toggleShoppingItem and is the
         // only thing that identifies who actually ticked it. This used to be a
         // hardcoded null, which made `recipients()` skip its own
@@ -127,7 +167,7 @@ export function classify(body: WebhookBody): Classified | null {
         targetId: record.created_by ?? null,
         push: {
           title: 'Done',
-          body: record.title,
+          body: title,
           tab,
           itemId: record.id,
           tag: `done-${record.id}`,
@@ -142,11 +182,12 @@ export function classify(body: WebhookBody): Classified | null {
     ) {
       return {
         event: 'claim_complete',
+        appId,
         actorId: record.last_completed_by,
         targetId: null,
         push: {
           title: 'Chore done',
-          body: `${record.title} — resting now`,
+          body: `${title} — resting now`,
           tab: 'chores',
           itemId: record.id,
           tag: `chore-${record.id}`,
@@ -160,11 +201,12 @@ export function classify(body: WebhookBody): Classified | null {
     if (record.updated_by && old_record.updated_by !== record.updated_by) {
       return {
         event: 'item_edited',
+        appId,
         actorId: record.updated_by,
         targetId: null,
         push: {
           title: 'Edited',
-          body: record.title,
+          body: title,
           tab,
           itemId: record.id,
           tag: `edit-${record.id}`,
@@ -174,4 +216,68 @@ export function classify(body: WebhookBody): Classified | null {
   }
 
   return null
+}
+
+/**
+ * Owe & Owed.
+ *
+ * Only two events are worth a phone buzz: an entry appearing, and one being
+ * settled. Edits are not announced — correcting a typo in "what for" is not
+ * news, and the list is short enough that a change is seen next time it is
+ * opened.
+ *
+ * Amounts are formatted here rather than in the app because the notification
+ * has to read correctly on a lock screen, with no styling and no context: the
+ * whole message is the title and one line.
+ */
+function classifyDebt(
+  type: WebhookBody['type'],
+  record: Row,
+  old: Row | null,
+): Classified | null {
+  const who = record.counterparty ?? 'Someone'
+  const amount = formatCents(record.amount_cents ?? 0)
+  const inbound = record.direction === 'owed_to_us'
+
+  if (type === 'INSERT') {
+    return {
+      event: 'debt_added',
+      appId: 'owe',
+      actorId: record.created_by ?? null,
+      targetId: null,
+      push: {
+        title: inbound ? `${who} owes ${amount}` : `We owe ${who} ${amount}`,
+        body: record.reason ?? 'Added to the list',
+        tab: inbound ? 'owed_to_us' : 'we_owe',
+        itemId: record.id,
+        tag: `debt-${record.id}`,
+      },
+    }
+  }
+
+  // Settled. Guarded on the transition rather than on is_paid alone, so an
+  // edit to an already-paid row doesn't re-announce it.
+  if (type === 'UPDATE' && old && !old.is_paid && record.is_paid) {
+    return {
+      event: 'debt_paid',
+      appId: 'owe',
+      actorId: record.paid_by ?? record.updated_by ?? null,
+      targetId: null,
+      push: {
+        title: 'Marked paid',
+        body: `${who} · ${amount}`,
+        tab: inbound ? 'owed_to_us' : 'we_owe',
+        itemId: record.id,
+        tag: `debt-paid-${record.id}`,
+      },
+    }
+  }
+
+  return null
+}
+
+/** 1250 -> "$12.50", 20000 -> "$200". Whole amounts drop the cents. */
+function formatCents(cents: number): string {
+  const dollars = cents / 100
+  return cents % 100 === 0 ? `$${dollars.toLocaleString('en-US')}` : `$${dollars.toFixed(2)}`
 }

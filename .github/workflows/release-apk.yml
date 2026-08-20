@@ -4,6 +4,10 @@ on:
   workflow_dispatch:
   push:
     tags: ['v*']
+    # Also build on every push to the working branch, so there is always a
+    # current APK to sideload without cutting a tag first. Only the tag runs
+    # attach to a release — see the guard on the last step.
+    branches: [claude/household-launcher-app-dc15ox, main]
 
 permissions:
   contents: write
@@ -41,6 +45,9 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # Supabase's newer name for the same browser-safe key. env.ts accepts
+          # either, so whichever one the dashboard showed at setup time works.
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
           VITE_HOUSEHOLD_EMAIL: ${{ secrets.VITE_HOUSEHOLD_EMAIL }}
           VITE_VAPID_PUBLIC_KEY: ${{ secrets.VITE_VAPID_PUBLIC_KEY }}
         run: npm run build:native
@@ -85,7 +92,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: things-apk
+          name: household-apk
           path: out/*.apk
           if-no-files-found: error
 
