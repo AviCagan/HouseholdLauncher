@@ -44,7 +44,6 @@ export function ZipperSwipe({
   const x = useMotionValue(0)
   const [committed, setCommitted] = useState(false)
   const lastDetent = useRef(0)
-  const trackRef = useRef<HTMLDivElement>(null)
 
   // The handle is inset from both ends of the track, so travel is the track
   // minus the handle rather than the full width — without this the handle
@@ -94,7 +93,6 @@ export function ZipperSwipe({
 
   return (
     <div
-      ref={trackRef}
       className="relative shrink-0 overflow-hidden rounded-full"
       style={{
         width,

@@ -35,6 +35,14 @@ export const SEED_PROFILES: Profile[] = [
   },
 ]
 
+/**
+ * A member's starting preferences.
+ *
+ * The two slug checks below are Avi's and Jackie's original defaults and
+ * nothing more — anyone else gets the neutral option. Kept rather than
+ * generalised because they encode a real fact (Jackie navigates with Waze) that
+ * a new member has no equivalent of.
+ */
 export const defaultSettings = (
   profileId: string,
   slug: ProfileSlug,
@@ -172,6 +180,35 @@ async function seedOnce(): Promise<void> {
     useData
       .getState()
       .applyChange({ table: 'household_settings', type: 'insert', row: h })
+  }
+}
+
+/**
+ * Make sure the signed-in member has a settings row.
+ *
+ * `ensureSeeded` only ever creates rows for Avi and Jackie, because it predates
+ * anyone else existing. A member added through People therefore lands with no
+ * `profile_settings` at all — which is not a crash, but it means `useSettings()`
+ * returns null, the theme and accent are never applied, and Things' settings
+ * sheet has no row to patch, so every switch in it silently does nothing.
+ *
+ * Best-effort on purpose. During the legacy-PIN bootstrap the session belongs
+ * to no member, so this can be refused by RLS; the app is perfectly usable on
+ * the built-in defaults, and failing the boot over a preferences row would be
+ * a far worse outcome than a default accent colour.
+ */
+export async function ensureMemberSettings(profileId: string): Promise<void> {
+  const { profile_settings, profiles, adapter } = useData.getState()
+  if (profile_settings.some((s) => s.profile_id === profileId)) return
+
+  const profile = profiles.find((p) => p.id === profileId)
+  const row = defaultSettings(profileId, profile?.slug ?? 'member')
+
+  try {
+    await adapter.insert('profile_settings', row)
+    useData.getState().applyChange({ table: 'profile_settings', type: 'insert', row })
+  } catch (err) {
+    console.warn('[settings] falling back to defaults', err)
   }
 }
 

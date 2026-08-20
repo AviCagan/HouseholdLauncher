@@ -11,7 +11,13 @@ import { AppHost } from './launcher/AppHost'
 import { NotificationCenter } from './launcher/NotificationCenter'
 import { SettingsSheet } from './launcher/settings/SettingsSheet'
 import { useData } from './store/useData'
-import { applySettings, ensureSeeded, useProfile, useSettings } from './store/useProfile'
+import {
+  applySettings,
+  ensureMemberSettings,
+  ensureSeeded,
+  useProfile,
+  useSettings,
+} from './store/useProfile'
 import { useLauncher } from './store/useLauncher'
 import { isConfigured } from './lib/env'
 import { hasSession, supabase } from './lib/supabase'
@@ -65,6 +71,7 @@ export default function App() {
 
     if (knownProfileId) {
       await useProfile.getState().selectProfile(knownProfileId)
+      await ensureMemberSettings(knownProfileId)
     } else if (identify) {
       /*
         Resolve a session that was persisted from a previous launch.
@@ -78,6 +85,7 @@ export default function App() {
       const me = await whoAmI()
       if (me.ok && me.data.profile) {
         await useProfile.getState().selectProfile(me.data.profile.id)
+        await ensureMemberSettings(me.data.profile.id)
       }
     }
 

@@ -186,11 +186,34 @@ async function upsertPref(
   try {
     if (exists) await adapter.update(table, key, row as never)
     else await adapter.insert(table, row as never)
-  } catch {
-    // A duplicate here means another device inserted the same row between the
-    // existence check and the write — the update is the correct repair, and a
-    // failure of that is a genuine error worth surfacing upstream.
-    await adapter.update(table, key, row as never)
+  } catch (first) {
+    try {
+      // A duplicate here means another device inserted the same row between the
+      // existence check and the write, and the update is the correct repair.
+      await adapter.update(table, key, row as never)
+    } catch (second) {
+      /*
+        Both failed. The realistic cause is the legacy-PIN bootstrap: these
+        tables are keyed on current_profile_id(), which is null for the old
+        shared session, so RLS refuses the write until personal codes are in
+        use.
+
+        Rolled back rather than left showing the optimistic value, because a
+        switch that stays flipped and does nothing is worse than one that
+        visibly springs back — and a toast is not raised for the same reason
+        the app tolerates this at all: it is a transitional state, not a fault
+        the person can act on.
+      */
+      useData.setState({
+        [table]: (useData.getState()[table] as unknown[]).filter(
+          (r) => appKey(
+            (r as { profile_id: string }).profile_id,
+            (r as { app_id: string }).app_id,
+          ) !== key,
+        ),
+      } as never)
+      console.warn('[prefs] not saved', first, second)
+    }
   }
 }
 
