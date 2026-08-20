@@ -1,0 +1,253 @@
+@import 'tailwindcss';
+
+/* ---------------------------------------------------------------------------
+   Themes.
+
+   Every colour is a token on :root. Theme modes and the per-profile accent are
+   swapped by setting data-theme / --accent on <html>, so switching costs a
+   variable write instead of a React re-render.
+
+   Ramps use color-mix(in oklab, …) rather than hand-built scales: oklab is
+   perceptually uniform, so *any* accent hue the user picks yields readable
+   contrast. Naive HSL ramps are exactly where custom accents fall apart.
+--------------------------------------------------------------------------- */
+
+:root {
+  --accent: #7c5cff;
+
+  /* Derived accent ramp — never define these per-theme. */
+  --accent-ghost: color-mix(in oklab, var(--accent) 10%, transparent);
+  --accent-soft: color-mix(in oklab, var(--accent) 18%, transparent);
+  --accent-muted: color-mix(in oklab, var(--accent) 35%, transparent);
+  --accent-strong: color-mix(in oklab, var(--accent) 82%, white 18%);
+  --accent-text: color-mix(in oklab, var(--accent) 88%, white 12%);
+
+  /* Urgency is a traffic light: three levels, no more. Deliberately
+     independent of the accent, so recolouring the app can never make a low
+     priority look urgent. */
+  --u-low: #2bb673;
+  --u-med: #f5a524;
+  --u-urgent: #ff4d4d;
+
+  --ok: #22c55e;
+  --warn: #f5a524;
+  --danger: #ff4d4d;
+
+  /* Light theme (default). */
+  --bg: #f6f6f8;
+  --bg-elevated: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f1f1f5;
+  --surface-3: #e8e8ee;
+  --border: rgb(0 0 0 / 0.09);
+  --border-strong: rgb(0 0 0 / 0.16);
+  --text: #16161a;
+  --text-dim: #5c5c68;
+  --text-faint: #8e8e9c;
+  --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.12), 0 2px 8px rgb(0 0 0 / 0.06);
+  --shadow-dock: 0 8px 32px rgb(0 0 0 / 0.16);
+  --dock-bg: rgb(255 255 255 / 0.72);
+
+  --font-scale: 1;
+  --radius: 16px;
+  --radius-sm: 10px;
+  --dock-h: 62px;
+}
+
+/* Dark. Applies on explicit choice, and on system preference unless the user
+   explicitly picked light. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #0e0e12;
+    --bg-elevated: #16161c;
+    --surface: #17171e;
+    --surface-2: #1e1e26;
+    --surface-3: #262630;
+    --border: rgb(255 255 255 / 0.09);
+    --border-strong: rgb(255 255 255 / 0.18);
+    --text: #f2f2f5;
+    --text-dim: #a0a0b0;
+    --text-faint: #6e6e80;
+    --shadow-lg: 0 12px 40px rgb(0 0 0 / 0.55);
+    --shadow-dock: 0 8px 32px rgb(0 0 0 / 0.5);
+    --dock-bg: rgb(24 24 30 / 0.72);
+  }
+}
+
+:root[data-theme='dark'] {
+  --bg: #0e0e12;
+  --bg-elevated: #16161c;
+  --surface: #17171e;
+  --surface-2: #1e1e26;
+  --surface-3: #262630;
+  --border: rgb(255 255 255 / 0.09);
+  --border-strong: rgb(255 255 255 / 0.18);
+  --text: #f2f2f5;
+  --text-dim: #a0a0b0;
+  --text-faint: #6e6e80;
+  --shadow-lg: 0 12px 40px rgb(0 0 0 / 0.55);
+  --shadow-dock: 0 8px 32px rgb(0 0 0 / 0.5);
+  --dock-bg: rgb(24 24 30 / 0.72);
+}
+
+/* OLED — true black, elevation expressed as hairlines rather than lighter
+   surfaces, which is the whole point of the mode. */
+:root[data-theme='oled'] {
+  --bg: #000000;
+  --bg-elevated: #000000;
+  --surface: #000000;
+  --surface-2: #0a0a0d;
+  --surface-3: #121216;
+  --border: rgb(255 255 255 / 0.14);
+  --border-strong: rgb(255 255 255 / 0.26);
+  --text: #ffffff;
+  --text-dim: #9a9aa8;
+  --text-faint: #62626e;
+  --shadow-lg: 0 0 0 1px rgb(255 255 255 / 0.08);
+  --shadow-dock: 0 0 0 1px rgb(255 255 255 / 0.1);
+  --dock-bg: rgb(0 0 0 / 0.86);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-dim: var(--text-dim);
+  --color-faint: var(--text-faint);
+  --color-accent: var(--accent);
+  --radius-card: var(--radius);
+}
+
+/*
+  These element resets MUST live in @layer base.
+
+  Unlayered CSS wins over layered CSS in the cascade no matter the specificity,
+  and Tailwind ships its utilities inside a layer. Left unlayered, `button {
+  padding: 0 }` silently beat every `px-*`/`py-*` utility on every button in the
+  app — buttons collapsed to their text with no padding at all.
+*/
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    /* iOS Safari's `vh`/`%` chain resolves against the "large" viewport — the
+       space its address bar and toolbar collapse into. In a normal tab that
+       gap ends up hidden under the toolbar; in standalone mode (installed to
+       the Home Screen) there is no toolbar to hide it under, so it shows up
+       as dead space below the dock. `dvh` tracks the viewport that is
+       actually visible right now in both contexts. Declared after the
+       fallback so unsupporting engines just keep the line above. */
+    height: 100dvh;
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family:
+      ui-rounded, 'SF Pro Rounded', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+      system-ui, sans-serif;
+    font-size: calc(16px * var(--font-scale));
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior-y: none;
+    /* The app owns scrolling; the document never bounces. */
+    overflow: hidden;
+  }
+
+  input,
+  textarea,
+  button {
+    font: inherit;
+    color: inherit;
+  }
+
+  button {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+  }
+}
+
+/* Respect the OS setting *and* the in-app toggle. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+:root[data-reduce-motion='true'] *,
+:root[data-reduce-motion='true'] *::before,
+:root[data-reduce-motion='true'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+/* Urgent is the only thing in the app that animates at rest — which is what
+   makes it actually attention-grabbing. */
+@keyframes urgent-breathe {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 6px 0 var(--u-urgent);
+  }
+  50% {
+    opacity: 0.72;
+    box-shadow: 0 0 12px 1px var(--u-urgent);
+  }
+}
+
+.urgent-glow {
+  animation: urgent-breathe 2.4s ease-in-out infinite;
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.scroll-y {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.scroll-y::-webkit-scrollbar {
+  display: none;
+}
+
+/*
+  Horizontal companion to .scroll-y, for the Owe list's per-person summary.
+  overscroll-behavior-inline pins the gesture to this strip: without it,
+  flicking past the last card hands the scroll to the page underneath and the
+  whole screen slides sideways.
+*/
+.scroll-x {
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.scroll-x::-webkit-scrollbar {
+  display: none;
+}
+
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;
+}

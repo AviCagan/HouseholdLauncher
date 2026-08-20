@@ -1,0 +1,63 @@
+name: Deploy web app to Pages
+
+on:
+  push:
+    branches: [claude/household-management-app-di6hp4, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never run two deploys at once; a superseded build is just cancelled.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm test
+
+      # NOTE: VITE_-prefixed values are inlined into the client bundle and
+      # served publicly. Storing them as Actions secrets keeps them out of git
+      # history — it does not make them secret. The database is protected by
+      # RLS requiring an authenticated session, not by hiding this key.
+      - name: Build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_HOUSEHOLD_EMAIL: ${{ secrets.VITE_HOUSEHOLD_EMAIL }}
+          VITE_VAPID_PUBLIC_KEY: ${{ secrets.VITE_VAPID_PUBLIC_KEY }}
+        run: npm run build:web
+
+      # enablement turns Pages on automatically if it isn't already. If the
+      # repo settings don't allow that, this step fails and Pages has to be
+      # switched on by hand once (Settings → Pages → Source: GitHub Actions).
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

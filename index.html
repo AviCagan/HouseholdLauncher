@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="icons/favicon-64.png" />
+
+    <!-- viewport-fit=cover is what lets safe-area-inset-* actually report the
+         notch and home indicator, which the dock and sheets depend on. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no"
+    />
+
+    <!-- iOS standalone launch. The web manifest alone does NOT produce a
+         chrome-less launch on iOS — these two tags are what do it. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Household" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png" />
+
+    <meta name="theme-color" content="#0e0e12" />
+    <meta name="description" content="Household launcher" />
+
+    <title>Household</title>
+    <style>
+      /* Paint the background before React mounts so launch isn't a white flash. */
+      html { background: #0e0e12; }
+      @media (prefers-color-scheme: light) { html { background: #f6f6f8; } }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

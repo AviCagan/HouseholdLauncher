@@ -1,0 +1,96 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    # Secrets are lifted to job-level env because the `secrets` context is NOT
+    # available in `if:` conditions — referencing it there makes the whole
+    # workflow file invalid, so no job runs at all. `env` is available in `if`.
+    # This also avoids interpolating JSON straight into a shell command.
+    env:
+      GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      # ubuntu-latest ships the Android SDK, but pinning it makes the build
+      # reproducible instead of dependent on the runner image of the day.
+      - uses: android-actions/setup-android@v3
+
+      - run: npm ci
+
+      - name: Build web bundle and sync native project
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_HOUSEHOLD_EMAIL: ${{ secrets.VITE_HOUSEHOLD_EMAIL }}
+          VITE_VAPID_PUBLIC_KEY: ${{ secrets.VITE_VAPID_PUBLIC_KEY }}
+        run: npm run build:native
+
+      # Firebase config for push notifications. Optional: without it the app
+      # still builds and runs, it just can't receive push while closed.
+      - name: Write google-services.json
+        if: env.GOOGLE_SERVICES_JSON != ''
+        run: printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+
+      # A debug build is re-signed with a NEW debug keystore on every CI run,
+      # and Android refuses to install an update whose signature changed — so
+      # each new build would need an uninstall first, wiping local settings.
+      # With the keystore secrets set, releases keep a stable signature and
+      # upgrade in place forever.
+      - name: Decode signing keystore
+        id: keystore
+        if: env.ANDROID_KEYSTORE_B64 != ''
+        run: |
+          printf '%s' "$ANDROID_KEYSTORE_B64" | base64 -d > android/app/release.keystore
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Build signed release APK
+        if: steps.keystore.outputs.signed == 'true'
+        working-directory: android
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Build debug APK (no keystore configured)
+        if: steps.keystore.outputs.signed != 'true'
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Collect APK
+        run: |
+          mkdir -p out
+          find android/app/build/outputs/apk -name '*.apk' -exec cp {} out/ \;
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: things-apk
+          path: out/*.apk
+          if-no-files-found: error
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/*.apk

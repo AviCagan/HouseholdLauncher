@@ -1,0 +1,96 @@
+apply plugin: 'com.android.application'
+
+/*
+  versionCode used to be a hardcoded 1 on every single build. Android's
+  installer uses that number — not the file's timestamp, not its hash — to
+  decide whether an APK you tap is actually newer than what's already on the
+  device. With every build reporting the same version, several install flows
+  treat a fresh APK as "nothing to update" and silently leave the old app
+  running: you tap install, nothing visibly happens, and you're still on
+  yesterday's build with no error to explain why.
+
+  GITHUB_RUN_NUMBER is exactly what this needs — set automatically by every
+  Actions job and guaranteed to strictly increase, which versionCode requires.
+  A local `./gradlew assembleDebug` with no CI env falls back to 1, which is
+  fine: a real update always comes from CI from here on.
+*/
+def buildNumber = (System.getenv('GITHUB_RUN_NUMBER') ?: '1').toInteger()
+def buildSha = (System.getenv('GITHUB_SHA') ?: 'dev').take(7)
+
+android {
+    namespace = "com.avicagan.household"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "com.avicagan.household"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode buildNumber
+        versionName "1.0.${buildNumber}-${buildSha}"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    // Release signing, supplied by CI (see .github/workflows/release-apk.yml).
+    //
+    // This exists so every build carries the SAME signature. A debug build is
+    // re-signed with a freshly generated debug keystore on each CI run, and
+    // Android refuses to install an update whose signature changed — so without
+    // this, every new version would need an uninstall first, wiping local
+    // settings. With the keystore secrets set, updates install in place.
+    //
+    // Falls back to a debug build when the keystore isn't present, so a local
+    // `./gradlew assembleDebug` still works with no setup.
+    signingConfigs {
+        release {
+            def keystoreFile = file('release.keystore')
+            if (keystoreFile.exists()) {
+                storeFile keystoreFile
+                storePassword System.getenv('KEYSTORE_PASSWORD')
+                keyAlias System.getenv('KEY_ALIAS')
+                keyPassword System.getenv('KEY_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (file('release.keystore').exists()) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}
