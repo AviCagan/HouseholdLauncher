@@ -99,18 +99,41 @@ what actually makes the PIN mean something.
 While you're there, **Authentication → Rate Limits** — lowering the sign-in
 limit directly slows down anyone trying to guess a 4-digit code.
 
-## 4. Add the keys to GitHub
+## 4. Connect the app to the project
 
-Repo → **Settings → Secrets and variables → Actions → New repository secret**:
+**Already done** — the project URL and publishable key are committed in
+[`src/lib/env.ts`](../src/lib/env.ts), so a fresh clone builds and connects with
+no configuration at all.
+
+That is a deliberate choice, not an oversight. Both values are inlined into the
+client bundle by definition, so they were already readable by anyone who opened
+the deployed site and viewed source. Keeping them in Actions secrets bought
+obscurity in git history and nothing else, while making every build depend on
+someone having configured the repository first.
+
+What actually protects the data is step 3 above: RLS grants `authenticated`
+only, the anon role has no policy on any table, and email signups are off so
+the key cannot mint an account that would satisfy it.
+
+**To point a build at a different project** — or to rotate after the key has
+been revoked in the dashboard — set these as repository secrets and they win
+over the committed defaults:
 
 | Secret | Value |
 |---|---|
-| `VITE_SUPABASE_URL` | Project URL from step 1, e.g. `https://abcdefgh.supabase.co` |
-| `VITE_SUPABASE_ANON_KEY` | the `sb_publishable_…` key from step 1 |
-| `VITE_HOUSEHOLD_EMAIL` | `household@things.local` |
+| `VITE_SUPABASE_URL` | Project URL, e.g. `https://abcdefgh.supabase.co` |
+| `VITE_SUPABASE_ANON_KEY` | the `sb_publishable_…` key (or `VITE_SUPABASE_PUBLISHABLE_KEY`) |
+| `VITE_HOUSEHOLD_EMAIL` | only if it isn't `household@things.local` |
 
-The key secret can also be named `VITE_SUPABASE_PUBLISHABLE_KEY` if that reads
-better to you — the app accepts either.
+> Revoking the key is done in the Supabase dashboard under **Settings → API
+> Keys**. Editing `env.ts` alone changes nothing — the old key keeps working
+> until the project itself stops accepting it.
+
+For local work against the on-device store instead of the real household:
+
+```bash
+VITE_LOCAL_ONLY=1 npm run dev
+```
 
 Then **Settings → Pages → Source: GitHub Actions**. Push to the branch and the
 site deploys itself.
@@ -137,7 +160,12 @@ Everything above is the Things backend, and the launcher runs on top of it.
 
 ### Run the migration
 
-SQL editor → paste **`015_launcher.sql`** → Run. Safe to re-run. It adds member
+SQL editor → paste **`015_launcher.sql`** → Run. Safe to re-run.
+
+> **Until this runs, the launcher's own features have nowhere to store
+> anything.** The app notices and says so in **Settings → About** rather than
+> failing to start — Things keeps working throughout, and Owe & Owed, People
+> and notifications simply stay empty until the migration lands. It adds member
 roles and codes, per-app access, notifications and the Owe list, and rewrites
 row-level security to ask who the session actually belongs to.
 

@@ -33,9 +33,15 @@ npm install
 npm run dev
 ```
 
-It works immediately with no backend — everything lives in on-device storage and
-a banner says it isn't syncing yet. To make the phones share data and to turn on
-household codes, follow [`supabase/README.md`](supabase/README.md).
+It connects to the household's Supabase project out of the box — the URL and
+publishable key are committed in [`src/lib/env.ts`](src/lib/env.ts), which is
+safe for the reasons set out there. `VITE_LOCAL_ONLY=1 npm run dev` works
+entirely on-device instead, against no real data.
+
+Household codes and the Owe list also need the SQL migration and one Edge
+Function deployed — see [`supabase/README.md`](supabase/README.md) §6. Until
+then the app still runs, Things still works, and **Settings → About** says what
+is missing.
 
 ```bash
 npm test              # unit tests
