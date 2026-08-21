@@ -215,11 +215,31 @@
   animation: urgent-breathe 2.4s ease-in-out infinite;
 }
 
+/*
+  Safe-area insets, via variables rather than env() directly.
+
+  The variables default to env(), so this works with no JavaScript at all. What
+  the indirection buys is src/lib/safeArea.ts being able to overwrite them on an
+  installed iPhone web app, where iOS reports 0 for insets that are demonstrably
+  not zero — the page sits under the status bar either way, so a header trusting
+  env() there lands behind the clock and the Dynamic Island.
+
+  A layout that needs its OWN padding as well must not also apply .safe-top:
+  both set padding-top, this file wins the cascade over Tailwind's utilities,
+  and the base padding vanishes silently. Use the variable in a calc instead:
+
+    pt-[calc(var(--safe-top)+0.75rem)]
+*/
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 .safe-bottom {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-bottom: var(--safe-bottom);
 }
 .safe-top {
-  padding-top: env(safe-area-inset-top, 0px);
+  padding-top: var(--safe-top);
 }
 
 .scroll-y {

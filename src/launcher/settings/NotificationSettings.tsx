@@ -1,5 +1,6 @@
 import { Icon } from '@/components/primitives/Icon'
 import { SettingsGroup, Toggle } from './SettingsSheet'
+import { PushCard } from './PushCard'
 import { APPS } from '@/launcher/registry'
 import { setNotifyPref, useCurrentMember, useHasApp } from '@/store/useMember'
 import { useData } from '@/store/useData'
@@ -26,15 +27,12 @@ export function NotificationSettings() {
 
   return (
     <>
+      {/* First, because every per-app switch below is moot until this is on. */}
+      <PushCard />
+
       {APPS.map((app) => (
         <AppNotifyCard key={app.id} appId={app.id} />
       ))}
-
-      <p className="px-1 pt-1 text-[11.5px] leading-snug" style={{ color: 'var(--text-faint)' }}>
-        Phone notifications also need permission from Android or iOS itself. If nothing
-        arrives with these on, check the launcher's notification permission in your
-        phone's settings.
-      </p>
     </>
   )
 }

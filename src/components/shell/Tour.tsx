@@ -177,7 +177,7 @@ export function Tour() {
             reading shouldn't silently end the walkthrough. */}
           <motion.div
             layout
-            className="m-3 flex flex-col gap-4 rounded-[26px] p-5 safe-bottom"
+            className="m-3 flex flex-col gap-4 rounded-[26px] p-5 pb-[calc(var(--safe-bottom)+1.25rem)]"
             style={{
               background: 'var(--bg-elevated)',
               border: '1px solid var(--border-strong)',

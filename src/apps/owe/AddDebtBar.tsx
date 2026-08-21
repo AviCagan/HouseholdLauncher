@@ -64,7 +64,7 @@ export function AddDebtBar({ direction }: { direction: DebtDirection }) {
   }
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-3 pb-3 safe-bottom">
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-3 pb-[calc(var(--safe-bottom)+0.75rem)]">
       <AnimatePresence>
         {suggestions.length > 0 && (
           <motion.div

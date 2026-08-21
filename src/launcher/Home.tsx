@@ -22,7 +22,7 @@ export function Home() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="shrink-0 px-5 pb-4 pt-4 safe-top">
+      <header className="shrink-0 px-5 pb-4 pt-[calc(var(--safe-top)+1rem)]">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[13px]" style={{ color: 'var(--text-faint)' }}>

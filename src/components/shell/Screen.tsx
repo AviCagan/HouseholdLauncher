@@ -25,7 +25,7 @@ export function Screen({
           with an 8px gap, 16px from the right edge — 96px — plus a little
           breathing room. It was sized for one button, which is why the bell
           landed on top of Shopping's Plan trip button. */}
-      <header className="shrink-0 pb-2 pl-5 pr-[104px] pt-3 safe-top">
+      <header className="shrink-0 pb-2 pl-5 pr-[104px] pt-[calc(var(--safe-top)+0.75rem)]">
         <div className="flex items-end justify-between gap-3">
           {/* min-w-0 so a long action keeps its own width and squeezes the
               title instead of wrapping itself onto two lines. */}

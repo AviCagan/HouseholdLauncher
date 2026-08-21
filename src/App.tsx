@@ -245,7 +245,9 @@ export default function App() {
       <PulseLayer />
       <Toaster
         position="top-center"
-        offset={54}
+        // Was a flat 54px, which on iOS put the toast behind the clock and the
+        // Dynamic Island — the inset is on top of the gap, not instead of it.
+        offset="calc(var(--safe-top) + 54px)"
         toastOptions={{
           style: {
             background: 'var(--surface-3)',
@@ -271,7 +273,7 @@ function LocalModeBanner() {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="mx-3 mt-2 flex shrink-0 items-center gap-2 rounded-full px-3.5 py-2 safe-top"
+      className="mx-3 mt-[calc(var(--safe-top)+0.5rem)] flex shrink-0 items-center gap-2 rounded-full px-3.5 py-2"
       style={{ background: 'var(--surface-3)', border: '1px solid var(--border)' }}
     >
       <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: 'var(--warn)' }} />

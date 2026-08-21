@@ -89,7 +89,7 @@ export function ThingsApp() {
             has no settings of its own that aren't household-wide. */}
         <div
           className="absolute right-4 z-40 flex items-center gap-2"
-          style={{ top: 'calc(env(safe-area-inset-top, 0px) + 14px)' }}
+          style={{ top: 'calc(var(--safe-top) + 14px)' }}
         >
           <ActivityBell />
         </div>
