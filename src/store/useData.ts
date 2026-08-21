@@ -31,11 +31,33 @@ type Collections = { [K in TableName]: TableMap[K][] }
 const emptyCollections = (): Collections =>
   Object.fromEntries(TABLES.map((t) => [t, []])) as unknown as Collections
 
+/**
+ * Is this the backend saying a table doesn't exist?
+ *
+ * PostgREST answers PGRST205 for a table missing from its schema cache, which
+ * is exactly what a project that hasn't had the latest migration run yet looks
+ * like. Matched narrowly on purpose: a network failure must NOT land here, or
+ * being offline would present as "your data is empty" instead of triggering
+ * the retry and the offline banner.
+ */
+function isMissingTable(err: unknown): boolean {
+  const code = (err as { code?: string })?.code
+  if (code === 'PGRST205' || code === '42P01') return true
+  const message = (err as { message?: string })?.message ?? ''
+  return message.includes('schema cache') && message.includes('Could not find the table')
+}
+
 interface DataState extends Collections {
   adapter: DataAdapter
   ready: boolean
   connection: 'local' | 'live' | 'offline'
   pendingCount: number
+  /**
+   * Tables the backend doesn't have yet, i.e. a migration that hasn't been run.
+   * Surfaced in Settings → About so "the Owe list is empty" is distinguishable
+   * from "the Owe list was never created".
+   */
+  missingTables: TableName[]
 
   init: () => Promise<void>
   setAdapter: (adapter: DataAdapter) => Promise<void>
@@ -69,6 +91,7 @@ export const useData = create<DataState>((set, get) => ({
   ready: false,
   connection: 'local',
   pendingCount: 0,
+  missingTables: [],
 
   async init() {
     await get().refetchAll()
@@ -88,13 +111,43 @@ export const useData = create<DataState>((set, get) => ({
    * missed while disconnected, so on every (re)subscribe the only thing that
    * guarantees convergence is refetching outright — and at household scale
    * that's a few hundred rows.
+   *
+   * A table the backend has never heard of is tolerated rather than fatal.
+   * This used to reject the whole batch, which meant a project running one
+   * migration behind couldn't get past the loading screen at all: the launcher
+   * asks for five tables that only exist after 015_launcher.sql, so a household
+   * that had not run it yet lost Things too — an app that worked perfectly well
+   * a version ago and whose own tables were all present. Now the feature that
+   * hasn't been set up is empty, and everything else carries on.
    */
   async refetchAll() {
     const { adapter } = get()
+    const missing: TableName[] = []
+
     const entries = await Promise.all(
-      TABLES.map(async (t) => [t, await adapter.list(t)] as const),
+      TABLES.map(async (t) => {
+        try {
+          return [t, await adapter.list(t)] as const
+        } catch (err) {
+          if (!isMissingTable(err)) throw err
+          missing.push(t)
+          // Keep whatever is already loaded rather than blanking it: on a
+          // reconnect this path would otherwise wipe good rows for a table
+          // that briefly failed to resolve.
+          return [t, get()[t]] as const
+        }
+      }),
     )
-    set(Object.fromEntries(entries) as unknown as Collections)
+
+    if (missing.length > 0) {
+      console.warn(
+        `[data] backend is missing ${missing.join(', ')} — run the latest SQL migration`,
+      )
+    }
+    set({
+      ...(Object.fromEntries(entries) as unknown as Collections),
+      missingTables: missing,
+    })
   },
 
   applyChange(event) {

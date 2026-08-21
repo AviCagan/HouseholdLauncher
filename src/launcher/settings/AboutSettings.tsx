@@ -16,6 +16,7 @@ import { isNative } from '@/lib/platform'
 export function AboutSettings() {
   const connection = useData((s) => s.connection)
   const pending = useData((s) => s.pendingCount)
+  const missing = useData((s) => s.missingTables)
 
   const connectionLabel = !isConfigured()
     ? 'On this device only'
@@ -27,6 +28,25 @@ export function AboutSettings() {
 
   return (
     <>
+      {/*
+        Shown only when the backend is behind the app. Named plainly rather
+        than as an error, because nothing is broken — the SQL just hasn't been
+        run, and until it is these features have nowhere to store anything.
+      */}
+      {missing.length > 0 && (
+        <SettingsGroup
+          label="Setup unfinished"
+          hint="Open your Supabase project → SQL Editor, paste in supabase/015_launcher.sql from the repo, and press Run. Safe to run twice."
+        >
+          <SettingsRow
+            icon="lock"
+            tint="var(--warn)"
+            title="The database is missing some tables"
+            subtitle={`Until the migration runs, these won't save: ${missing.join(', ')}`}
+          />
+        </SettingsGroup>
+      )}
+
       <SettingsGroup label="This build">
         <SettingsRow
           title="Version"
