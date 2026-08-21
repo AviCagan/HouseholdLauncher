@@ -144,6 +144,24 @@ export function createLocalAdapter(): DataAdapter {
       return row as never
     },
 
+    async steal(table, id, profileId, seenHolder) {
+      const db = await load()
+      const rows = db[table] as Array<{ id: string; claimed_by: string | null }>
+      const row = rows.find((r) => r.id === id)
+      // Same conditional as the Supabase adapter: only a claim still held by
+      // the person the caller saw can be taken from them.
+      if (!row || row.claimed_by !== seenHolder) {
+        return { won: false, row: (row ?? undefined) as never }
+      }
+      const beforeSteal = { ...row }
+      row.claimed_by = profileId
+      ;(row as { updated_at?: string }).updated_at = nowIso()
+      logActivity(db, table, 'update', beforeSteal as never, row as never)
+      await persist()
+      emit({ table, type: 'update', row } as never)
+      return { won: true, row: row as never }
+    },
+
     async completeRecurring(id, profileId, seenLastCompletedAt) {
       const db = await load()
       const rows = db.chores as Chore[]

@@ -225,6 +225,24 @@ async function optimistic<T extends TableName>(
   }
 }
 
+/**
+ * How long a "tap again to take it" offer stands.
+ *
+ * Long enough to read the toast and decide, short enough that a tap on the
+ * same row minutes later is a fresh intention rather than the second half of a
+ * gesture nobody remembers starting.
+ */
+const STEAL_CONFIRM_MS = 6000
+
+/**
+ * The claim currently being offered for theft.
+ *
+ * Module state rather than store state on purpose: nothing renders from it, so
+ * putting it in the store would repaint every subscribed list twice per tap to
+ * move a value only this function reads.
+ */
+let pendingSteal: { table: string; id: string; holder: string; at: number } | null = null
+
 function baseFields(profileId: string | null) {
   return {
     id: newId(),
@@ -508,9 +526,55 @@ export const dataActions = {
       return
     }
 
+    /*
+      Someone else holds it: offer to take it, then take it.
+
+      Two taps rather than one, and not out of caution about the data — the
+      write is trivially reversible. It is about the other person. A claim is a
+      statement that they are going to do it, and quietly overriding that on a
+      mis-tap is the kind of thing that gets noticed and resented long before
+      anyone thinks to check the app. The confirmation makes taking it a choice
+      you can't make by accident, and the count that follows makes it visible.
+    */
     if (currentClaim !== null) {
-      fire('warning')
-      toast(`${claimantName(currentClaim)} has this one`)
+      const pending = pendingSteal
+      const isConfirming =
+        pending !== null &&
+        pending.table === table &&
+        pending.id === id &&
+        pending.holder === currentClaim &&
+        Date.now() - pending.at < STEAL_CONFIRM_MS
+
+      if (!isConfirming) {
+        pendingSteal = { table, id, holder: currentClaim, at: Date.now() }
+        fire('warning')
+        toast(`${claimantName(currentClaim)} has this — again to take it`)
+        return
+      }
+
+      pendingSteal = null
+      fire('claim')
+      applyLocal(table, id, { claimed_by: profileId })
+      try {
+        const result = await adapter.steal(table, id, profileId, currentClaim)
+        if (!result.won) {
+          undo()
+          fire('warning')
+          const holder = result.row?.claimed_by
+          // The holder changed between the two taps. Saying so is better than
+          // silently stealing from whoever happens to hold it now.
+          toast(
+            holder
+              ? `${claimantName(holder)} has it now — try again`
+              : 'They let it go — it\'s free now',
+          )
+          return
+        }
+        toast(`Taken from ${claimantName(currentClaim)}`)
+      } catch {
+        undo()
+        fire('error')
+      }
       return
     }
 

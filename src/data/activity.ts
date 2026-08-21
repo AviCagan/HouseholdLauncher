@@ -43,6 +43,8 @@ interface AnyRow {
 export interface DerivedActivity {
   event: ActivityLog['event']
   actorId: string | null
+  /** Who it was taken FROM. Only a steal has a second person in it. */
+  subjectId?: string | null
 }
 
 export function deriveActivity(
@@ -92,6 +94,26 @@ export function deriveActivity(
     }
   }
 
+  // --- then theft, before plain claiming ---
+  //
+  // A steal moves claimed_by from one person to another without ever passing
+  // through null, so the claimed/unclaimed check below cannot see it: that one
+  // tests whether the NULL-ness changed, and here it doesn't. Ordered first for
+  // the same reason it is in the SQL trigger.
+  if (table !== 'wishlist_items') {
+    if (
+      before.claimed_by != null &&
+      after.claimed_by != null &&
+      before.claimed_by !== after.claimed_by
+    ) {
+      return {
+        event: 'stolen',
+        actorId: after.claimed_by,
+        subjectId: before.claimed_by,
+      }
+    }
+  }
+
   // --- then claiming ---
   if (table !== 'wishlist_items') {
     const wasClaimed = before.claimed_by != null
@@ -125,6 +147,7 @@ export function activityRow(
     title,
     event: derived.event,
     actor_id: derived.actorId,
+    subject_id: derived.subjectId ?? null,
     created_at: new Date().toISOString(),
   }
 }

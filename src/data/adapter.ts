@@ -100,6 +100,22 @@ export interface DataAdapter {
   ): Promise<TableMap[T] | null>
 
   /**
+   * Take a claim off whoever currently holds it.
+   *
+   * Conditional on `seenHolder` rather than unconditional, which matters for
+   * the same reason `claim` is conditional: between the row being drawn and
+   * the tap landing, the holder may have released it or been robbed by the
+   * third phone. Overwriting blindly would record a theft from someone who no
+   * longer had it, and `won: false` lets the caller re-read and say so.
+   */
+  steal<T extends 'todos' | 'chores' | 'shopping_items'>(
+    table: T,
+    id: string,
+    profileId: string,
+    seenHolder: string,
+  ): Promise<ClaimResult<TableMap[T]>>
+
+  /**
    * Guarded completion for recurring chores — advances the cooldown only if
    * `last_completed_at` still matches what the caller last saw, so simultaneous
    * taps from both phones can't double-advance it.

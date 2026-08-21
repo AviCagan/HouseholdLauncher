@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+    <defs>
+      <linearGradient id="bg" x1="0" y1="0" x2="0.35" y2="1"><stop offset="0%" stop-color="#9B7BFF"/><stop offset="45%" stop-color="#6A45E8"/><stop offset="100%" stop-color="#3A1E9E"/></linearGradient>
+      <!-- A soft top-left light so the tile isn't a flat wash. Kept very low
+           contrast: at 48px anything stronger reads as a smudge. -->
+      <radialGradient id="sheen" cx="0.28" cy="0.18" r="0.75">
+        <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.22"/>
+        <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+    <rect width="512" height="512" rx="112" fill="url(#sheen)"/>
+    <g transform="translate(256 256) scale(1) translate(-256 -256)">
+      <!-- Knockout, not two shapes: the windows show the gradient behind, so
+           the background reads through the mark and the icon keeps depth at
+           sizes where a separate coloured square would just blur. -->
+      <mask id="windows">
+        <rect width="512" height="512" fill="black"/>
+        <path d="M256 132 L404 258 L404 420 L108 420 L108 258 Z"
+              fill="white" stroke="white" stroke-width="26" stroke-linejoin="round"/>
+        <g fill="black">
+          <rect x="186" y="272" width="60" height="60" rx="15"/>
+          <rect x="266" y="272" width="60" height="60" rx="15"/>
+          <rect x="186" y="352" width="60" height="60" rx="15"/>
+          <rect x="266" y="352" width="60" height="60" rx="15"/>
+        </g>
+      </mask>
+      <rect width="512" height="512" fill="white" mask="url(#windows)"/>
+    </g></svg>

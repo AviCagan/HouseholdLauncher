@@ -59,6 +59,16 @@ export interface Score {
   added: number
   /** Currently on their plate. */
   claimed: number
+  /** Claims they took off somebody else in the window. */
+  stolen: number
+  /**
+   * Claims taken off THEM in the window.
+   *
+   * Counted separately rather than derived by subtraction, because with more
+   * than two people in the household "thefts minus mine" is not the number of
+   * times you were robbed — it is the number of times anyone else was.
+   */
+  robbed: number
 }
 
 /** Events that mean "this person finished something". */
@@ -89,6 +99,10 @@ export function scoreboard(
     done: recent.filter((e) => e.actor_id === profileId && DONE_EVENTS.has(e.event)).length,
     added: recent.filter((e) => e.actor_id === profileId && e.event === 'added').length,
     claimed: claimedBy.filter((id) => id === profileId).length,
+    stolen: recent.filter((e) => e.event === 'stolen' && e.actor_id === profileId).length,
+    // subject_id is absent on rows written before 016, so those simply don't
+    // count rather than counting against whoever happens to be first.
+    robbed: recent.filter((e) => e.event === 'stolen' && e.subject_id === profileId).length,
   }))
 }
 

@@ -40,6 +40,9 @@ function stubAdapter(absent: TableName[]): DataAdapter {
     async unclaim() {
       return null as never
     },
+    async steal() {
+      return { won: true } as never
+    },
     async completeRecurring() {
       return { won: true } as never
     },

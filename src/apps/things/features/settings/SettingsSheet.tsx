@@ -11,7 +11,6 @@ import { enablePush, pushState, type PushState } from '@/lib/notifications'
 import { runPushDiagnostics, sendTestPush, type Check } from '@/lib/pushDiagnostics'
 import { newVoiceToken, voiceUrl, VOICE_LISTS } from '@/lib/voice'
 import { buildLabel, nativeVersion } from '@/lib/build'
-import { fileToAvatarDataUrl, dataUrlBytes } from '@/lib/image'
 import { AddressInput } from '@/components/primitives/AddressInput'
 import { ColorPicker } from '@/components/primitives/ColorPicker'
 import { ColorSwatchButton } from '@/components/primitives/ColorSwatchButton'
@@ -26,9 +25,8 @@ import {
 } from '@/lib/calendar'
 import { openExternal, copyToClipboard } from '@/apps/things/routing/deeplink'
 import { isConfigured } from '@/lib/env'
-import { Avatar } from '@/components/primitives/ClaimChip'
 import { toast } from 'sonner'
-import type { HouseholdSettings, Profile } from '@/data/types'
+import type { HouseholdSettings } from '@/data/types'
 import type {
   HapticIntensity,
   NavApp,
@@ -121,7 +119,6 @@ export function SettingsSheet() {
         </p>
 
         <Group label={`${profile.display_name}'s look`}>
-          <AvatarRow profile={profile} />
 
           <Row label="Theme" stacked>
             <div className="pt-2">
@@ -1113,137 +1110,6 @@ function PushDiagnostics({ profileId }: { profileId: string }) {
           ))}
         </div>
       )}
-    </div>
-  )
-}
-
-/** Profile photo: pick, downscale, store. Emoji stays as the fallback. */
-function AvatarRow({ profile }: { profile: Profile }) {
-  const [busy, setBusy] = useState(false)
-  const [choosing, setChoosing] = useState(false)
-
-  async function pick(file: File | undefined) {
-    if (!file) return
-    setBusy(true)
-    try {
-      const dataUrl = await fileToAvatarDataUrl(file)
-      if (dataUrlBytes(dataUrl) > 400_000) {
-        throw new Error('That image is too large even after resizing')
-      }
-      await dataActions.patchRow('profiles', profile.id, { avatar_url: dataUrl })
-      fire('success')
-      setChoosing(false)
-    } catch (err) {
-      fire('error')
-      toast.error(err instanceof Error ? err.message : "Couldn't use that photo")
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <div
-      className="flex items-center gap-4 rounded-2xl px-4 py-3.5"
-      style={{ background: 'var(--surface-2)' }}
-    >
-      <span
-        className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-full text-[26px]"
-        style={{
-          background: `color-mix(in oklab, ${profile.color_hex} 24%, transparent)`,
-          border: `2px solid ${profile.color_hex}`,
-        }}
-      >
-        <Avatar profile={profile} size={56} />
-      </span>
-
-      <div className="min-w-0 flex-1">
-        <div className="text-[14px] font-medium">Your photo</div>
-        <div className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
-          {profile.avatar_url ? 'Shown wherever you appear' : 'Using your emoji for now'}
-        </div>
-      </div>
-
-      <div className="flex shrink-0 flex-col items-end gap-1.5">
-        {!choosing ? (
-          <button
-            onClick={() => {
-              fire('tap')
-              setChoosing(true)
-            }}
-            className="rounded-full px-3 py-2 text-[12px] font-semibold text-white"
-            style={{ background: 'var(--accent)' }}
-          >
-            {profile.avatar_url ? 'Change' : 'Add photo'}
-          </button>
-        ) : (
-        <div className="flex items-center gap-1.5">
-          {/* Two inputs rather than one: `capture` opens the camera straight
-              away, and without it the picker offers the photo library. There
-              is no single control that offers both. */}
-          <label
-            className="cursor-pointer rounded-full px-3 py-2 text-[12px] font-semibold text-white"
-            style={{ background: 'var(--accent)', opacity: busy ? 0.6 : 1 }}
-          >
-            {busy ? 'Saving…' : 'Camera'}
-            <input
-              type="file"
-              accept="image/*"
-              capture="user"
-              className="hidden"
-              onChange={(e) => {
-                void pick(e.target.files?.[0])
-                e.target.value = ''
-              }}
-            />
-          </label>
-
-          <label
-            className="cursor-pointer rounded-full px-3 py-2 text-[12px] font-semibold"
-            style={{
-              background: 'var(--surface-3)',
-              color: 'var(--text)',
-              opacity: busy ? 0.6 : 1,
-            }}
-          >
-            Library
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                void pick(e.target.files?.[0])
-                e.target.value = ''
-              }}
-            />
-          </label>
-
-          <button
-            onClick={() => {
-              fire('tap')
-              setChoosing(false)
-            }}
-            aria-label="Cancel"
-            className="px-1 text-[12px]"
-            style={{ color: 'var(--text-faint)' }}
-          >
-            Cancel
-          </button>
-        </div>
-        )}
-
-        {profile.avatar_url && !choosing && (
-          <button
-            onClick={() => {
-              fire('delete')
-              void dataActions.patchRow('profiles', profile.id, { avatar_url: null })
-            }}
-            className="px-1 text-[12px]"
-            style={{ color: 'var(--text-faint)' }}
-          >
-            Remove photo
-          </button>
-        )}
-      </div>
     </div>
   )
 }

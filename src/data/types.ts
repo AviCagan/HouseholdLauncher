@@ -263,8 +263,24 @@ export interface ActivityLog {
   table_name: 'todos' | 'chores' | 'shopping_items' | 'wishlist_items'
   row_id: string
   title: string
-  event: 'added' | 'edited' | 'completed' | 'uncompleted' | 'claimed' | 'unclaimed' | 'deleted'
+  event:
+    | 'added'
+    | 'edited'
+    | 'completed'
+    | 'uncompleted'
+    | 'claimed'
+    | 'unclaimed'
+    | 'deleted'
+    // Someone took a claim off someone else. The only event with two people in
+    // it, which is why `subject_id` exists.
+    | 'stolen'
   actor_id: string | null
+  /**
+   * Who the event happened TO. Only ever set for 'stolen' — the person the
+   * claim was taken from. Optional because rows written before 016 have no
+   * such column.
+   */
+  subject_id?: string | null
   created_at: string
 }
 

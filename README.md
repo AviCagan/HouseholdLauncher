@@ -120,6 +120,15 @@ the row is the record either way.
 **Claiming is a race,** so it's never read-then-write. The database arbitrates
 with a conditional update, and losing simply shows "Jackie got there first."
 
+**A claim can be stolen, and stealing is counted.** First-come-first-served is
+the right rule for two phones tapping at once and the wrong one for the far
+commoner case: you claimed the shopping, they're the one driving past the shop.
+So a held claim can be taken — after a confirmation, because quietly overriding
+someone's "I'll do it" on a mis-tap gets noticed long before anyone thinks to
+check the app. The theft lands in the activity log as its own event with both
+people named, so the scoreboard can show *stolen* and *robbed* without a second
+source of truth. Both counts stay hidden until the first one happens.
+
 **Cooldowns are derived, not pushed.** When a recurring chore's rest period
 expires, *nothing in the database changes* — so Postgres emits no event and no
 push can announce it. The client works it out from a ticker that also recomputes

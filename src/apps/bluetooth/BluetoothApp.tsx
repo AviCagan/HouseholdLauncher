@@ -3,8 +3,10 @@ import { AnimatePresence, motion } from 'motion/react'
 import { toast } from 'sonner'
 import { Icon, type IconName } from '@/components/primitives/Icon'
 import { EmptyState } from '@/components/shell/Screen'
+import { Sheet } from '@/components/primitives/Sheet'
 import { Toggle } from '@/launcher/settings/SettingsSheet'
 import { BluetoothControl, type BtDevice } from './plugin'
+import { displayName, isRenamed, loadNicknames, setNickname } from './nicknames'
 import { fire } from '@/lib/haptics'
 
 /**
@@ -41,6 +43,13 @@ export function BluetoothApp() {
   const [status, setStatus] = useState<Status>({ kind: 'loading' })
   /** Addresses with a call in flight, so their row can't be double-tapped. */
   const [busy, setBusy] = useState<string[]>([])
+  const [nicknames, setNicknames] = useState<Record<string, string>>({})
+  /** The device being renamed, if any. */
+  const [renaming, setRenaming] = useState<BtDevice | null>(null)
+
+  useEffect(() => {
+    void loadNicknames().then(setNicknames)
+  }, [])
 
   const refresh = useCallback(async () => {
     try {
@@ -66,6 +75,11 @@ export function BluetoothApp() {
         // Connected first, then alphabetical. The device you want to drop is
         // by definition one that is currently connected, so it should never be
         // below the fold.
+        //
+        // Ordered on the name Android reports rather than on the nickname:
+        // this list re-sorts on every refresh, and sorting by an editable name
+        // would make a rename slide the row somewhere else a second after you
+        // saved it.
         devices: [...devices].sort(
           (a, b) => Number(b.connected) - Number(a.connected) || a.name.localeCompare(b.name),
         ),
@@ -226,13 +240,30 @@ export function BluetoothApp() {
                   <Icon name={ICONS[device.kind]} size={19} />
                 </span>
 
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[15px] font-semibold">{device.name}</span>
-                  <span className="block text-[12px]" style={{ color: 'var(--text-faint)' }}>
-                    {device.connected ? 'Connected' : 'Paired, not connected'}
-                    {device.kind === 'car' ? ' · car' : ''}
+                <button
+                  onClick={() => {
+                    fire('tap')
+                    setRenaming(device)
+                  }}
+                  aria-label={`Rename ${displayName(nicknames, device.address, device.name)}`}
+                  className="min-w-0 flex-1 text-left"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <span className="truncate text-[15px] font-semibold">
+                      {displayName(nicknames, device.address, device.name)}
+                    </span>
+                    <span className="shrink-0" style={{ color: 'var(--text-faint)', opacity: 0.7 }}>
+                      <Icon name="pencil" size={12} />
+                    </span>
                   </span>
-                </span>
+                  <span className="block truncate text-[12px]" style={{ color: 'var(--text-faint)' }}>
+                    {/* The name Android reports, kept visible once renamed —
+                        without it there is no way to tell which physical thing
+                        "Car" actually is when two of them could be. */}
+                    {isRenamed(nicknames, device.address) ? `${device.name} · ` : ''}
+                    {device.connected ? 'Connected' : 'Paired, not connected'}
+                  </span>
+                </button>
 
                 <Toggle
                   on={device.connected}
@@ -258,10 +289,87 @@ export function BluetoothApp() {
       </button>
 
       <p className="px-2 pt-3 text-[11.5px] leading-snug" style={{ color: 'var(--text-faint)' }}>
-        Switching a device off disconnects it now without unpairing, so turning it
-        back on reconnects straight away. Devices can still reconnect on their own
-        later — Android doesn't let an app block that.
+        Tap a name to rename it. Switching a device off disconnects it now without
+        unpairing, so turning it back on reconnects straight away. Devices can still
+        reconnect on their own later — Android doesn't let an app block that.
       </p>
+
+      <RenameSheet
+        device={renaming}
+        current={renaming ? displayName(nicknames, renaming.address, renaming.name) : ''}
+        onClose={() => setRenaming(null)}
+        onSave={async (name) => {
+          if (!renaming) return
+          setNicknames(await setNickname(renaming.address, name))
+          fire('success')
+          setRenaming(null)
+        }}
+      />
     </div>
+  )
+}
+
+/** Rename one device. Clearing the field restores the name Android reports. */
+function RenameSheet({
+  device,
+  current,
+  onClose,
+  onSave,
+}: {
+  device: BtDevice | null
+  current: string
+  onClose: () => void
+  onSave: (name: string) => void | Promise<void>
+}) {
+  const [value, setValue] = useState('')
+
+  // Reloaded whenever a different device is opened. Keyed on the address
+  // rather than the object, which is replaced on every refresh poll.
+  useEffect(() => {
+    if (device) setValue(current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [device?.address])
+
+  if (!device) return null
+
+  return (
+    <Sheet open onClose={onClose} title="Rename device">
+      <div className="flex flex-col gap-3 pb-4">
+        <input
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void onSave(value)
+          }}
+          placeholder={device.name}
+          aria-label="Device name"
+          autoFocus
+          className="w-full rounded-2xl px-3.5 py-3 text-[16px] outline-none placeholder:opacity-40"
+          style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
+        />
+        <p className="px-1 text-[12px]" style={{ color: 'var(--text-faint)' }}>
+          Your phone still calls it <strong>{device.name}</strong>. This name is only
+          used here, and only on this device.
+        </p>
+
+        <button
+          onClick={() => void onSave(value)}
+          className="w-full rounded-2xl py-3.5 text-[15px] font-semibold text-white"
+          style={{ background: 'var(--accent)' }}
+        >
+          Save
+        </button>
+
+        {value.trim() !== device.name && (
+          <button
+            onClick={() => void onSave('')}
+            className="w-full rounded-2xl py-3 text-[14px] font-semibold"
+            style={{ color: 'var(--text-dim)' }}
+          >
+            Use the original name
+          </button>
+        )}
+      </div>
+    </Sheet>
   )
 }

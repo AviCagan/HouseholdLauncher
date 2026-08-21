@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Icon } from '@/components/primitives/Icon'
 import { SettingsGroup, SettingsRow, PrimaryButton, Notice } from './SettingsSheet'
+import { AvatarPicker } from './AvatarPicker'
 import { useCurrentMember, useIsOwner } from '@/store/useMember'
 import { useUI } from '@/store/useUI'
 import { useData } from '@/store/useData'
@@ -44,13 +45,13 @@ export function GeneralSettings() {
     <>
       {member && (
         <SettingsGroup label="You">
+          {/* Photo first: it is the thing you came here to change, and it says
+              who this section is about better than the name field does. */}
+          <AvatarPicker profile={member} />
+
+          {/* No avatar on this row: the picker directly above already shows it,
+              and two copies of the same face in one card reads as a mistake. */}
           <div className="flex items-center gap-3 px-3.5 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
-            <span
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-[20px]"
-              style={{ background: `color-mix(in oklab, ${member.color_hex} 22%, transparent)` }}
-            >
-              {member.avatar_emoji}
-            </span>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}

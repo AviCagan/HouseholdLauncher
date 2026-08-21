@@ -13,6 +13,7 @@ export type NotifyEvent =
   | 'urgent_added'
   | 'any_added'
   | 'item_edited'
+  | 'claim_stolen'
   // Owe & Owed
   | 'debt_added'
   | 'debt_paid'
@@ -137,6 +138,38 @@ export function classify(body: WebhookBody): Classified | null {
   }
 
   if (type === 'UPDATE' && old_record) {
+    /*
+      Taken off someone.
+
+      Checked before the newly-claimed branch below, which only tests that the
+      new value is set and the old one wasn't — a steal satisfies neither half,
+      so it would otherwise fall through to 'edited' or to nothing.
+
+      `targetId` is the victim rather than "everyone but the actor". This is
+      the one event whose entire audience is a single specific person: being
+      told a claim you never had was reassigned is noise, and being told yours
+      was is the point.
+    */
+    if (
+      old_record.claimed_by &&
+      record.claimed_by &&
+      old_record.claimed_by !== record.claimed_by
+    ) {
+      return {
+        event: 'claim_stolen',
+        appId,
+        actorId: record.claimed_by,
+        targetId: old_record.claimed_by,
+        push: {
+          title: 'Taken off you',
+          body: title,
+          tab,
+          itemId: record.id,
+          tag: `steal-${record.id}`,
+        },
+      }
+    }
+
     // Newly claimed
     if (!old_record.claimed_by && record.claimed_by) {
       return {

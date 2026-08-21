@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deriveActivity, isActivityTable } from './activity'
+import { activityRow, deriveActivity, isActivityTable } from './activity'
 
 /**
  * These mirror the end-to-end cases the Postgres `log_activity()` trigger was
@@ -116,5 +116,83 @@ describe('deriveActivity', () => {
     const before = row({ is_purchased: false, claimed_by: undefined })
     const after = row({ is_purchased: false, claimed_by: undefined, title: 'New' })
     expect(deriveActivity('wishlist_items', 'update', before, after)).toBeNull()
+  })
+})
+
+describe('stolen claims', () => {
+  it('reports a claim moving between two people as stolen, not edited', () => {
+    const derived = deriveActivity(
+      'todos',
+      'update',
+      { id: 't', claimed_by: 'avi' },
+      { id: 't', claimed_by: 'jackie' },
+    )
+    expect(derived).toEqual({ event: 'stolen', actorId: 'jackie', subjectId: 'avi' })
+  })
+
+  it('names the thief as the actor and the victim as the subject', () => {
+    const derived = deriveActivity(
+      'shopping_items',
+      'update',
+      { id: 's', claimed_by: 'jackie' },
+      { id: 's', claimed_by: 'avi' },
+    )
+    expect(derived?.actorId).toBe('avi')
+    expect(derived?.subjectId).toBe('jackie')
+  })
+
+  /*
+    The ordering that makes the whole thing work. A steal never passes through
+    null, so the claimed/unclaimed check — which tests whether the NULL-ness
+    changed — cannot see it. Put that check first and every theft is logged as
+    a plain edit, or as nothing at all.
+  */
+  it('is not confused with an ordinary claim or release', () => {
+    const claimed = deriveActivity(
+      'todos',
+      'update',
+      { id: 't', claimed_by: null },
+      { id: 't', claimed_by: 'avi' },
+    )
+    expect(claimed?.event).toBe('claimed')
+
+    const released = deriveActivity(
+      'todos',
+      'update',
+      { id: 't', claimed_by: 'avi' },
+      { id: 't', claimed_by: null },
+    )
+    expect(released?.event).toBe('unclaimed')
+  })
+
+  it('does not fire when the same person re-claims their own item', () => {
+    const derived = deriveActivity(
+      'todos',
+      'update',
+      { id: 't', claimed_by: 'avi' },
+      { id: 't', claimed_by: 'avi' },
+    )
+    expect(derived).toBeNull()
+  })
+
+  /*
+    Completing a recurring chore writes last_completed_by AND clears claimed_by
+    in one update. Completion is checked first, so this stays 'completed' — if
+    theft were checked earlier it would still be safe (the new claim is null),
+    but this pins the behaviour either way.
+  */
+  it('still reports a completed chore as completed, not as a claim change', () => {
+    const derived = deriveActivity(
+      'chores',
+      'update',
+      { id: 'c', claimed_by: 'avi', last_completed_by: null },
+      { id: 'c', claimed_by: null, last_completed_by: 'jackie' },
+    )
+    expect(derived?.event).toBe('completed')
+  })
+
+  it('leaves subject_id null for every event that is not a theft', () => {
+    const added = deriveActivity('todos', 'insert', null, { id: 't', created_by: 'avi' })
+    expect(activityRow('todos', 't', 'x', added!).subject_id).toBeNull()
   })
 })

@@ -135,6 +135,30 @@ export function createSupabaseAdapter(sb: SupabaseClient): DataAdapter {
     },
 
     /**
+     * Take a claim, but only from the person the caller saw holding it.
+     *
+     * `.eq('claimed_by', seenHolder)` is what makes the theft honest: if the
+     * holder released it a moment ago, this matches nothing and the row is
+     * claimed the ordinary way instead of logged as taken from someone who had
+     * already let go.
+     */
+    async steal(table, id, profileId, seenHolder) {
+      const { data, error } = await from(table)
+        .update({ claimed_by: profileId })
+        .eq('id', id)
+        .eq('claimed_by', seenHolder)
+        .select()
+      if (error) throw error
+
+      const rows = (data ?? []) as unknown[]
+      if (rows.length === 0) {
+        const { data: current } = await from(table).select('*').eq('id', id).maybeSingle()
+        return { won: false, row: (current ?? undefined) as never }
+      }
+      return { won: true, row: rows[0] as never }
+    },
+
+    /**
      * Guarded so two phones tapping "done" at the same moment can't advance the
      * cooldown twice. The filter pins the update to the state the caller saw.
      */

@@ -189,16 +189,16 @@ describe('scoreboard', () => {
 describe('shareOfDone', () => {
   it('splits proportionally', () => {
     const share = shareOfDone([
-      { profileId: 'avi', done: 3, added: 0, claimed: 0 },
-      { profileId: 'jackie', done: 1, added: 0, claimed: 0 },
+      { profileId: 'avi', done: 3, added: 0, claimed: 0, stolen: 0, robbed: 0 },
+      { profileId: 'jackie', done: 1, added: 0, claimed: 0, stolen: 0, robbed: 0 },
     ])
     expect(share).toEqual([0.75, 0.25])
   })
 
   it('reads level when nobody has done anything, rather than a default winner', () => {
     const share = shareOfDone([
-      { profileId: 'avi', done: 0, added: 0, claimed: 0 },
-      { profileId: 'jackie', done: 0, added: 0, claimed: 0 },
+      { profileId: 'avi', done: 0, added: 0, claimed: 0, stolen: 0, robbed: 0 },
+      { profileId: 'jackie', done: 0, added: 0, claimed: 0, stolen: 0, robbed: 0 },
     ])
     expect(share).toEqual([0.5, 0.5])
   })

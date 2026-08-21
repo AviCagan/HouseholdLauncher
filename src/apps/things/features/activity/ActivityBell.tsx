@@ -341,7 +341,9 @@ function ScoreRow({
   share,
 }: {
   profile: Profile
-  score: { done: number; added: number; claimed: number } | undefined
+  score:
+    | { done: number; added: number; claimed: number; stolen: number; robbed: number }
+    | undefined
   share: number
 }) {
   return (
@@ -364,6 +366,19 @@ function ScoreRow({
       <div className="flex items-center gap-3 text-[12px]" style={{ color: 'var(--text-dim)' }}>
         <span title="On their plate now">{score?.claimed ?? 0} claimed</span>
         <span title="Added in this window">{score?.added ?? 0} added</span>
+        {/* Only shown once there is something to show. A permanent "0 stolen"
+            on both rows is noise; the first theft makes it appear, which is
+            considerably funnier and more useful. */}
+        {(score?.stolen ?? 0) > 0 && (
+          <span title="Claims taken off someone else" style={{ color: 'var(--warn)' }}>
+            {score?.stolen} stolen
+          </span>
+        )}
+        {(score?.robbed ?? 0) > 0 && (
+          <span title="Claims taken off them" style={{ color: 'var(--text-faint)' }}>
+            {score?.robbed} robbed
+          </span>
+        )}
       </div>
       <div className="flex w-14 shrink-0 flex-col items-end">
         <span className="text-[19px] font-bold leading-none">{score?.done ?? 0}</span>
@@ -383,6 +398,9 @@ const EVENT_META: Record<ActivityLog['event'], { icon: IconName; verb: string; c
   claimed: { icon: 'pin', verb: 'claimed', color: 'var(--accent)' },
   unclaimed: { icon: 'close', verb: 'unclaimed', color: 'var(--text-faint)' },
   deleted: { icon: 'trash', verb: 'deleted', color: 'var(--danger)' },
+  // Deliberately the loudest verb in the list. The whole point of counting
+  // thefts is that they are visible.
+  stolen: { icon: 'pin', verb: 'stole', color: 'var(--warn)' },
 }
 
 const TABLE_LABEL: Record<ActivityLog['table_name'], string> = {
