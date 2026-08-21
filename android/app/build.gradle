@@ -33,24 +33,41 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
-    // Release signing, supplied by CI (see .github/workflows/release-apk.yml).
-    //
-    // This exists so every build carries the SAME signature. A debug build is
-    // re-signed with a freshly generated debug keystore on each CI run, and
-    // Android refuses to install an update whose signature changed — so without
-    // this, every new version would need an uninstall first, wiping local
-    // settings. With the keystore secrets set, updates install in place.
-    //
-    // Falls back to a debug build when the keystore isn't present, so a local
-    // `./gradlew assembleDebug` still works with no setup.
+    /*
+      Release signing.
+
+      Every build has to carry the SAME signature or Android refuses to install
+      it over the previous one: you get "app not installed", and the only way
+      through is to uninstall first, which wipes the sign-in and local settings.
+      A debug build can never provide that — the debug keystore is regenerated
+      on each CI runner, so consecutive builds are signed by different keys.
+
+      The keystore itself is NOT in this repository. It is decoded from the
+      ANDROID_KEYSTORE_B64 secret by the workflow, which writes it here as
+      release.keystore. This repository is public, and a signing key in a public
+      place would let anyone build an APK that Android accepts as a silent
+      update to this one.
+
+      The alias and passwords below are plain constants, and that is deliberate
+      rather than an oversight: they protect nothing on their own. Without the
+      key file they open nothing, and anyone holding the key file can read its
+      alias straight out of it. Splitting them into four secrets would have
+      meant four things to configure and four things to lose, for no additional
+      protection.
+
+      To rotate: make a new keystore, replace the secret, and expect one final
+      uninstall on each phone — to Android a new key is a different app author.
+    */
     signingConfigs {
         release {
             def keystoreFile = file('release.keystore')
             if (keystoreFile.exists()) {
                 storeFile keystoreFile
-                storePassword System.getenv('KEYSTORE_PASSWORD')
-                keyAlias System.getenv('KEY_ALIAS')
-                keyPassword System.getenv('KEY_PASSWORD')
+                // Env vars win when supplied, so a keystore made some other way
+                // still works without editing this file.
+                storePassword System.getenv('KEYSTORE_PASSWORD') ?: 'householdlauncher'
+                keyAlias System.getenv('KEY_ALIAS') ?: 'household'
+                keyPassword System.getenv('KEY_PASSWORD') ?: 'householdlauncher'
             }
         }
     }

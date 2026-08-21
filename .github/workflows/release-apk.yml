@@ -68,21 +68,40 @@ jobs:
         if: env.ANDROID_KEYSTORE_B64 != ''
         run: |
           printf '%s' "$ANDROID_KEYSTORE_B64" | base64 -d > android/app/release.keystore
+          # Fail here rather than three steps later: a truncated or mangled
+          # paste decodes to bytes that are not a keystore, and Gradle's error
+          # for that names a JKS parsing failure without ever suggesting the
+          # secret is at fault.
+          if ! keytool -list -keystore android/app/release.keystore \
+                 -storepass "${KEYSTORE_PASSWORD:-householdlauncher}" >/dev/null 2>&1; then
+            echo "::error::ANDROID_KEYSTORE_B64 did not decode to a valid keystore. Re-copy the whole value — it is one long line with no spaces or newlines."
+            exit 1
+          fi
           echo "signed=true" >> "$GITHUB_OUTPUT"
 
       - name: Build signed release APK
         if: steps.keystore.outputs.signed == 'true'
         working-directory: android
         env:
+          # Optional. build.gradle falls back to the constants documented there
+          # when these are unset, which is the normal case — the key file is the
+          # secret, its alias is not.
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: ./gradlew assembleRelease --no-daemon
 
-      - name: Build debug APK (no keystore configured)
+      # A debug APK is signed with a keystore the runner generates fresh each
+      # time, so consecutive builds have different signatures and Android
+      # refuses to install one over the other. Useful for a first look, useless
+      # as an update — so it is built, but the run says so loudly rather than
+      # leaving someone to discover it at install time.
+      - name: Build debug APK (no signing key configured)
         if: steps.keystore.outputs.signed != 'true'
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
+        run: |
+          echo "::warning::ANDROID_KEYSTORE_B64 is not set, so this is a DEBUG build. It will NOT install as an update over an existing copy — the app must be uninstalled first. Set the secret to get updatable builds."
+          ./gradlew assembleDebug --no-daemon
 
       - name: Collect APK
         run: |

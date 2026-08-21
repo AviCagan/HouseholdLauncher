@@ -53,6 +53,24 @@ npm run build:native  # build + sync the Android project
 The APK is built by CI, not locally — see `.github/workflows/release-apk.yml`.
 Every push to the working branch leaves a downloadable APK artifact on the run.
 
+**Signing.** The build needs one repository secret, `ANDROID_KEYSTORE_B64`: a
+base64 copy of the signing keystore. Without it CI still produces an APK, but a
+debug-signed one that Android will not install over an existing copy — the run
+warns about exactly that. With it, every build shares a signature and updates
+install in place. The key file is deliberately not committed, since this
+repository is public; the alias and password are constants in
+`android/app/build.gradle`, which protect nothing without the key file itself.
+
+```bash
+# Making a fresh one, if the secret is ever lost. Note that a new key means one
+# final uninstall on each phone: to Android it is a different app author.
+keytool -genkeypair -v -keystore household.keystore -alias household \
+  -keyalg RSA -keysize 2048 -validity 10000 \
+  -storepass householdlauncher -keypass householdlauncher \
+  -dname "CN=Household Launcher, OU=Household, O=Household, C=US"
+base64 -w0 household.keystore    # paste this as ANDROID_KEYSTORE_B64
+```
+
 ---
 
 ## How sign-in works
