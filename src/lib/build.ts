@@ -8,6 +8,15 @@ export const BUILD_SHA = __BUILD_SHA__
 export const BUILD_TIME = __BUILD_TIME__
 export const BUILD_RUN = __BUILD_RUN__
 
+/**
+ * Whether this build was compiled with Firebase credentials.
+ *
+ * Read before every native push call. Asking Android to register without them
+ * is not a failed registration, it is an uncatchable crash — see the comment
+ * in vite.config.ts, and the guard in lib/notifications.ts.
+ */
+export const FCM_CONFIGURED = __FCM_CONFIGURED__
+
 /** "54c61f0 · run 42 · Aug 16, 3:41 PM" — short enough for a settings footer. */
 export function buildLabel(): string {
   const date = new Date(BUILD_TIME)

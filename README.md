@@ -171,9 +171,51 @@ Worth knowing up front rather than discovering later:
 - **A household code can't be looked up, only replaced.** Only its peppered hash
   reaches the database, which is exactly why a stolen table is not a list of
   codes. Write a new one down when it's shown; there is no recovery screen.
+- **Android push needs a Firebase project, and this build has none.** Web Push
+  is a browser standard; Android's equivalent is Firebase Cloud Messaging, and
+  there is no way around it for a Capacitor app — a WebView has no Push API.
+  Without it the Android app still shows badges and fills its notification
+  centre whenever it's open; it just can't be woken while closed. Settings →
+  Alerts says so on the phone, and asking for notifications is disabled rather
+  than offered, because tapping it used to kill the app outright: Capacitor
+  rethrows anything a plugin method throws as an uncaught RuntimeException, and
+  `PushNotifications.register()` throws when the APK was built with no
+  credentials. See **Turning Android push on** below.
 - **The Supabase key in the bundle is public.** That's why every table is gated
   behind an authenticated session and per-app RLS, and why turning off email
   signups in the dashboard actually matters.
+
+---
+
+## Turning Android push on
+
+Two repository secrets, both from one free Firebase project. Jackie's iPhone
+does not need any of this — iOS Web Push is a browser standard and already
+works.
+
+1. Create a project at <https://console.firebase.google.com>. Analytics is not
+   needed.
+2. Add an **Android** app to it. The package name must be exactly
+   `com.avicagan.household` — Firebase rejects a token whose package doesn't
+   match. Download the `google-services.json` it offers.
+3. Project settings → **Service accounts** → *Generate new private key*. That
+   downloads a second JSON. This one is a real credential: it can send a
+   notification to any device in the project, so it goes in a secret and
+   nowhere else.
+4. In this repository, Settings → Secrets and variables → Actions, add both
+   files as secrets, pasting each file's entire contents:
+
+   | Secret | File |
+   | --- | --- |
+   | `GOOGLE_SERVICES_JSON` | `google-services.json` from step 2 |
+   | `FCM_SERVICE_ACCOUNT` | the private key from step 3 |
+
+5. Re-run **Build Android APK** and **Deploy Supabase functions** from the
+   Actions tab, then install the new APK and tap *Turn on notifications* in
+   Settings → Alerts.
+
+Until step 4 is done the APK build logs a warning saying push is off, rather
+than producing a build that looks complete and fails silently on the phone.
 
 ---
 

@@ -2,6 +2,7 @@ import { PushNotifications } from '@capacitor/push-notifications'
 import { LocalNotifications } from '@capacitor/local-notifications'
 import { supabase } from './supabase'
 import { VAPID_PUBLIC_KEY } from './env'
+import { FCM_CONFIGURED } from './build'
 import {
   isNative,
   supportsWebPush,
@@ -20,6 +21,16 @@ import type { Chore } from '@/data/types'
 
 export type PushState =
   | 'unsupported'
+  /**
+   * Android, built without Firebase credentials.
+   *
+   * Its own state rather than 'unsupported' because the phone is perfectly
+   * capable and nothing about it is wrong — the build simply has no project to
+   * register against, and the fix is one file in CI, not anything the person
+   * holding the phone can do. Saying "unsupported" would send them to check
+   * device settings that are already correct.
+   */
+  | 'needs-fcm'
   | 'needs-install'
   | 'default'
   | 'granted'
@@ -36,6 +47,7 @@ export type PushState =
 
 export function pushState(): PushState {
   if (isNative()) {
+    if (!FCM_CONFIGURED) return 'needs-fcm'
     // Android 13+ prompts; older versions grant implicitly.
     return 'default'
   }
@@ -100,6 +112,20 @@ export async function enablePush(profileId: string): Promise<PushState> {
 }
 
 async function enableNativePush(profileId: string): Promise<PushState> {
+  /*
+    Before anything else, and not inside the try below — this is the guard that
+    stops a crash, and a try/catch cannot help.
+
+    PushNotifications.register() calls FirebaseMessaging.getInstance(), which
+    throws IllegalStateException when the APK was built with no
+    google-services.json. Capacitor's Bridge.callPluginMethod catches that and
+    rethrows it as a RuntimeException on its own task-handler thread, where
+    nothing is left to catch it: the process dies. From JS the promise never
+    settles and never rejects, because the app is gone. So the only fix is not
+    to make the call.
+  */
+  if (!FCM_CONFIGURED) return 'needs-fcm'
+
   let perm
   try {
     perm = await PushNotifications.checkPermissions()

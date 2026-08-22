@@ -41,6 +41,27 @@ jobs:
 
       - run: npm ci
 
+      # Firebase credentials for push notifications, and this MUST come before
+      # the build below.
+      #
+      # Two things read this file and both read it at build time: Gradle only
+      # wires Firebase in if it exists (android/app/build.gradle), and Vite
+      # bakes its presence into the bundle as __FCM_CONFIGURED__ so the app
+      # knows never to ask Android to register when it would crash. Written
+      # afterwards, the APK got Firebase while the bundle inside it believed
+      # otherwise — or, as it actually happened, neither, silently.
+      - name: Write google-services.json
+        if: env.GOOGLE_SERVICES_JSON != ''
+        run: printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+
+      # Loud, because the alternative is discovering it on the phone. Without
+      # this secret the APK is fine in every other respect and simply cannot
+      # receive notifications while closed.
+      - name: Warn when push is not configured
+        if: env.GOOGLE_SERVICES_JSON == ''
+        run: |
+          echo "::warning title=No push notifications::GOOGLE_SERVICES_JSON is not set, so this APK cannot receive push. Settings -> Alerts will say so on the phone."
+
       - name: Build web bundle and sync native project
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
@@ -51,12 +72,6 @@ jobs:
           VITE_HOUSEHOLD_EMAIL: ${{ secrets.VITE_HOUSEHOLD_EMAIL }}
           VITE_VAPID_PUBLIC_KEY: ${{ secrets.VITE_VAPID_PUBLIC_KEY }}
         run: npm run build:native
-
-      # Firebase config for push notifications. Optional: without it the app
-      # still builds and runs, it just can't receive push while closed.
-      - name: Write google-services.json
-        if: env.GOOGLE_SERVICES_JSON != ''
-        run: printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
 
       # A debug build is re-signed with a NEW debug keystore on every CI run,
       # and Android refuses to install an update whose signature changed — so

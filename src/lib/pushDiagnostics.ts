@@ -1,6 +1,7 @@
 import { supabase } from './supabase'
 import { VAPID_PUBLIC_KEY, isConfigured } from './env'
 import { isNative, isIOS, isStandalone, supportsWebPush } from './platform'
+import { FCM_CONFIGURED } from './build'
 
 /**
  * Why notifications aren't arriving, answered from the device itself.
@@ -29,11 +30,21 @@ export interface Check {
 
 async function serviceWorkerCheck(): Promise<Check> {
   if (isNative()) {
-    return {
-      label: 'Delivery channel',
-      status: 'ok',
-      detail: 'Android push (FCM) — no service worker needed',
-    }
+    // The native branch used to report a flat "ok" here and in the two checks
+    // below, which made this whole panel say everything was fine on the one
+    // device where nothing could possibly work.
+    return FCM_CONFIGURED
+      ? {
+          label: 'Delivery channel',
+          status: 'ok',
+          detail: 'Android push (FCM) — no service worker needed',
+        }
+      : {
+          label: 'Delivery channel',
+          status: 'bad',
+          detail: 'This build has no Firebase key',
+          fix: 'Nothing to fix on the phone. The APK has to be rebuilt with a google-services.json — ask Claude to set it up.',
+        }
   }
   if (!('serviceWorker' in navigator)) {
     return {
@@ -64,11 +75,17 @@ async function serviceWorkerCheck(): Promise<Check> {
 
 async function subscriptionCheck(): Promise<Check> {
   if (isNative()) {
-    return {
-      label: 'Device registration',
-      status: 'ok',
-      detail: 'Handled by the Android app',
-    }
+    return FCM_CONFIGURED
+      ? {
+          label: 'Device registration',
+          status: 'ok',
+          detail: 'Handled by the Android app',
+        }
+      : {
+          label: 'Device registration',
+          status: 'bad',
+          detail: 'Cannot register without a Firebase key',
+        }
   }
   if (!supportsWebPush()) {
     return { label: 'Push subscription', status: 'bad', detail: 'Push not supported here' }
@@ -158,13 +175,15 @@ export async function runPushDiagnostics(profileId: string | null): Promise<Chec
             label: 'Installed to Home Screen',
             status: 'bad',
             detail: 'Open in a Safari tab',
-            fix: 'Share → Add to Home Screen, then open Things from that icon. iOS never delivers notifications to a browser tab, and it does not warn you.',
+            fix: 'Share → Add to Home Screen, then open Household from that icon. iOS never delivers notifications to a browser tab, and it does not warn you.',
           },
     )
   }
 
   const permission = isNative()
-    ? 'granted'
+    ? FCM_CONFIGURED
+      ? 'granted'
+      : 'unsupported'
     : 'Notification' in window
       ? Notification.permission
       : 'unsupported'
@@ -187,12 +206,16 @@ export async function runPushDiagnostics(profileId: string | null): Promise<Chec
 
   checks.push({
     label: 'Server keys',
-    status: isConfigured() ? (isNative() || VAPID_PUBLIC_KEY ? 'ok' : 'bad') : 'bad',
+    status: isConfigured() ? ((isNative() ? FCM_CONFIGURED : !!VAPID_PUBLIC_KEY) ? 'ok' : 'bad') : 'bad',
     detail: !isConfigured()
       ? 'Supabase not configured'
-      : isNative() || VAPID_PUBLIC_KEY
-        ? 'Configured'
-        : 'VAPID public key missing from this build',
+      : isNative()
+        ? FCM_CONFIGURED
+          ? 'Configured'
+          : 'Firebase key missing from this build'
+        : VAPID_PUBLIC_KEY
+          ? 'Configured'
+          : 'VAPID public key missing from this build',
   })
 
   // Not a failure by itself, but it silences everything downstream of here and
@@ -202,7 +225,7 @@ export async function runPushDiagnostics(profileId: string | null): Promise<Chec
       label: 'Focus / Do Not Disturb',
       status: 'warn',
       detail: 'Cannot be checked from inside the app',
-      fix: 'If every check above passes but nothing arrives, look at Focus modes and Settings → Notifications → Things on the phone itself.',
+      fix: 'If every check above passes but nothing arrives, look at Focus modes and Settings → Notifications → Household on the phone itself.',
     })
   }
 

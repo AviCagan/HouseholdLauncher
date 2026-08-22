@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'node:path'
+import { existsSync } from 'node:fs'
 
 // Capacitor serves from https://localhost/ inside the APK, GitHub Pages serves
 // from /Things/. Getting this wrong is a white screen on exactly one target.
@@ -23,12 +24,34 @@ const BUILD_SHA = (process.env.GITHUB_SHA ?? 'dev').slice(0, 7)
 const BUILD_TIME = new Date().toISOString()
 const BUILD_RUN = process.env.GITHUB_RUN_NUMBER ?? ''
 
+/*
+  Whether this build can talk to Firebase Cloud Messaging.
+
+  Not a nicety — asking without it is a hard crash. `PushNotifications.register()`
+  calls `FirebaseMessaging.getInstance()`, which throws
+  "Default FirebaseApp is not initialized in this process" when the app was
+  built without google-services.json, and Capacitor's bridge rethrows any
+  exception out of a plugin method as an uncaught RuntimeException. So the app
+  did not fail to register: it died, on the tap, with no message.
+
+  Android's build wires Firebase in only if this file is present at compile
+  time (see android/app/build.gradle), so its presence at *bundle* time is the
+  same fact — provided CI writes it before building the bundle, which is why
+  that step moved ahead of the build in release-apk.yml.
+
+  The file is never committed: it identifies the household's Firebase project.
+*/
+const FCM_CONFIGURED = existsSync(
+  path.resolve(import.meta.dirname, 'android/app/google-services.json'),
+)
+
 export default defineConfig({
   base,
   define: {
     __BUILD_SHA__: JSON.stringify(BUILD_SHA),
     __BUILD_TIME__: JSON.stringify(BUILD_TIME),
     __BUILD_RUN__: JSON.stringify(BUILD_RUN),
+    __FCM_CONFIGURED__: JSON.stringify(FCM_CONFIGURED),
   },
   resolve: {
     alias: { '@': path.resolve(import.meta.dirname, 'src') },

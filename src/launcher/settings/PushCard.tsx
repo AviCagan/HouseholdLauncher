@@ -104,6 +104,36 @@ export function PushCard() {
     )
   }
 
+  /*
+    Android, built with no Firebase credentials.
+
+    Shown rather than hidden, and worded as a setup step rather than a fault,
+    because the phone is fine and there is nothing to fix on it. This is the
+    state the crash used to live in: the button was offered, tapping it called
+    into Firebase, and the app died on the spot with no message.
+  */
+  if (state === 'needs-fcm') {
+    return (
+      <SettingsGroup label="Phone notifications">
+        <div className="flex items-start gap-3 px-3.5 py-3.5">
+          <span className="mt-0.5 shrink-0" style={{ color: 'var(--warn)' }}>
+            <Icon name="bell" size={17} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[13.5px] font-semibold">Not set up for this build</p>
+            <p className="pt-1 text-[13px] leading-snug" style={{ color: 'var(--text-dim)' }}>
+              The Android app needs a Firebase key before it can be sent
+              anything, and this build doesn't have one. Everything else works —
+              the badges and the notification centre still fill in whenever the
+              app is open. Ask Claude to walk you through adding it; it is one
+              file, added once.
+            </p>
+          </div>
+        </div>
+      </SettingsGroup>
+    )
+  }
+
   if (state === 'unsupported') {
     return (
       <SettingsGroup label="Phone notifications">
