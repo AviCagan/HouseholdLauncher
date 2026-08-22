@@ -23,9 +23,18 @@ import { classify, type NotifyEvent, type Push, type WebhookBody } from './class
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-const VAPID_PUBLIC = Deno.env.get('VAPID_PUBLIC_KEY') ?? ''
+// Committed to match src/lib/env.ts. Both halves must agree on the public key
+// or every send is rejected by the push service, and having one of them come
+// from a secret means they can silently disagree.
+const DEFAULT_VAPID_PUBLIC =
+  'BKfX9ann7fPsKjOdy6IwifTxHa373_gD3XjJDIkr98QDlrIUjuyT5Wqa1rOwcXuPyG4zIOpwVj_wNe8HSji5OLw'
+const VAPID_PUBLIC = Deno.env.get('VAPID_PUBLIC_KEY') || DEFAULT_VAPID_PUBLIC
 const VAPID_PRIVATE = Deno.env.get('VAPID_PRIVATE_KEY') ?? ''
-const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') ?? 'mailto:things@example.com'
+// Push services require a contact for the application server. A real URL
+// beats the placeholder mailto that was here: example.com is a reserved
+// domain, and some services are within their rights to reject it.
+const VAPID_SUBJECT =
+  Deno.env.get('VAPID_SUBJECT') || 'https://github.com/AviCagan/HouseholdLauncher'
 const FCM_SERVICE_ACCOUNT = Deno.env.get('FCM_SERVICE_ACCOUNT') ?? ''
 
 const db = createClient(SUPABASE_URL, SERVICE_ROLE, {
@@ -153,11 +162,16 @@ async function sendWebPush(sub: Subscription, push: Push): Promise<boolean> {
     return true
   } catch (err) {
     const status = (err as { statusCode?: number }).statusCode
-    // The subscription is dead — usually the icon was deleted from the Home
-    // Screen, which silently ends Web Push on iOS.
-    if (status === 404 || status === 410) {
+    // 404/410: the subscription is dead — usually the icon was deleted from
+    // the Home Screen, which silently ends Web Push on iOS.
+    // 403: the push service refused our signature, which after a VAPID
+    // rotation means this row was created against the previous key and can
+    // never be delivered to again. Both are unrecoverable for this row, and
+    // leaving it in place makes the app claim a device it cannot reach.
+    if (status === 403 || status === 404 || status === 410) {
       await db.from('push_subscriptions').delete().eq('id', sub.id)
     }
+    console.error('[webpush] refused', status, String(err).slice(0, 200))
     return false
   }
 }

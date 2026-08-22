@@ -85,6 +85,21 @@ function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
   return out
 }
 
+/**
+ * Whether a live subscription was created with the key we are about to use.
+ *
+ * `options.applicationServerKey` is the raw key back as an ArrayBuffer. Some
+ * browsers have historically not populated it; an absent value is treated as
+ * "assume it matches" rather than forcing a re-subscribe on every launch,
+ * since a needless unsubscribe costs a working registration.
+ */
+function sameKey(sub: PushSubscription, key: Uint8Array): boolean {
+  const current = sub.options?.applicationServerKey
+  if (!current) return true
+  const bytes = new Uint8Array(current)
+  return bytes.length === key.length && bytes.every((b, i) => b === key[i])
+}
+
 async function saveSubscription(row: Record<string, unknown>): Promise<void> {
   const sb = supabase()
   if (!sb) return
@@ -197,12 +212,32 @@ async function enableWebPush(profileId: string): Promise<PushState> {
   if (permission !== 'granted') return permission as PushState
 
   const reg = await navigator.serviceWorker.ready
+  const key = urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+
+  /*
+    Reuse an existing subscription only if it was created with THIS key.
+
+    A push subscription is permanently bound to the applicationServerKey it was
+    made with. Reusing one after the key changed produces a row that looks
+    perfectly healthy — a real endpoint, saved without error, reported as a
+    registered device — and every send to it is rejected by the push service
+    for a signature it cannot verify. Nothing in the app would say so.
+
+    Worse, `subscribe()` with a different key throws InvalidStateError while an
+    old subscription is live, so the honest path is to tear the old one down
+    first. Unsubscribing is safe: it is already undeliverable.
+  */
   const existing = await reg.pushManager.getSubscription()
+  const stale = existing !== null && !sameKey(existing, key)
+  if (stale) {
+    await existing.unsubscribe().catch(() => undefined)
+  }
+
   const sub =
-    existing ??
+    (stale ? null : existing) ??
     (await reg.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+      applicationServerKey: key,
     }))
 
   const json = sub.toJSON() as { endpoint?: string; keys?: Record<string, string> }

@@ -53,7 +53,30 @@ export const SUPABASE_ANON_KEY =
   raw.VITE_SUPABASE_ANON_KEY?.trim() ||
   DEFAULT_SUPABASE_KEY
 
-export const VAPID_PUBLIC_KEY = raw.VITE_VAPID_PUBLIC_KEY?.trim() ?? ''
+/*
+  The household's VAPID public key, committed for the same reason the Supabase
+  project is: it is inlined into the bundle by definition and is public by
+  design — the browser hands it to Apple's and Google's push services as the
+  identifier of who is allowed to send. Publishing it grants nothing. Sending
+  requires the *private* half, which lives only in the Edge Function's secrets.
+
+  It is committed rather than injected because leaving it to a secret is what
+  broke Jackie's phone: this repository is not the one Things was built from,
+  secrets do not follow a repo, and nobody set it here. The bundle went out
+  with an empty string, the install-to-Home-Screen dance worked perfectly, and
+  the button then reported her iPhone as incapable of notifications — a build
+  configuration problem wearing a device problem's clothes.
+
+  Rotating means generating a new pair, putting the private half in
+  VAPID_PRIVATE_KEY and the public half here. Note that every existing
+  subscription is bound to the key it was created with, so a rotation
+  invalidates all of them; enableWebPush detects that and re-subscribes.
+*/
+const DEFAULT_VAPID_PUBLIC_KEY =
+  'BKfX9ann7fPsKjOdy6IwifTxHa373_gD3XjJDIkr98QDlrIUjuyT5Wqa1rOwcXuPyG4zIOpwVj_wNe8HSji5OLw'
+
+export const VAPID_PUBLIC_KEY =
+  raw.VITE_VAPID_PUBLIC_KEY?.trim() || DEFAULT_VAPID_PUBLIC_KEY
 
 /** The shared household account the PIN unlocks. */
 export const HOUSEHOLD_EMAIL =
