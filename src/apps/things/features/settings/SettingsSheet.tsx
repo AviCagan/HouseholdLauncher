@@ -21,6 +21,19 @@ import { isConfigured } from '@/lib/env'
 import { toast } from 'sonner'
 import type { HouseholdSettings, NavApp, NotifyEvent } from '@/data/types'
 
+/**
+ * Things' own settings, reached from the gear in Things' header.
+ *
+ * The test for whether something belongs here is simple: does changing it do
+ * anything outside Things? Home address, the calendar feed, the voice links,
+ * how long finished items hang around and which recurrence presets show on the
+ * chore bar all fail to affect anything else, so they live here.
+ *
+ * Theme, accent, text size, vibration and whether this phone is registered for
+ * push all used to live here too, back when Things was the whole app. They are
+ * the launcher's now: reaching them by opening one particular app made them
+ * look app-scoped when they were never anything of the sort.
+ */
 const NAV_APPS: { key: NavApp; label: string }[] = [
   { key: 'google', label: 'Google Maps' },
   { key: 'waze', label: 'Waze' },
