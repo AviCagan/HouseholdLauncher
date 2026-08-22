@@ -103,7 +103,41 @@ async function sendFcm(sub: Subscription, push: Push): Promise<boolean> {
     await db.from('push_subscriptions').delete().eq('id', sub.id)
     return false
   }
+
+  /*
+    Say why, rather than returning a bare false.
+
+    A rejected send used to be indistinguishable from having no devices: both
+    surfaced as "sent 0". FCM's refusals are specific and almost always
+    actionable — SENDER_ID_MISMATCH means the APK was built against a
+    different Firebase project than the one sending, 403 means the service
+    account lacks the messaging scope — and none of that reached anywhere a
+    person could read it.
+  */
+  if (!res.ok) {
+    console.error('[fcm] refused', res.status, await res.text().catch(() => ''))
+  }
   return res.ok
+}
+
+/**
+ * Deliver to one device, and never let it take the others with it.
+ *
+ * The fan-out loops called sendFcm/sendWebPush bare, so anything thrown —
+ * google-auth-library tripping over the Deno runtime, a malformed service
+ * account, a DNS blip — escaped `deliver`, failed the whole invocation, and
+ * took every *other* recipient's notification down with it. Turning Firebase
+ * on for the first time is exactly the change that would have found that out
+ * the hard way: a new, untested code path running ahead of a working one in
+ * the same loop.
+ */
+async function sendTo(sub: Subscription, push: Push): Promise<boolean> {
+  try {
+    return sub.platform === 'fcm' ? await sendFcm(sub, push) : await sendWebPush(sub, push)
+  } catch (err) {
+    console.error('[push] send failed', sub.platform, sub.id, err)
+    return false
+  }
 }
 
 async function sendWebPush(sub: Subscription, push: Push): Promise<boolean> {
@@ -216,11 +250,7 @@ async function deliver(
 
   let sent = 0
   for (const sub of (subs ?? []) as (Subscription & { profile_id: string })[]) {
-    const ok =
-      sub.platform === 'fcm'
-        ? await sendFcm(sub, push)
-        : await sendWebPush(sub, push)
-    if (ok) sent++
+    if (await sendTo(sub, push)) sent++
   }
   return {
     sent,
@@ -387,7 +417,7 @@ Deno.serve(async (req) => {
         .eq('profile_id', profileId)
 
       const push: Push = {
-        title: 'Things',
+        title: 'Household',
         body: 'Test notification — this is working.',
         tab: 'todos',
         tag: `test-${Date.now()}`,
@@ -395,11 +425,17 @@ Deno.serve(async (req) => {
 
       let sent = 0
       for (const sub of (subs ?? []) as Subscription[]) {
-        const ok =
-          sub.platform === 'fcm' ? await sendFcm(sub, push) : await sendWebPush(sub, push)
-        if (ok) sent++
+        if (await sendTo(sub, push)) sent++
       }
-      return reply({ ok: true, mode: 'test', devices: subs?.length ?? 0, sent })
+      // `failed` separates "you have no devices" from "your device refused
+      // it", which is the whole question when a test doesn't arrive.
+      return reply({
+        ok: true,
+        mode: 'test',
+        devices: subs?.length ?? 0,
+        sent,
+        failed: (subs?.length ?? 0) - sent,
+      })
     }
 
     const classified = classify(body as WebhookBody)

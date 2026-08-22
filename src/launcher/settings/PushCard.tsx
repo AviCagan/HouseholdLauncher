@@ -68,12 +68,17 @@ export function PushCard() {
     if (!profileId) return
     setBusy(true)
     try {
-      const { sent } = await sendTestPush(profileId)
+      const { sent, devices } = await sendTestPush(profileId)
       fire(sent > 0 ? 'success' : 'warning')
       toast[sent > 0 ? 'success' : 'error'](
         sent > 0
           ? `Sent to ${sent} device${sent === 1 ? '' : 's'} — it should arrive now`
-          : 'No devices are registered for you yet. Tap "Turn on notifications" first.',
+          : devices === 0
+            ? 'No devices are registered for you yet. Tap "Turn on notifications" first.'
+            // Registered but refused: the phone is known and the send was
+            // rejected, which is a different problem from having no phone and
+            // used to be reported with the same sentence.
+            : `Your ${devices === 1 ? 'device is' : `${devices} devices are`} registered, but the server couldn't deliver. Run the check below.`,
       )
     } catch (err) {
       fire('error')

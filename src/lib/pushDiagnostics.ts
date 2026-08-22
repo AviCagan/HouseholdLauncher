@@ -237,12 +237,17 @@ export async function runPushDiagnostics(profileId: string | null): Promise<Chec
  * subscription, delivery service. A test that skipped any of that would prove
  * nothing about the part that keeps breaking.
  */
-export async function sendTestPush(profileId: string): Promise<{ sent: number }> {
+export async function sendTestPush(
+  profileId: string,
+): Promise<{ sent: number; devices: number }> {
   const sb = supabase()
   if (!sb) throw new Error('Not connected')
   const { data, error } = await sb.functions.invoke('notify', {
     body: { mode: 'test', profile_id: profileId },
   })
   if (error) throw new Error(error.message)
-  return { sent: (data as { sent?: number })?.sent ?? 0 }
+  const result = data as { sent?: number; devices?: number } | null
+  // Devices as well as sends, because zero-of-zero and zero-of-one are
+  // completely different problems and used to read identically.
+  return { sent: result?.sent ?? 0, devices: result?.devices ?? 0 }
 }
