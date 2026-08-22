@@ -245,9 +245,17 @@ export default function App() {
       <PulseLayer />
       <Toaster
         position="top-center"
-        // Was a flat 54px, which on iOS put the toast behind the clock and the
-        // Dynamic Island — the inset is on top of the gap, not instead of it.
+        /*
+          Both, and the second one is the one that matters.
+
+          Under 600px wide — every phone this app runs on — sonner ignores
+          `offset` completely and lays the toaster out from `--mobile-offset-*`
+          instead, which defaults to a flat 16px. So the inset-aware offset
+          below was correct and simply never applied on the devices it was
+          written for, and the toast kept landing on the Dynamic Island.
+        */
         offset="calc(var(--safe-top) + 54px)"
+        mobileOffset={{ top: 'calc(var(--safe-top) + 16px)' }}
         toastOptions={{
           style: {
             background: 'var(--surface-3)',
@@ -273,7 +281,7 @@ function LocalModeBanner() {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="mx-3 mt-[calc(var(--safe-top)+0.5rem)] flex shrink-0 items-center gap-2 rounded-full px-3.5 py-2"
+      className="mx-3 mt-[max(var(--safe-top),0.5rem)] flex shrink-0 items-center gap-2 rounded-full px-3.5 py-2"
       style={{ background: 'var(--surface-3)', border: '1px solid var(--border)' }}
     >
       <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: 'var(--warn)' }} />

@@ -2,6 +2,7 @@ import { useRef } from 'react'
 import { motion } from 'motion/react'
 import { Icon, type IconName } from '../primitives/Icon'
 import { TABS, useUI } from '@/store/useUI'
+import { useLauncher } from '@/store/useLauncher'
 import { fire } from '@/lib/haptics'
 import type { TabKey } from '@/data/types'
 
@@ -17,6 +18,15 @@ import type { TabKey } from '@/data/types'
  * pointer events on the container rather than click handlers on the buttons —
  * a click only fires where the finger lifts, which would lose every tab you
  * passed through on the way.
+ *
+ * The way out of the app is the button to the *left* of the dock, and it is
+ * deliberately not a fifth slot inside it. Things has no room for one in its
+ * header — the title row already carries the settings and activity buttons,
+ * and Shopping's own Trip button on top of that — and on the iPhone web app
+ * there is no hardware back button, so without something here you are simply
+ * stuck in Things until you force-quit. Keeping it outside the drag surface
+ * means sliding your thumb along the tabs can never fling you back to the
+ * launcher by accident.
  */
 
 const DOCK_PADDING = 6
@@ -24,6 +34,7 @@ const DOCK_PADDING = 6
 export function TabDock() {
   const tab = useUI((s) => s.tab)
   const setTab = useUI((s) => s.setTab)
+  const goHome = useLauncher((s) => s.goHome)
   const navRef = useRef<HTMLElement>(null)
   const dragging = useRef(false)
   const lastIndex = useRef<number>(-1)
@@ -51,11 +62,31 @@ export function TabDock() {
   }
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 safe-bottom">
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex items-stretch gap-2 px-3 safe-bottom">
+      <button
+        type="button"
+        onClick={() => {
+          fire('tap')
+          goHome()
+        }}
+        aria-label="Back to the launcher"
+        className="pointer-events-auto mb-2.5 grid shrink-0 place-items-center rounded-[26px] px-4"
+        style={{
+          background: 'var(--dock-bg)',
+          backdropFilter: 'blur(22px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(22px) saturate(180%)',
+          border: '1px solid var(--border)',
+          boxShadow: 'var(--shadow-dock)',
+          color: 'var(--text-dim)',
+        }}
+      >
+        <Icon name="grid" size={22} strokeWidth={2} />
+      </button>
+
       <nav
         ref={navRef}
         aria-label="Sections"
-        className="pointer-events-auto mx-3 mb-2.5 flex items-stretch rounded-[26px]"
+        className="pointer-events-auto mb-2.5 flex min-w-0 flex-1 items-stretch rounded-[26px]"
         style={{
           padding: DOCK_PADDING,
           background: 'var(--dock-bg)',

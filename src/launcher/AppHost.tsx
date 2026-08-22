@@ -103,7 +103,7 @@ function AppFrame({
 }) {
   return (
     <div className="flex h-full flex-col">
-      <header className="flex shrink-0 items-center gap-2 px-2 pb-1 pt-[calc(var(--safe-top)+0.5rem)]">
+      <header className="flex shrink-0 items-center gap-2 px-2 pb-1 pt-[max(var(--safe-top),0.5rem)]">
         <button
           onClick={() => {
             fire('tap')

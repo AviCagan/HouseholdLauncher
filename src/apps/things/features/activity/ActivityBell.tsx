@@ -370,12 +370,12 @@ function ScoreRow({
             on both rows is noise; the first theft makes it appear, which is
             considerably funnier and more useful. */}
         {(score?.stolen ?? 0) > 0 && (
-          <span title="Claims taken off someone else" style={{ color: 'var(--warn)' }}>
+          <span title="Taken off someone else and then finished" style={{ color: 'var(--warn)' }}>
             {score?.stolen} stolen
           </span>
         )}
         {(score?.robbed ?? 0) > 0 && (
-          <span title="Claims taken off them" style={{ color: 'var(--text-faint)' }}>
+          <span title="Taken off them and finished by whoever took it" style={{ color: 'var(--text-faint)' }}>
             {score?.robbed} robbed
           </span>
         )}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { outstanding, scoreboard, shareOfDone, daysAgoIso } from './stats'
+import { outstanding, scoreboard, settledSteals, shareOfDone, daysAgoIso } from './stats'
 import type { ActivityLog, Chore, ShoppingItem, Todo, WishlistItem } from '@/data/types'
 
 const NOW = Date.parse('2026-08-16T12:00:00.000Z')
@@ -179,6 +179,69 @@ describe('scoreboard', () => {
     expect(avi.done).toBe(0)
   })
 
+  /*
+    Stealing a claim is a promise, not a result. These cases are the whole
+    point of the metric: it should be impossible to farm "stolen" by grabbing
+    everything Jackie claimed and doing none of it.
+  */
+  it('does not count a steal until the thief actually finishes the job', () => {
+    const entries = [
+      log({ id: '1', event: 'stolen', actor_id: 'jackie', subject_id: 'avi' }),
+    ]
+    const [avi, jackie] = scoreboard(entries, ['avi', 'jackie'], since, [])
+    expect(jackie.stolen).toBe(0)
+    expect(avi.robbed).toBe(0)
+  })
+
+  it('counts it once the stolen item is completed', () => {
+    const entries = [
+      log({ id: '1', event: 'stolen', actor_id: 'jackie', subject_id: 'avi' }),
+      log({
+        id: '2',
+        event: 'completed',
+        actor_id: 'jackie',
+        created_at: '2026-08-16T01:00:00.000Z',
+      }),
+    ]
+    const [avi, jackie] = scoreboard(entries, ['avi', 'jackie'], since, [])
+    expect(jackie.stolen).toBe(1)
+    expect(avi.robbed).toBe(1)
+  })
+
+  it('gives no credit when somebody else finishes what you took', () => {
+    const entries = [
+      log({ id: '1', event: 'stolen', actor_id: 'jackie', subject_id: 'avi' }),
+      log({
+        id: '2',
+        event: 'completed',
+        actor_id: 'avi',
+        created_at: '2026-08-16T01:00:00.000Z',
+      }),
+    ]
+    const [, jackie] = scoreboard(entries, ['avi', 'jackie'], since, [])
+    expect(jackie.stolen).toBe(0)
+  })
+
+  it('ignores a completion that happened before the steal', () => {
+    const entries = [
+      log({
+        id: '1',
+        event: 'completed',
+        actor_id: 'jackie',
+        created_at: '2026-08-16T00:00:00.000Z',
+      }),
+      log({
+        id: '2',
+        event: 'stolen',
+        actor_id: 'jackie',
+        subject_id: 'avi',
+        created_at: '2026-08-16T01:00:00.000Z',
+      }),
+    ]
+    const [, jackie] = scoreboard(entries, ['avi', 'jackie'], since, [])
+    expect(jackie.stolen).toBe(0)
+  })
+
   it('counts what is currently on each plate', () => {
     const [avi, jackie] = scoreboard([], ['avi', 'jackie'], since, ['avi', 'avi', 'jackie', null])
     expect(avi.claimed).toBe(2)
@@ -201,5 +264,48 @@ describe('shareOfDone', () => {
       { profileId: 'jackie', done: 0, added: 0, claimed: 0, stolen: 0, robbed: 0 },
     ])
     expect(share).toEqual([0.5, 0.5])
+  })
+})
+
+describe('settledSteals', () => {
+  it('pairs each steal with its own completion rather than sharing one', () => {
+    // A recurring chore: stolen, done, stolen again, done again. Two pairs,
+    // not four — and not one completion redeeming both thefts.
+    const entries = [
+      log({ id: '1', event: 'stolen', actor_id: 'jackie', subject_id: 'avi', created_at: '2026-08-10T00:00:00.000Z' }),
+      log({ id: '2', event: 'completed', actor_id: 'jackie', created_at: '2026-08-10T01:00:00.000Z' }),
+      log({ id: '3', event: 'stolen', actor_id: 'jackie', subject_id: 'avi', created_at: '2026-08-11T00:00:00.000Z' }),
+      log({ id: '4', event: 'completed', actor_id: 'jackie', created_at: '2026-08-11T01:00:00.000Z' }),
+    ]
+    expect(settledSteals(entries).map((s) => s.steal.id)).toEqual(['1', '3'])
+  })
+
+  it('lets a steal-back supersede the steal it interrupted', () => {
+    // Jackie takes it off Avi, Avi takes it straight back and finishes it.
+    // Avi is credited; Jackie held it and produced nothing.
+    const entries = [
+      log({ id: '1', event: 'stolen', actor_id: 'jackie', subject_id: 'avi', created_at: '2026-08-10T00:00:00.000Z' }),
+      log({ id: '2', event: 'stolen', actor_id: 'avi', subject_id: 'jackie', created_at: '2026-08-10T01:00:00.000Z' }),
+      log({ id: '3', event: 'completed', actor_id: 'avi', created_at: '2026-08-10T02:00:00.000Z' }),
+    ]
+    const settled = settledSteals(entries)
+    expect(settled).toHaveLength(1)
+    expect(settled[0].steal.actor_id).toBe('avi')
+  })
+
+  it('keeps separate items apart', () => {
+    const entries = [
+      log({ id: '1', row_id: 'a', event: 'stolen', actor_id: 'jackie', subject_id: 'avi' }),
+      log({ id: '2', row_id: 'b', event: 'completed', actor_id: 'jackie', created_at: '2026-08-16T01:00:00.000Z' }),
+    ]
+    expect(settledSteals(entries)).toHaveLength(0)
+  })
+
+  it('reports when the credit was earned, not when the claim was taken', () => {
+    const entries = [
+      log({ id: '1', event: 'stolen', actor_id: 'jackie', subject_id: 'avi', created_at: '2026-08-01T00:00:00.000Z' }),
+      log({ id: '2', event: 'completed', actor_id: 'jackie', created_at: '2026-08-15T00:00:00.000Z' }),
+    ]
+    expect(settledSteals(entries)[0].completedAt).toBe('2026-08-15T00:00:00.000Z')
   })
 })

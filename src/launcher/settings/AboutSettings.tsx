@@ -1,9 +1,11 @@
+import { useEffect, useState } from 'react'
 import { SettingsGroup, SettingsRow } from './SettingsSheet'
 import { APPS } from '@/launcher/registry'
 import { useData } from '@/store/useData'
 import { isConfigured } from '@/lib/env'
 import { hapticBackend, HAPTIC_BACKEND_LABEL } from '@/lib/haptics'
 import { isNative } from '@/lib/platform'
+import { nativeVersion } from '@/lib/build'
 
 /**
  * What's actually installed and what it's talking to.
@@ -17,6 +19,18 @@ export function AboutSettings() {
   const connection = useData((s) => s.connection)
   const pending = useData((s) => s.pendingCount)
   const missing = useData((s) => s.missingTables)
+
+  /*
+    Android's own version, which is not the same fact as the bundle stamp
+    below it. A JS bundle updates over the air; the APK only changes when a new
+    one is actually installed. When these two disagree, the install didn't
+    take — which is the single most useful thing to know when a feature is
+    "missing" right after an update.
+  */
+  const [nativeVer, setNativeVer] = useState<string | null>(null)
+  useEffect(() => {
+    void nativeVersion().then(setNativeVer)
+  }, [])
 
   const connectionLabel = !isConfigured()
     ? 'On this device only'
@@ -55,7 +69,14 @@ export function AboutSettings() {
           }
         />
         <SettingsRow title="Built" subtitle={new Date(__BUILD_TIME__).toLocaleString()} />
-        <SettingsRow title="Running as" subtitle={isNative() ? 'Android app' : 'Web app'} />
+        <SettingsRow
+          title="Running as"
+          subtitle={
+            isNative()
+              ? `Android app${nativeVer ? ` · ${nativeVer}` : ''}`
+              : 'Web app'
+          }
+        />
         <SettingsRow title="Connection" subtitle={connectionLabel} />
         <SettingsRow title="Haptics" subtitle={HAPTIC_BACKEND_LABEL[hapticBackend()]} />
       </SettingsGroup>

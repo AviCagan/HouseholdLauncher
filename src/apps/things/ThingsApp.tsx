@@ -13,6 +13,9 @@ import { ItemEditSheet } from './features/items/ItemEditSheet'
 import { ActivityBell, ActivitySheet } from './features/activity/ActivityBell'
 import { DeadlinePromptHost } from './features/todos/DeadlinePrompt'
 import { Tour, tourSeen } from '@/components/shell/Tour'
+import { SettingsSheet } from './features/settings/SettingsSheet'
+import { Icon } from '@/components/primitives/Icon'
+import { fire } from '@/lib/haptics'
 import { dataActions } from '@/store/useData'
 import { useProfile } from '@/store/useProfile'
 import { useUI } from '@/store/useUI'
@@ -24,9 +27,10 @@ import type { TabKey } from '@/data/types'
  *
  * This is the screen that used to be the whole of App.tsx. Everything it lost
  * belonged to the shell rather than to Things: booting, unlocking, choosing
- * who you are, and the settings sheet — all of which the launcher now owns and
- * every app shares. What is left is the four tabs and the things that hang off
- * them.
+ * who you are, how the whole thing looks and feels, and whether this phone
+ * gets notified — all of which the launcher owns and every app shares. What is
+ * left is the four tabs, the things that hang off them, and the settings that
+ * only mean anything inside Things.
  */
 export function ThingsApp() {
   const profileId = useProfile((s) => s.profileId)
@@ -84,13 +88,32 @@ export function ThingsApp() {
           </motion.div>
         </AnimatePresence>
 
-        {/* The activity bell keeps its place in the header rail. The settings
-            button that used to sit beside it is the launcher's now — Things
-            has no settings of its own that aren't household-wide. */}
+        {/* Two buttons, which is exactly what Screen's `pr-[104px]` reserves.
+            The gear is back after a spell in launcher settings: what it opens
+            is now genuinely Things' own — home address, calendar sync, voice
+            links, which lists get cleared — while everything that was shared
+            (theme, accent, vibration) moved out to the launcher, where
+            changing it visibly affects every app. Settings you reach by
+            opening one app should only change that app. */}
         <div
           className="absolute right-4 z-40 flex items-center gap-2"
-          style={{ top: 'calc(var(--safe-top) + 14px)' }}
+          style={{ top: 'max(var(--safe-top), 14px)' }}
         >
+          <button
+            onClick={() => {
+              fire('tap')
+              useUI.getState().openSheet({ kind: 'settings' })
+            }}
+            aria-label="Things settings"
+            className="grid h-9 w-9 place-items-center rounded-full"
+            style={{
+              background: 'var(--surface-2)',
+              border: '1px solid var(--border)',
+              color: 'var(--text-dim)',
+            }}
+          >
+            <Icon name="settings" size={17} />
+          </button>
           <ActivityBell />
         </div>
       </div>
@@ -123,6 +146,10 @@ export function ThingsApp() {
           positioned z-40 element, which establishes a stacking context that
           would pin this sheet below the quick-add bar and the dock. */}
       <ActivitySheet />
+      {/* Mounted alongside the app's other sheets rather than in the launcher's
+          settings sheet, where it used to live: it belongs to Things now, and
+          nesting it inside another sheet is what pinned it below the dock. */}
+      <SettingsSheet />
       <Tour />
     </div>
   )

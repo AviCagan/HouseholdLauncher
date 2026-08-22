@@ -8,7 +8,6 @@ import { AppsSettings } from './AppsSettings'
 import { PeopleSettings } from './PeopleSettings'
 import { NotificationSettings } from './NotificationSettings'
 import { AboutSettings } from './AboutSettings'
-import { SettingsSheet as ThingsSettingsSheet } from '@/apps/things/features/settings/SettingsSheet'
 import { fire } from '@/lib/haptics'
 
 /**
@@ -19,9 +18,12 @@ import { fire } from '@/lib/haptics'
  * up — hand out a code in People, tick the apps they get, check how it looks
  * in Apps — and a push/pop hierarchy turns each of those into three taps.
  *
- * Appearance and Things' own household settings stay where they already were.
- * They are a thousand lines of working UI whose only sin is living in the
- * Things folder, and re-homing them would be churn for no behaviour change.
+ * What is in here is only what the launcher owns: who you are, the code you
+ * sign in with, how everything looks and feels, who else is in the household
+ * and what they can open, and whether your phone gets notified. Anything that
+ * changes one app and one app only — Things' home address, its calendar feed,
+ * its voice links — lives behind that app's own gear, because a setting you
+ * reach by opening Things should not silently be a setting for Owe as well.
  */
 
 const SECTIONS: { id: SettingsSection; label: string; icon: IconName; ownerOnly?: boolean }[] = [
@@ -93,10 +95,6 @@ export function SettingsSheet() {
           </motion.div>
         </AnimatePresence>
       </Sheet>
-
-      {/* Opened from a row in General. Mounted here so it layers above this
-          sheet rather than inside its scroll container. */}
-      <ThingsSettingsSheet />
     </>
   )
 }
@@ -218,6 +216,41 @@ export function Toggle({
         style={{ boxShadow: '0 1px 3px rgb(0 0 0 / 0.3)' }}
       />
     </button>
+  )
+}
+
+/** Pill-shaped exclusive choice, for a handful of short options. */
+export function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: { key: T; label: string }[]
+  value: T
+  onChange: (next: T) => void
+}) {
+  return (
+    <div className="flex gap-1 rounded-full p-1.5" style={{ background: 'var(--surface-3)' }}>
+      {options.map((o) => {
+        const on = o.key === value
+        return (
+          <button
+            key={o.key}
+            onClick={() => {
+              fire('snap')
+              onChange(o.key)
+            }}
+            className="flex-1 whitespace-nowrap rounded-full px-3 py-2.5 text-[13px] font-medium transition-colors"
+            style={{
+              background: on ? 'var(--accent)' : 'transparent',
+              color: on ? '#fff' : 'var(--text-dim)',
+            }}
+          >
+            {o.label}
+          </button>
+        )
+      })}
+    </div>
   )
 }
 

@@ -4,7 +4,6 @@ import { supabase } from './supabase'
 import { VAPID_PUBLIC_KEY } from './env'
 import {
   isNative,
-  isStandalone,
   supportsWebPush,
   webPushBlockedByInstall,
 } from './platform'
@@ -40,10 +39,22 @@ export function pushState(): PushState {
     // Android 13+ prompts; older versions grant implicitly.
     return 'default'
   }
-  if (!supportsWebPush()) return 'unsupported'
-  // On iOS a Safari tab can't do Web Push at all, so asking would silently do
-  // nothing. Tell the user to install instead of showing a dead button.
+  /*
+    Install check first, capability check second. This order is the whole fix
+    for "iPhone says it cannot receive notifications".
+
+    In an iOS Safari *tab*, `window.PushManager` does not exist — Apple only
+    exposes it to installed web apps. So `supportsWebPush()` is false there,
+    and checking it first sent every iPhone that had not been added to the
+    Home Screen down the 'unsupported' path, which says "this browser can't
+    receive notifications" and offers nothing to do about it. The phone was
+    perfectly capable; it just hadn't been installed yet.
+
+    Asked in this order, the same phone gets 'needs-install' and the
+    Add-to-Home-Screen instructions, which is both true and actionable.
+  */
   if (webPushBlockedByInstall()) return 'needs-install'
+  if (!supportsWebPush()) return 'unsupported'
   return Notification.permission as PushState
 }
 
@@ -147,8 +158,10 @@ async function enableNativePush(profileId: string): Promise<PushState> {
 }
 
 async function enableWebPush(profileId: string): Promise<PushState> {
-  if (!supportsWebPush()) return 'unsupported'
+  // Same order as pushState, for the same reason: on an uninstalled iPhone the
+  // honest answer is "install it first", not "your browser can't do this".
   if (webPushBlockedByInstall()) return 'needs-install'
+  if (!supportsWebPush()) return 'unsupported'
   if (!VAPID_PUBLIC_KEY) {
     console.warn('[push] VITE_VAPID_PUBLIC_KEY is not set')
     return 'unsupported'
@@ -275,10 +288,8 @@ export async function cancelCooldownReminder(choreId: string): Promise<void> {
   }
 }
 
-/** Whether this device is installed such that push can actually arrive. */
+/** What to tell someone whose device can't receive push until they install it. */
 export const pushInstallHint = (): string | null =>
   webPushBlockedByInstall()
-    ? 'Add Things to your Home Screen first — iOS only delivers notifications to installed web apps, not Safari tabs.'
-    : isStandalone() || isNative()
-      ? null
-      : null
+    ? 'Add Household to your Home Screen first — iPhone only delivers notifications to installed web apps, never to a Safari tab.'
+    : null

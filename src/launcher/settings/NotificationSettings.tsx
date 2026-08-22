@@ -1,6 +1,7 @@
 import { Icon } from '@/components/primitives/Icon'
 import { SettingsGroup, Toggle } from './SettingsSheet'
 import { PushCard } from './PushCard'
+import { PushDiagnostics } from './PushDiagnostics'
 import { APPS } from '@/launcher/registry'
 import { setNotifyPref, useCurrentMember, useHasApp } from '@/store/useMember'
 import { useData } from '@/store/useData'
@@ -33,6 +34,10 @@ export function NotificationSettings() {
       {APPS.map((app) => (
         <AppNotifyCard key={app.id} appId={app.id} />
       ))}
+
+      {/* Last, because it is only worth opening once the switches above have
+          failed to explain anything. */}
+      <PushDiagnostics />
     </>
   )
 }

@@ -3,17 +3,10 @@ import { Sheet } from '@/components/primitives/Sheet'
 import { Icon } from '@/components/primitives/Icon'
 import { useData, dataActions } from '@/store/useData'
 import { useUI } from '@/store/useUI'
-import { useCurrentProfile, useProfile, useSettings, updateSettings } from '@/store/useProfile'
-import { fire, ALL_HAPTIC_EVENTS, hasRealHaptics } from '@/lib/haptics'
-import { unlockAudio } from '@/lib/sound'
-import { isIOS, isNative } from '@/lib/platform'
-import { enablePush, pushState, type PushState } from '@/lib/notifications'
-import { runPushDiagnostics, sendTestPush, type Check } from '@/lib/pushDiagnostics'
+import { useCurrentProfile, useSettings, updateSettings } from '@/store/useProfile'
+import { fire } from '@/lib/haptics'
 import { newVoiceToken, voiceUrl, VOICE_LISTS } from '@/lib/voice'
-import { buildLabel, nativeVersion } from '@/lib/build'
 import { AddressInput } from '@/components/primitives/AddressInput'
-import { ColorPicker } from '@/components/primitives/ColorPicker'
-import { ColorSwatchButton } from '@/components/primitives/ColorSwatchButton'
 import { AUTO_CLEAR_OPTIONS } from '@/lib/cleanup'
 import { RECURRENCE_PRESETS } from '@/lib/time'
 import {
@@ -26,33 +19,7 @@ import {
 import { openExternal, copyToClipboard } from '@/apps/things/routing/deeplink'
 import { isConfigured } from '@/lib/env'
 import { toast } from 'sonner'
-import type { HouseholdSettings } from '@/data/types'
-import type {
-  HapticIntensity,
-  NavApp,
-  ThemeMode,
-  HapticEventName,
-  NotifyEvent,
-} from '@/data/types'
-
-const ACCENTS = [
-  '#7c5cff', '#ff6ea9', '#3aa0ff', '#2bb673',
-  '#f5a524', '#e0563c', '#00c2b8', '#b06cff',
-]
-
-const THEMES: { key: ThemeMode; label: string }[] = [
-  { key: 'system', label: 'System' },
-  { key: 'light', label: 'Light' },
-  { key: 'dark', label: 'Dark' },
-  { key: 'oled', label: 'OLED' },
-]
-
-const INTENSITIES: { key: HapticIntensity; label: string }[] = [
-  { key: 'off', label: 'Off' },
-  { key: 'subtle', label: 'Subtle' },
-  { key: 'normal', label: 'Normal' },
-  { key: 'heavy', label: 'Heavy' },
-]
+import type { HouseholdSettings, NavApp, NotifyEvent } from '@/data/types'
 
 const NAV_APPS: { key: NavApp; label: string }[] = [
   { key: 'google', label: 'Google Maps' },
@@ -88,13 +55,7 @@ export function SettingsSheet() {
     setHome(storedHome)
     setHomeCoords(null)
   }, [storedHome])
-  const [showHaptics, setShowHaptics] = useState(false)
   const [showPresets, setShowPresets] = useState(false)
-  const [accentWheel, setAccentWheel] = useState(false)
-  const [nativeVer, setNativeVer] = useState<string | null>(null)
-  useEffect(() => {
-    void nativeVersion().then(setNativeVer)
-  }, [])
 
   if (!profile || !settings) return null
   const id = profile.id
@@ -103,184 +64,8 @@ export function SettingsSheet() {
     void updateSettings(id, patch)
 
   return (
-    <Sheet open={sheet.kind === 'settings'} onClose={closeSheet} title="Settings">
+    <Sheet open={sheet.kind === 'settings'} onClose={closeSheet} title="Things settings">
       <div className="flex flex-col gap-7 pb-6">
-        {/* First thing in the sheet, on purpose: "is this the build I think it
-            is" needs to be answerable without scrolling, especially right
-            after installing a new APK. */}
-        <p
-          className="-mt-2 text-center text-[11px]"
-          style={{ color: 'var(--text-faint)' }}
-        >
-          Build {buildLabel()}
-          {/* Android's own version, not the JS bundle's — if this run number
-              doesn't match the one above, the install didn't actually take. */}
-          {nativeVer && <> · {nativeVer}</>}
-        </p>
-
-        <Group label={`${profile.display_name}'s look`}>
-
-          <Row label="Theme" stacked>
-            <div className="pt-2">
-              <Segmented
-                options={THEMES.map((t) => ({ key: t.key, label: t.label }))}
-                value={settings.theme_mode}
-                onChange={(v) => set({ theme_mode: v as ThemeMode })}
-              />
-            </div>
-          </Row>
-
-          <Row label="Accent" stacked>
-            <div className="flex flex-wrap items-center gap-2 pt-2">
-              <ColorSwatchButton
-                value={settings.accent_hex}
-                open={accentWheel}
-                onClick={() => {
-                  fire('tap')
-                  setAccentWheel((v) => !v)
-                }}
-              />
-              {ACCENTS.map((c) => (
-                <button
-                  key={c}
-                  onClick={() => {
-                    fire('snap')
-                    set({ accent_hex: c })
-                  }}
-                  aria-label={`Accent ${c}`}
-                  className="h-[34px] w-[34px] shrink-0 rounded-full"
-                  style={{
-                    background: c,
-                    outline: settings.accent_hex === c ? '2px solid var(--text)' : 'none',
-                    outlineOffset: 2,
-                  }}
-                />
-              ))}
-            </div>
-            {accentWheel && (
-              <div className="pt-3">
-                <ColorPicker
-                  value={settings.accent_hex}
-                  onChange={(hex) => set({ accent_hex: hex })}
-                />
-              </div>
-            )}
-          </Row>
-
-          <Row label="Text size" stacked>
-            <div className="flex items-center gap-3 pt-1">
-              <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>A</span>
-              <input
-                type="range"
-                min={0.8}
-                max={1.4}
-                step={0.05}
-                value={settings.font_scale}
-                onChange={(e) => set({ font_scale: parseFloat(e.target.value) })}
-                className="flex-1 accent-[var(--accent)]"
-              />
-              <span className="text-[19px]" style={{ color: 'var(--text-faint)' }}>A</span>
-            </div>
-          </Row>
-
-          <Toggle
-            label="Reduce motion"
-            hint="Fades instead of springs"
-            value={settings.reduce_motion}
-            onChange={(v) => set({ reduce_motion: v })}
-          />
-        </Group>
-
-        <Group label="Feel">
-          {!hasRealHaptics() && (
-            <p
-              className="rounded-2xl p-3.5 text-[13px] leading-relaxed"
-              style={{ background: 'var(--surface-3)', color: 'var(--text-dim)' }}
-            >
-              {isIOS()
-                ? "iOS doesn't let web apps trigger haptics, so this device uses a visual pulse (and sound, if on) instead."
-                : "This device doesn't report haptic support — you'll get the visual pulse instead."}
-            </p>
-          )}
-
-          <Row label="Haptic strength" stacked>
-            <div className="pt-2">
-              <Segmented
-                options={INTENSITIES.map((i) => ({ key: i.key, label: i.label }))}
-                value={settings.haptic_intensity}
-                onChange={(v) => {
-                  set({ haptic_intensity: v as HapticIntensity })
-                  // Fire a sample so the new strength is felt straight away.
-                  setTimeout(() => fire('claim'), 60)
-                }}
-              />
-            </div>
-          </Row>
-
-          <Toggle
-            label="Sounds"
-            hint="Short synthesised ticks on actions"
-            value={settings.sound_enabled}
-            onChange={(v) => {
-              unlockAudio()
-              set({ sound_enabled: v })
-            }}
-          />
-
-          {isIOS() && !isNative() && (
-            <Toggle
-              label="iOS haptics"
-              hint="iPhones have no vibration API, so this borrows Apple's switch control to produce a real haptic. Works on iOS 17.4 and later; Apple changed it in 26.5, where it may do nothing. Turn off if it feels wrong."
-              value={settings.ios_native_switch}
-              onChange={(v) => set({ ios_native_switch: v })}
-            />
-          )}
-
-          <button
-            onClick={() => {
-              fire('tap')
-              setShowHaptics((s) => !s)
-            }}
-            className="flex items-center justify-between rounded-2xl px-4 py-3.5"
-            style={{ background: 'var(--surface-2)' }}
-          >
-            <span className="text-[14px]">Test & fine-tune each buzz</span>
-            <Icon name="chevron" size={15} />
-          </button>
-
-          {showHaptics && (
-            <div className="flex flex-col gap-1.5 pt-1">
-              {ALL_HAPTIC_EVENTS.map((event) => {
-                const on = settings.haptic_events[event] !== false
-                return (
-                  <div
-                    key={event}
-                    className="flex items-center gap-2.5 rounded-2xl px-4 py-3"
-                    style={{ background: 'var(--surface-2)' }}
-                  >
-                    <span className="flex-1 text-[13px]">{labelFor(event)}</span>
-                    <button
-                      onClick={() => fire(event)}
-                      className="rounded-full px-3 py-1.5 text-[12px] font-medium"
-                      style={{ background: 'var(--surface-3)', color: 'var(--text-dim)' }}
-                    >
-                      Test
-                    </button>
-                    <Switch
-                      value={on}
-                      onChange={(v) =>
-                        set({
-                          haptic_events: { ...settings.haptic_events, [event]: v },
-                        })
-                      }
-                    />
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </Group>
-
         <Group label="Getting around">
           <Row label="Navigate with" stacked>
             <div className="pt-1">
@@ -416,7 +201,7 @@ export function SettingsSheet() {
 
         <VoiceGroup household={household} profileSlug={profile.slug} />
 
-        <NotificationsGroup profileId={id} settings={settings} onSet={set} />
+        <NotificationsGroup settings={settings} onSet={set} />
 
         <Group label="Help">
           <button
@@ -436,22 +221,6 @@ export function SettingsSheet() {
           </button>
         </Group>
 
-        <Group label="Account">
-          <button
-            onClick={() => {
-              fire('tap')
-              closeSheet()
-              void useProfile.getState().clearProfile()
-            }}
-            className="flex items-center justify-between rounded-2xl px-4 py-4"
-            style={{ background: 'var(--surface-2)' }}
-          >
-            <span className="text-[14px]">
-              Switch from {profile.display_name}
-            </span>
-            <Icon name="chevron" size={15} />
-          </button>
-        </Group>
       </div>
     </Sheet>
   )
@@ -862,123 +631,26 @@ function VoiceLinkRow({
   )
 }
 
+/**
+ * Which Things events are worth a notification.
+ *
+ * Only the choices — not the switch that registers this device for push, and
+ * not the "why am I not getting notifications" diagnostics, both of which used
+ * to be here. Those are one per phone, not one per app: registering from
+ * Things registered you for Owe and everything else too, so having the control
+ * inside one app made it look like an app-level setting and left every other
+ * app with no way to ask. They live in launcher Settings → Alerts now, which
+ * is also where the same two switches exist for every other app.
+ */
 function NotificationsGroup({
-  profileId,
   settings,
   onSet,
 }: {
-  profileId: string
   settings: import('@/data/types').ProfileSettings
   onSet: (patch: Partial<import('@/data/types').ProfileSettings>) => void
 }) {
-  const [state, setState] = useState<PushState>(() => pushState())
-  const [busy, setBusy] = useState(false)
-
-  async function turnOn() {
-    // Tapping while already "on" re-runs registration rather than doing
-    // nothing — the button used to be disabled in this state, which is
-    // exactly how a permission-granted-but-never-actually-saved subscription
-    // stayed invisible with no way to retry.
-    const reverifying = state === 'granted'
-    setBusy(true)
-    try {
-      // Must run inside this click — a permission prompt outside a user
-      // gesture is refused, and on iOS a refusal sticks until the icon is
-      // reinstalled. When already granted this resolves instantly with no
-      // prompt shown, so re-tapping never surprises anyone with a dialog.
-      const next = await enablePush(profileId)
-      setState(next)
-      fire(next === 'granted' ? 'success' : 'warning')
-      if (reverifying) {
-        toast[next === 'granted' ? 'success' : 'error'](
-          next === 'granted' ? "Confirmed — you're registered" : "Couldn't confirm — try again",
-        )
-      }
-    } catch (err) {
-      // Belt and braces: enablePush is written to resolve to 'error' rather
-      // than throw, but a stuck "Asking…" button forever is a worse failure
-      // mode than a slightly generic message, if something upstream ever
-      // does throw.
-      console.error('[push] turnOn failed unexpectedly', err)
-      setState('error')
-      fire('warning')
-    } finally {
-      setBusy(false)
-    }
-  }
-
   return (
-    <Group label="Notifications">
-      {state === 'needs-install' && (
-        <p
-          className="rounded-2xl p-3.5 text-[13px] leading-relaxed"
-          style={{ background: 'var(--surface-3)', color: 'var(--text-dim)' }}
-        >
-          Add Things to your Home Screen first, then open it from that icon.
-          iOS only delivers notifications to installed web apps — not Safari tabs.
-        </p>
-      )}
-
-      {state === 'unsupported' && (
-        <p
-          className="rounded-2xl p-3.5 text-[13px] leading-relaxed"
-          style={{ background: 'var(--surface-3)', color: 'var(--text-dim)' }}
-        >
-          This browser can't receive notifications.
-        </p>
-      )}
-
-      {state === 'denied' && (
-        <p
-          className="rounded-2xl p-3.5 text-[13px] leading-relaxed"
-          style={{ background: 'var(--surface-3)', color: 'var(--text-dim)' }}
-        >
-          Notifications are blocked. Turn them back on in your device settings
-          for Things.
-        </p>
-      )}
-
-      {state === 'error' && (
-        <p
-          className="rounded-2xl p-3.5 text-[13px] leading-relaxed"
-          style={{ background: 'var(--surface-3)', color: 'var(--warn)' }}
-        >
-          Permission was granted, but saving didn't go through — check your
-          connection and try again below.
-        </p>
-      )}
-
-      {(state === 'default' || state === 'granted' || state === 'error') && (
-        <button
-          onClick={turnOn}
-          disabled={busy}
-          className="flex items-center justify-between rounded-2xl px-4 py-4 disabled:opacity-70"
-          style={{
-            background: state === 'granted' ? 'var(--surface-2)' : 'var(--accent)',
-            color: state === 'granted' ? 'var(--text)' : '#fff',
-          }}
-        >
-          <span className="flex items-center gap-2 text-[14px] font-medium">
-            <Icon name="bell" size={16} />
-            {busy
-              ? state === 'granted'
-                ? 'Verifying…'
-                : 'Asking…'
-              : state === 'granted'
-                ? 'Notifications are on'
-                : state === 'error'
-                  ? 'Try again'
-                  : 'Turn on notifications'}
-          </span>
-          {state === 'granted' && !busy && <Icon name="check" size={16} strokeWidth={2.6} />}
-        </button>
-      )}
-      {state === 'granted' && (
-        <p className="px-1 text-[12px]" style={{ color: 'var(--text-faint)' }}>
-          Tap to re-check if you're not sure it's actually registered.
-        </p>
-      )}
-
+    <Group label="Notify me about">
       {NOTIFY_EVENTS.map((e) => (
         <Toggle
           key={e.key}
@@ -998,141 +670,12 @@ function NotificationsGroup({
         </p>
       )}
 
-      <PushDiagnostics profileId={profileId} />
+      <p className="px-1 text-[12px] leading-relaxed" style={{ color: 'var(--text-faint)' }}>
+        Whether any of these reach your phone at all is set once for the whole
+        launcher, in Settings → Alerts.
+      </p>
     </Group>
   )
-}
-
-/**
- * Reads the actual state of this device rather than inferring it from the
- * other end. Every notification bug in this app so far has been invisible
- * from the sending side and obvious from here.
- */
-function PushDiagnostics({ profileId }: { profileId: string }) {
-  const [checks, setChecks] = useState<Check[] | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [testing, setTesting] = useState(false)
-
-  async function run() {
-    setBusy(true)
-    fire('tap')
-    try {
-      setChecks(await runPushDiagnostics(profileId))
-    } catch (err) {
-      console.error('[push] diagnostics failed', err)
-      toast.error("Couldn't run the check")
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function test() {
-    setTesting(true)
-    fire('tap')
-    try {
-      const { sent } = await sendTestPush(profileId)
-      if (sent > 0) {
-        fire('success')
-        toast.success(`Sent to ${sent} device${sent === 1 ? '' : 's'}`, {
-          description: 'It should arrive in a few seconds.',
-        })
-      } else {
-        fire('warning')
-        toast.error('Nothing to send to', {
-          description: 'No device is registered for you. Run the check above.',
-        })
-      }
-    } catch (err) {
-      fire('warning')
-      toast.error("Couldn't send", {
-        description: err instanceof Error ? err.message : undefined,
-      })
-    } finally {
-      setTesting(false)
-    }
-  }
-
-  const COLOR: Record<Check['status'], string> = {
-    ok: 'var(--ok)',
-    warn: 'var(--warn)',
-    bad: 'var(--danger)',
-  }
-
-  return (
-    <div className="flex flex-col gap-2 pt-1">
-      <div className="flex gap-2">
-        <button
-          onClick={() => void run()}
-          disabled={busy}
-          className="flex-1 rounded-xl py-2.5 text-[13px] font-semibold"
-          style={{ background: 'var(--surface-3)', color: 'var(--text)' }}
-        >
-          {busy ? 'Checking…' : 'Why am I not getting notifications?'}
-        </button>
-        <button
-          onClick={() => void test()}
-          disabled={testing}
-          className="rounded-xl px-3 py-2.5 text-[13px] font-semibold"
-          style={{ background: 'var(--surface-3)', color: 'var(--text)' }}
-        >
-          {testing ? 'Sending…' : 'Test'}
-        </button>
-      </div>
-
-      {checks && (
-        <div
-          className="flex flex-col gap-2.5 rounded-2xl p-3.5"
-          style={{ background: 'var(--surface-3)' }}
-        >
-          {checks.map((c) => (
-            <div key={c.label} className="flex items-start gap-2.5">
-              <span
-                className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
-                style={{ background: COLOR[c.status] }}
-              />
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-baseline gap-x-2">
-                  <span className="text-[13px] font-semibold">{c.label}</span>
-                  <span className="text-[12px]" style={{ color: 'var(--text-dim)' }}>
-                    {c.detail}
-                  </span>
-                </div>
-                {c.fix && (
-                  <p
-                    className="mt-0.5 text-[12px] leading-relaxed"
-                    style={{ color: COLOR[c.status] }}
-                  >
-                    {c.fix}
-                  </p>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function labelFor(event: HapticEventName): string {
-  const map: Record<HapticEventName, string> = {
-    tap: 'Tap',
-    toggleOn: 'Switch on',
-    toggleOff: 'Switch off',
-    claim: 'Claiming something',
-    complete: 'Completing something',
-    delete: 'Deleting',
-    swipeThreshold: 'Swipe hits the line',
-    longPress: 'Long press',
-    dragStart: 'Starting a drag',
-    snap: 'Small ticks',
-    zipperTick: 'Swipe-to-pay teeth',
-    zipperDone: 'Swipe-to-pay lands',
-    success: 'Success',
-    warning: 'Warning',
-    error: 'Error',
-  }
-  return map[event]
 }
 
 function Group({ label, children }: { label: string; children: ReactNode }) {

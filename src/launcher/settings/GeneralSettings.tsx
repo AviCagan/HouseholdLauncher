@@ -1,9 +1,8 @@
 import { useState } from 'react'
-import { Icon } from '@/components/primitives/Icon'
 import { SettingsGroup, SettingsRow, PrimaryButton, Notice } from './SettingsSheet'
 import { AvatarPicker } from './AvatarPicker'
+import { AppearanceSettings } from './AppearanceSettings'
 import { useCurrentMember, useIsOwner } from '@/store/useMember'
-import { useUI } from '@/store/useUI'
 import { useData } from '@/store/useData'
 import { closeLegacyAuth, setMemberCode, updateMember } from '@/lib/household'
 import { signOut } from '@/lib/supabase'
@@ -21,7 +20,6 @@ import { fire } from '@/lib/haptics'
 export function GeneralSettings() {
   const member = useCurrentMember()
   const isOwner = useIsOwner()
-  const openThingsSettings = useUI((s) => s.openSheet)
   const household = useData((s) => s.household_settings)[0]
 
   const [name, setName] = useState(member?.display_name ?? '')
@@ -76,18 +74,11 @@ export function GeneralSettings() {
 
       {member && isConfigured() && <CodeCard profileId={member.id} />}
 
-      <SettingsGroup label="Appearance & Things">
-        <SettingsRow
-          icon="sparkle"
-          title="Theme, haptics and sound"
-          subtitle="Accent colour, text size, vibration strength"
-          right={<Icon name="chevron" size={16} />}
-          onClick={() => {
-            fire('tap')
-            openThingsSettings({ kind: 'settings' })
-          }}
-        />
-      </SettingsGroup>
+      {/* Not a link out to an app's settings any more. Theme, accent, text
+          size and vibration are applied to the document root and are felt in
+          every app, so they belong to the launcher — the only reason they used
+          to live inside Things is that Things once was the whole app. */}
+      <AppearanceSettings />
 
       {isOwner && isConfigured() && household?.legacy_auth_enabled !== false && (
         <LegacyCard />

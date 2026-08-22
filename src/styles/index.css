@@ -226,9 +226,16 @@
 
   A layout that needs its OWN padding as well must not also apply .safe-top:
   both set padding-top, this file wins the cascade over Tailwind's utilities,
-  and the base padding vanishes silently. Use the variable in a calc instead:
+  and the base padding vanishes silently. Use the variable inline instead:
 
-    pt-[calc(var(--safe-top)+0.75rem)]
+    pt-[max(var(--safe-top),0.75rem)]
+
+  max(), not calc(). The inset already includes the clearance — 59px on a
+  Dynamic Island phone is measured from the top of the screen to below the
+  pill, not the height of the pill — so adding a gap on top of it pushes the
+  header a visible thumb's width down the screen for no reason. max() gives
+  the ordinary padding where there is no inset (Android, desktop) and the
+  inset alone where there is one, which is what both cases want.
 */
 :root {
   --safe-top: env(safe-area-inset-top, 0px);

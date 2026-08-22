@@ -59,10 +59,16 @@ export interface Score {
   added: number
   /** Currently on their plate. */
   claimed: number
-  /** Claims they took off somebody else in the window. */
+  /**
+   * Claims they took off somebody else AND then actually finished.
+   *
+   * Taking a claim is a promise, not an achievement — on its own it costs
+   * nothing and moves no work. So a steal sits uncounted until the same person
+   * completes the item, and a claim grabbed and left to rot scores zero.
+   */
   stolen: number
   /**
-   * Claims taken off THEM in the window.
+   * Items taken off THEM and then finished by whoever took them.
    *
    * Counted separately rather than derived by subtraction, because with more
    * than two people in the household "thefts minus mine" is not the number of
@@ -73,6 +79,51 @@ export interface Score {
 
 /** Events that mean "this person finished something". */
 const DONE_EVENTS = new Set<ActivityLog['event']>(['completed'])
+
+/** A steal that was made good on, and when it was made good on. */
+export interface SettledSteal {
+  steal: ActivityLog
+  completedAt: string
+}
+
+/**
+ * Pair every steal with the completion that redeemed it, if there was one.
+ *
+ * Walked per item in time order rather than counted, because a recurring chore
+ * produces many steals and many completions against one `row_id` over its
+ * life, and the metric is about pairs: this steal, then this person finishing
+ * that thing. Counting the two event types independently would let one
+ * completion redeem every steal that ever happened to the chore.
+ *
+ * At most one steal is outstanding per item at a time — the item is only ever
+ * on one person's plate — so a second steal supersedes the first rather than
+ * queueing behind it, and the person who lost the claim before finishing it
+ * gets no credit.
+ */
+export function settledSteals(entries: ActivityLog[]): SettledSteal[] {
+  const byRow = new Map<string, ActivityLog[]>()
+  for (const e of entries) {
+    if (e.event !== 'stolen' && e.event !== 'completed') continue
+    const list = byRow.get(e.row_id)
+    if (list) list.push(e)
+    else byRow.set(e.row_id, [e])
+  }
+
+  const settled: SettledSteal[] = []
+  for (const list of byRow.values()) {
+    const ordered = [...list].sort((a, b) => a.created_at.localeCompare(b.created_at))
+    let pending: ActivityLog | null = null
+    for (const e of ordered) {
+      if (e.event === 'stolen') {
+        pending = e
+      } else if (pending && e.actor_id === pending.actor_id) {
+        settled.push({ steal: pending, completedAt: e.created_at })
+        pending = null
+      }
+    }
+  }
+  return settled
+}
 
 /**
  * Head-to-head counts over a time window.
@@ -94,15 +145,28 @@ export function scoreboard(
 ): Score[] {
   const recent = entries.filter((e) => e.created_at >= sinceIso)
 
+  /*
+    Windowed on the completion, not on the steal.
+
+    A steal scores when it is made good on, so that is the moment it belongs
+    to. Windowing on the theft instead would drop a Sunday grab finished on
+    Monday out of the Monday week, and — worse — briefly show a steal in the
+    scoreboard before it had earned anything.
+
+    Searched across every entry rather than only the recent ones, because the
+    steal that a completion redeems can easily predate the window.
+  */
+  const settled = settledSteals(entries).filter((s) => s.completedAt >= sinceIso)
+
   return profileIds.map((profileId) => ({
     profileId,
     done: recent.filter((e) => e.actor_id === profileId && DONE_EVENTS.has(e.event)).length,
     added: recent.filter((e) => e.actor_id === profileId && e.event === 'added').length,
     claimed: claimedBy.filter((id) => id === profileId).length,
-    stolen: recent.filter((e) => e.event === 'stolen' && e.actor_id === profileId).length,
+    stolen: settled.filter((s) => s.steal.actor_id === profileId).length,
     // subject_id is absent on rows written before 016, so those simply don't
     // count rather than counting against whoever happens to be first.
-    robbed: recent.filter((e) => e.event === 'stolen' && e.subject_id === profileId).length,
+    robbed: settled.filter((s) => s.steal.subject_id === profileId).length,
   }))
 }
 
