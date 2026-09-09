@@ -5,6 +5,7 @@ import { formatPrice } from '@/lib/money'
 import { DISH_KINDS, type Dish, type DishKind } from '@/data/types'
 import { PotDoodle } from './doodles'
 import { dishCost } from './nutrition'
+import { cookable } from './shelf'
 import { useMealsUI } from './store'
 import { Chip, KIND_META, MCard, Stat, TextInput } from './ui'
 
@@ -16,7 +17,8 @@ import { Chip, KIND_META, MCard, Stat, TextInput } from './ui'
  * width on a phone.
  */
 export function DishesTab() {
-  const dishes = useData((s) => s.dishes)
+  // Shelved recipes (see shelf.ts) live behind the star, not here.
+  const dishes = cookable(useData((s) => s.dishes))
   const openSheet = useMealsUI((s) => s.openSheet)
   const [query, setQuery] = useState('')
   const [kind, setKind] = useState<DishKind | null>(null)

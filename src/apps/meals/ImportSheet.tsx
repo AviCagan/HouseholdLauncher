@@ -5,7 +5,11 @@ import { fire } from '@/lib/haptics'
 import { importFromText, importFromUrl, type ImportedRecipe } from '@/lib/recipe'
 import { isUrl } from '@/lib/unfurl'
 import { WhiskSpinner } from './doodles'
-import { draftFromImport, hasNutrition } from './nutrition'
+import { toast } from 'sonner'
+import { useProfile } from '@/store/useProfile'
+import { addDish } from './actions'
+import { draftFromImport, guessEmoji, hasNutrition } from './nutrition'
+import { SHELF_TAG, linkOnly } from './shelf'
 import { useMealsUI } from './store'
 import { BigButton, Field, POP, Stat, TextArea, TextInput } from './ui'
 
@@ -25,6 +29,7 @@ import { BigButton, Field, POP, Stat, TextArea, TextInput } from './ui'
  */
 export function ImportSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const openSheet = useMealsUI((s) => s.openSheet)
+  const profileId = useProfile((s) => s.profileId)
   const [url, setUrl] = useState('')
   const [text, setText] = useState('')
   const [mode, setMode] = useState<'link' | 'text'>('link')
@@ -112,6 +117,36 @@ export function ImportSheet({ open, onClose }: { open: boolean; onClose: () => v
     openSheet({ kind: 'dish', dish: null, draft, note })
   }
 
+  /*
+    Onto the shelf as-is: everything the page gave up, tagged want-to-try, so
+    it stays out of "my dishes" until it's actually been made. No form to fill
+    in — the whole point is that it takes one tap to not lose it.
+  */
+  function saveForLater() {
+    if (!result) return
+    const draft = draftFromImport(result, mode === 'link' ? url.trim() : null)
+    const name = draft.name || (url.trim() ? linkOnly(url.trim()).name : 'Recipe to try')
+    const saved = addDish(
+      { ...draft, name, emoji: guessEmoji(name, 'main'), kind: 'main', cost_cents: null, notes: null, tags: [SHELF_TAG] },
+      profileId,
+    )
+    if (!saved) return
+    toast.success(`⭐ ${saved.name} is on the shelf`)
+    reset()
+    onClose()
+  }
+
+  /** The link alone, for a page the reader couldn't get into. */
+  function saveLink() {
+    const u = url.trim()
+    if (!isUrl(u)) return
+    const saved = addDish(linkOnly(u), profileId)
+    if (!saved) return
+    toast.success('⭐ The link is on the shelf')
+    reset()
+    onClose()
+  }
+
   return (
     <Sheet
       open={open}
@@ -182,16 +217,21 @@ export function ImportSheet({ open, onClose }: { open: boolean; onClose: () => v
           )}
 
           {!busy && error && (
-            <motion.p
+            <motion.div
               key="error"
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="m-card-flat px-3 py-2.5 text-[13px] font-semibold"
+              className="m-card-flat flex flex-col gap-2 px-3 py-2.5 text-[13px] font-semibold"
               style={{ background: 'var(--m-butter-soft)' }}
             >
-              {error}
-            </motion.p>
+              <span>{error}</span>
+              {isUrl(url) && (
+                <button onClick={saveLink} className="m-chip self-start" style={{ background: 'var(--m-card)' }}>
+                  ⭐ Save the link for later anyway
+                </button>
+              )}
+            </motion.div>
           )}
 
           {!busy && result && (
@@ -228,7 +268,12 @@ export function ImportSheet({ open, onClose }: { open: boolean; onClose: () => v
         </AnimatePresence>
 
         {result ? (
-          <BigButton onClick={useIt}>Looks right — edit & save</BigButton>
+          <div className="flex flex-col gap-2">
+            <BigButton onClick={useIt}>Looks right — edit & save</BigButton>
+            <BigButton onClick={saveForLater} tone="var(--m-butter)" ink="var(--m-ink)">
+              ⭐ Save for later
+            </BigButton>
+          </div>
         ) : (
           <BigButton onClick={() => void run()} busy={busy} disabled={mode === 'link' ? !isUrl(url) : text.trim().length < 10}>
             {mode === 'link' ? 'Read the recipe' : 'Sort it out'}

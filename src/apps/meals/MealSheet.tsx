@@ -12,6 +12,7 @@ import { addMeal, removeMeal, updateMeal, type DishInput, type MealInput } from 
 import { DishSheet } from './DishSheet'
 import { MissingSheet } from './MissingSheet'
 import { DEFAULT_PEOPLE, NUTRITION_LABEL, batchesFor, lineText, shoppingList, shoppingListText, summariseMeal } from './nutrition'
+import { cookable } from './shelf'
 import { useMealsUI } from './store'
 import { BigButton, Chip, EmojiPicker, Field, Headcount, KIND_META, OCCASION_META, POP, Stat, TextArea, TextInput, occasionEmoji } from './ui'
 
@@ -300,7 +301,7 @@ export function MealSheet({
                         >
                           <DishPicker
                             role={course.role}
-                            dishes={dishes}
+                            dishes={cookable(dishes)}
                             current={course.dish_id}
                             onPick={(id) => {
                               fire('snap')

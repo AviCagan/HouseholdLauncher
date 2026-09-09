@@ -31,6 +31,7 @@ export type MealsSheet =
     }
   | { kind: 'template'; template: MealTemplate | null }
   | { kind: 'import' }
+  | { kind: 'shelf' }
 
 interface MealsUI {
   tab: MealsTab

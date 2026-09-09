@@ -9,6 +9,7 @@ import { fire } from '@/lib/haptics'
 import { DISH_KINDS, NUTRITION_KEYS, type Dish, type DishKind, type Ingredient, type Nutrition } from '@/data/types'
 import { addDish, removeDish, updateDish, type DishInput } from './actions'
 import { NUTRITION_LABEL, guessEmoji, ingredientCostSum } from './nutrition'
+import { SHELF_TAG, isShelved } from './shelf'
 import { useMealsUI } from './store'
 import { BigButton, Chip, EmojiPicker, Field, KIND_META, POP, Stepper, TextArea, TextInput } from './ui'
 
@@ -52,6 +53,7 @@ export function DishSheet({
   const [sourceKind, setSourceKind] = useState<Dish['source_kind']>('manual')
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [notes, setNotes] = useState('')
+  const [tags, setTags] = useState<string[]>([])
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   /*
@@ -75,6 +77,7 @@ export function DishSheet({
     setSourceKind(src.source_kind ?? 'manual')
     setImageUrl(src.image_url ?? null)
     setNotes(src.notes ?? '')
+    setTags(src.tags ?? [])
     setConfirmDelete(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, dish?.id, draft])
@@ -102,8 +105,10 @@ export function DishSheet({
       source_kind: sourceKind,
       image_url: imageUrl,
       notes: notes.trim() || null,
+      tags,
     }
   }
+  const onShelf = isShelved({ tags })
 
   // Closes at once: the dish is in the store before the network is touched
   // (see actions.ts), so there is nothing to wait for.
@@ -146,6 +151,23 @@ export function DishSheet({
             <span className="text-[16px]">🔍</span>
             <span>{note}</span>
           </motion.div>
+        )}
+
+        {onShelf && (
+          <div className="m-card-flat flex items-center gap-2.5 px-3 py-2.5" style={{ background: 'var(--m-butter-soft)' }}>
+            <span className="text-[18px]">⭐</span>
+            <span className="min-w-0 flex-1 text-[13px] font-semibold">On the want-to-try shelf, not in your dishes yet.</span>
+            <button
+              onClick={() => {
+                fire('success')
+                setTags((t) => t.filter((x) => x !== SHELF_TAG))
+              }}
+              className="m-chip shrink-0 !py-1 !text-[11.5px]"
+              style={{ background: 'var(--m-mint-soft)' }}
+            >
+              Make it a dish
+            </button>
+          </div>
         )}
 
         {imageUrl && (
@@ -345,7 +367,7 @@ export function DishSheet({
 
         <div className="flex flex-col gap-2 pt-1">
           <BigButton onClick={() => void save()} disabled={!valid}>
-            {dish ? 'Save changes' : 'Add to my dishes'}
+            {dish ? 'Save changes' : onShelf ? 'Save to the shelf' : 'Add to my dishes'}
           </BigButton>
           {dish && (
             <BigButton onClick={() => void remove()} tone={confirmDelete ? '#ff4d4d' : 'var(--m-card)'} ink={confirmDelete ? '#fff' : 'var(--m-ink)'}>

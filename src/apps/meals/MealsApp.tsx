@@ -11,6 +11,8 @@ import { ImportSheet } from './ImportSheet'
 import { MealSheet } from './MealSheet'
 import { MealsTab } from './MealsTab'
 import { PlepTab } from './PlepTab'
+import { ShelfSheet } from './ShelfSheet'
+import { shelved } from './shelf'
 import { TemplateSheet, TemplatesTab } from './TemplatesTab'
 import { useMealsUI, type MealsTab as TabKey } from './store'
 import { POP, useReduceMotion } from './ui'
@@ -47,6 +49,7 @@ export function MealsApp() {
   const dishes = useData((s) => s.dishes)
   const meals = useData((s) => s.meals)
   const [fab, setFab] = useState(false)
+  const onShelf = shelved(dishes).length
 
   /*
     Honour a notification tap: {tab, id}. The dish or meal is opened only if
@@ -58,6 +61,7 @@ export function MealsApp() {
     if (!link) return
     const wanted = link.tab
     if (wanted === 'dishes' || wanted === 'meals' || wanted === 'templates' || wanted === 'plan') setTab(wanted)
+    if (wanted === 'shelf') openSheet({ kind: 'shelf' })
     const id = typeof link.id === 'string' ? link.id : null
     if (!id) return
     const dish = dishes.find((d) => d.id === id)
@@ -91,9 +95,30 @@ export function MealsApp() {
               </svg>
             </h1>
             <p className="mt-1.5 text-[12px] font-bold" style={{ color: 'var(--m-ink-dim)' }}>
-              {dishes.length} {dishes.length === 1 ? 'dish' : 'dishes'} · {meals.length} {meals.length === 1 ? 'meal' : 'meals'}
+              {dishes.length - onShelf} {dishes.length - onShelf === 1 ? 'dish' : 'dishes'} · {meals.length} {meals.length === 1 ? 'meal' : 'meals'}
             </p>
           </div>
+          {/* The shelf: recipes found and saved for later, behind a star. */}
+          <motion.button
+            whileTap={{ scale: 0.9, rotate: 12 }}
+            onClick={() => {
+              fire('tap')
+              openSheet({ kind: 'shelf' })
+            }}
+            aria-label={onShelf ? `Want to try, ${onShelf} saved` : 'Want to try'}
+            className="relative grid h-11 w-11 shrink-0 place-items-center rounded-full text-[20px]"
+            style={{ background: onShelf ? 'var(--m-butter)' : 'var(--m-card)', border: '2.5px solid var(--m-line)', boxShadow: 'var(--m-shadow-sm)' }}
+          >
+            ⭐
+            {onShelf > 0 && (
+              <span
+                className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10.5px] font-black text-white"
+                style={{ background: 'var(--m-tomato)', border: '2px solid var(--m-line)' }}
+              >
+                {onShelf}
+              </span>
+            )}
+          </motion.button>
         </div>
 
         <nav className="mt-3 flex gap-1.5 rounded-[20px] p-1.5" style={{ background: 'var(--m-card)', border: '2.5px solid var(--m-line)', boxShadow: 'var(--m-shadow-sm)' }} aria-label="Sections">
@@ -169,6 +194,7 @@ export function MealsApp() {
       />
       <TemplateSheet open={sheet?.kind === 'template'} template={sheet?.kind === 'template' ? sheet.template : null} onClose={closeSheet} />
       <ImportSheet open={sheet?.kind === 'import'} onClose={closeSheet} />
+      <ShelfSheet open={sheet?.kind === 'shelf'} onClose={closeSheet} />
       <Confetti burst={burst} />
     </div>
   )
