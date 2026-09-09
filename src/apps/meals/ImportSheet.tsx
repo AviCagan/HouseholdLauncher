@@ -64,7 +64,20 @@ export function ImportSheet({ open, onClose }: { open: boolean; onClose: () => v
 
     if (!res.ok) {
       fire('error')
-      setError(res.error)
+      /*
+        A 4xx from the site itself is almost always a bot block — Allrecipes
+        and its stablemates refuse any fetch that isn't a browser — and there
+        is nothing a server can do about that. The recipe is still right there
+        on the person's screen, so the honest next step is the paste box, and
+        the sheet moves them to it rather than leaving a dead end.
+      */
+      const blocked = mode === 'link' && /answered 4\d\d/.test(res.error)
+      setError(
+        blocked
+          ? `${res.error} — that site blocks automated readers. Copy the recipe text from the page and paste it here instead.`
+          : res.error,
+      )
+      if (blocked) setMode('text')
       return
     }
     const r = res.recipe
