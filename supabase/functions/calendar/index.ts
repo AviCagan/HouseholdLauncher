@@ -1,4 +1,5 @@
-// Things — iCalendar feed for recurring chores (Supabase Edge Function, Deno)
+// Household — iCalendar feed for recurring chores and planned meals
+// (Supabase Edge Function, Deno)
 //
 // Google Calendar can subscribe to a calendar "from URL". It fetches that URL
 // on its own schedule with no headers you control, which decides the shape of
@@ -20,7 +21,7 @@
 // Deploy: supabase functions deploy calendar --no-verify-jwt
 
 import { createClient } from 'jsr:@supabase/supabase-js@2'
-import { buildCalendar, type ChoreRow } from './ics.ts'
+import { buildCalendar, type ChoreRow, type MealRow } from './ics.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -72,15 +73,37 @@ Deno.serve(async (req) => {
     })
   }
 
+  // Planned meals from the last month on: enough that "what did we make last
+  // Shabbat" is still on the calendar, without shipping the whole history on
+  // every poll. Meals are optional — a household that never ran 017_meals.sql
+  // simply has no table, and the feed carries on with the chores.
+  const since = new Date(Date.now() - 31 * 86_400_000).toISOString().slice(0, 10)
+  const { data: mealRows } = await db
+    .from('meals')
+    .select('id, name, emoji, planned_for, people, notes, courses')
+    .not('planned_for', 'is', null)
+    .gte('planned_for', since)
+  const meals = (mealRows ?? []) as MealRow[]
+
+  const dishIds = [...new Set(meals.flatMap((m) => (m.courses ?? []).map((c) => c.dish_id)).filter(Boolean))] as string[]
+  const dishNames = new Map<string, string>()
+  if (dishIds.length) {
+    const { data: dishes } = await db.from('dishes').select('id, name').in('id', dishIds)
+    for (const d of (dishes ?? []) as { id: string; name: string }[]) dishNames.set(d.id, d.name)
+  }
+
   const body = buildCalendar(
     (chores ?? []) as ChoreRow[],
     settings?.calendar_alarm_minutes ?? 0,
+    new Date(),
+    meals,
+    (id) => dishNames.get(id) ?? null,
   )
 
   const headers = {
     ...CORS,
     'Content-Type': 'text/calendar; charset=utf-8',
-    'Content-Disposition': 'inline; filename="things-chores.ics"',
+    'Content-Disposition': 'inline; filename="household.ics"',
     'Cache-Control': 'public, max-age=900',
   }
 

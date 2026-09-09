@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildCalendar,
+  describeMeal,
   esc,
   fold,
+  nextDay,
   type ChoreRow,
+  type MealRow,
 } from '../../supabase/functions/calendar/ics'
 
 /**
@@ -193,5 +196,52 @@ describe('buildCalendar: weekday mode', () => {
       NOW,
     )
     expect(ics).toContain('Repeats on Sundays\\, Thursdays\\, Fridays')
+  })
+})
+
+describe('buildCalendar: meals', () => {
+  const dinner: MealRow = {
+    id: 'meal-1',
+    name: 'Shabbat dinner',
+    emoji: '🕯️',
+    planned_for: '2026-09-11',
+    people: 8,
+    notes: 'Nuri is coming',
+    courses: [
+      { label: 'Challah', dish_id: 'd-challah' },
+      { label: 'Main', dish_id: null },
+    ],
+  }
+  const dishName = (id: string) => (id === 'd-challah' ? 'Challah' : null)
+
+  it('is an all-day event on the planned day with an exclusive end', () => {
+    const ics = buildCalendar([], 0, NOW, [dinner], dishName)
+    expect(ics).toContain('UID:meal-1@meals')
+    expect(ics).toContain('DTSTART;VALUE=DATE:20260911')
+    expect(ics).toContain('DTEND;VALUE=DATE:20260912')
+    expect(ics).toContain('SUMMARY:🕯️ Shabbat dinner')
+    expect(ics).not.toContain('RRULE')
+  })
+
+  it('describes the headcount, each course, and the notes', () => {
+    expect(describeMeal(dinner, dishName)).toBe('For 8\n\nChallah: Challah\nMain: —\n\nNuri is coming')
+    expect(buildCalendar([], 0, NOW, [dinner], dishName)).toContain('DESCRIPTION:For 8\\n\\nChallah: Challah\\nMain: —\\n\\nNuri is coming')
+  })
+
+  it('rolls the end date over a month boundary', () => {
+    expect(nextDay('2026-09-30')).toBe('2026-10-01')
+    expect(nextDay('2026-12-31')).toBe('2027-01-01')
+  })
+
+  it('skips a meal with no usable date and keeps the chores', () => {
+    const ics = buildCalendar([row()], 0, NOW, [{ ...dinner, planned_for: 'soon' }], dishName)
+    expect(ics.match(/BEGIN:VEVENT/g)).toHaveLength(1)
+    expect(ics).not.toContain('@meals')
+  })
+
+  it('still builds a chores-only feed with the old signature', () => {
+    const ics = buildCalendar([row()], 0, NOW)
+    expect(ics).toContain('X-WR-CALNAME:Household — Chores & meals')
+    expect(ics.match(/BEGIN:VEVENT/g)).toHaveLength(1)
   })
 })

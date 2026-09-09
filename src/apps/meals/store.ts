@@ -11,7 +11,7 @@ import type { DishInput } from './actions'
  * be able to land on one too.
  */
 
-export type MealsTab = 'dishes' | 'meals' | 'templates'
+export type MealsTab = 'dishes' | 'meals' | 'templates' | 'plan'
 
 export type MealsSheet =
   | {
@@ -22,7 +22,13 @@ export type MealsSheet =
       /** A one-line caution shown above the form, e.g. "guessed from a caption". */
       note?: string
     }
-  | { kind: 'meal'; meal: Meal | null; template?: MealTemplate | null }
+  | {
+      kind: 'meal'
+      meal: Meal | null
+      template?: MealTemplate | null
+      /** For a new meal: the day the planner was on, so it opens dated. */
+      date?: string | null
+    }
   | { kind: 'template'; template: MealTemplate | null }
   | { kind: 'import' }
 

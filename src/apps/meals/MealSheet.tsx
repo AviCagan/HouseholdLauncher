@@ -38,12 +38,15 @@ import { BigButton, Chip, EmojiPicker, Field, Headcount, KIND_META, OCCASION_MET
 export function MealSheet({
   meal,
   template,
+  date = null,
   open,
   onClose,
 }: {
   meal: Meal | null
   /** Shape to start from, for a new meal. */
   template?: MealTemplate | null
+  /** The day to plan it for, when opened from the planner. */
+  date?: string | null
   open: boolean
   onClose: () => void
 }) {
@@ -82,7 +85,7 @@ export function MealSheet({
       setNotes(meal.notes ?? '')
     } else {
       applyTemplate(template ?? null)
-      setPlannedFor('')
+      setPlannedFor(date ?? '')
       setNotes('')
     }
     setCustomOccasion('')
@@ -92,7 +95,7 @@ export function MealSheet({
     setAdding(false)
     setConfirmDelete(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, meal?.id, template?.id])
+  }, [open, meal?.id, template?.id, date])
 
   function applyTemplate(t: MealTemplate | null) {
     fire('snap')

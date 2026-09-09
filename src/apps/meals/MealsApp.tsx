@@ -10,6 +10,7 @@ import { DishSheet } from './DishSheet'
 import { ImportSheet } from './ImportSheet'
 import { MealSheet } from './MealSheet'
 import { MealsTab } from './MealsTab'
+import { PlepTab } from './PlepTab'
 import { TemplateSheet, TemplatesTab } from './TemplatesTab'
 import { useMealsUI, type MealsTab as TabKey } from './store'
 import { POP, useReduceMotion } from './ui'
@@ -18,9 +19,10 @@ import './meals.css'
 /**
  * Meals.
  *
- * Three tabs — the dishes you know how to make, the meals you've put them
- * into, and the templates that give a meal its shape — under one bouncy
- * header and a tomato-red button that does all the adding.
+ * Four tabs — the dishes you know how to make, the meals you've put them
+ * into, the templates that give a meal its shape, and the planner ("Plep":
+ * plan and prep) — under one bouncy header and a tomato-red button that does
+ * all the adding.
  *
  * Everything visual about this app is scoped by the `.meals` class on the
  * root; see meals.css for what that buys and why.
@@ -30,6 +32,7 @@ const TABS: { key: TabKey; label: string; emoji: string }[] = [
   { key: 'dishes', label: 'Dishes', emoji: '🥘' },
   { key: 'meals', label: 'Meals', emoji: '🍽️' },
   { key: 'templates', label: 'Templates', emoji: '📋' },
+  { key: 'plan', label: 'Plep', emoji: '📆' },
 ]
 
 export function MealsApp() {
@@ -54,7 +57,7 @@ export function MealsApp() {
     const link = consumeDeepLink()
     if (!link) return
     const wanted = link.tab
-    if (wanted === 'dishes' || wanted === 'meals' || wanted === 'templates') setTab(wanted)
+    if (wanted === 'dishes' || wanted === 'meals' || wanted === 'templates' || wanted === 'plan') setTab(wanted)
     const id = typeof link.id === 'string' ? link.id : null
     if (!id) return
     const dish = dishes.find((d) => d.id === id)
@@ -105,14 +108,16 @@ export function MealsApp() {
                   setTab(t.key)
                 }}
                 aria-current={active ? 'page' : undefined}
-                className="relative flex flex-1 items-center justify-center gap-1.5 rounded-[14px] py-2 text-[13px] font-extrabold"
+                // Emoji over label, not beside it: four labels in a row no
+                // longer fit at a readable size, and "Temp…" is not a tab.
+                className="relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-[14px] px-1 py-1.5 text-[11.5px] font-extrabold"
                 style={{ color: active ? '#fff' : 'var(--m-ink)' }}
               >
                 {active && (
                   <motion.span layoutId="meals-tab" className="absolute inset-0 rounded-[14px]" style={{ background: 'var(--m-tomato)' }} transition={{ type: 'spring', stiffness: 520, damping: 34 }} />
                 )}
-                <span className="relative">{t.emoji}</span>
-                <span className="relative">{t.label}</span>
+                <span className="relative text-[16px] leading-none">{t.emoji}</span>
+                <span className="relative max-w-full truncate leading-tight">{t.label}</span>
               </button>
             )
           })}
@@ -131,6 +136,7 @@ export function MealsApp() {
             {tab === 'dishes' && <DishesTab />}
             {tab === 'meals' && <MealsTab />}
             {tab === 'templates' && <TemplatesTab />}
+            {tab === 'plan' && <PlepTab />}
           </motion.div>
         </AnimatePresence>
       </div>
@@ -158,6 +164,7 @@ export function MealsApp() {
         open={sheet?.kind === 'meal'}
         meal={sheet?.kind === 'meal' ? sheet.meal : null}
         template={sheet?.kind === 'meal' ? sheet.template : null}
+        date={sheet?.kind === 'meal' ? sheet.date ?? null : null}
         onClose={closeSheet}
       />
       <TemplateSheet open={sheet?.kind === 'template'} template={sheet?.kind === 'template' ? sheet.template : null} onClose={closeSheet} />

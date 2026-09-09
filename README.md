@@ -18,7 +18,7 @@ from Safari on iPhone.
 |---|---|
 | **Things** | To-dos, chores, shopping and wishlist. Recurring chores rest after each time and come back on their own; shopping groups by store and plans the driving order. |
 | **Owe & Owed** | Two lists — who owes us, and who we owe. Adds up a person listed more than once, and settling is a deliberate zipper-swipe, not a tap. |
-| **Meals** | Dishes with what they cost and what's in them, meals built from templates — Shabbat, every holiday, a weeknight — that add up cost and nutrition per plate and scale to however many are coming — a slider sets the headcount, and batches, cost and a copyable shopping list follow it — and a recipe importer that reads a link or an Instagram caption. The one app that's allowed to look like a sticker book. |
+| **Meals** | Dishes with what they cost and what's in them, meals built from templates — Shabbat, every holiday, a weeknight — that add up cost and nutrition per plate and scale to however many are coming — a slider sets the headcount, and batches, cost and a copyable shopping list follow it — a recipe importer that reads a link or an Instagram caption, a two-week planner ("Plep") that puts the board on Google Calendar, and a "Missing ingredients?" button that sends what's needed to the Things shopping list, sorted by store. The one app that's allowed to look like a sticker book. |
 | **A&J Encyclopedia** | A dictionary of the words only the two of them use, typeset like the real thing — headword, pronunciation, part of speech, an example, an origin — with an alphabet index, a word of the day, and nothing in it until they write it. |
 | **Bluetooth** | One switch per paired device, so the car can be dropped without four taps into system settings. Android only — see below. |
 
