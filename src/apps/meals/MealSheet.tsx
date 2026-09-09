@@ -10,6 +10,7 @@ import { fire } from '@/lib/haptics'
 import { DISH_KINDS, NUTRITION_KEYS, type Dish, type DishKind, type Meal, type MealCourse, type MealTemplate } from '@/data/types'
 import { addMeal, removeMeal, updateMeal, type DishInput, type MealInput } from './actions'
 import { DishSheet } from './DishSheet'
+import { MissingSheet } from './MissingSheet'
 import { DEFAULT_PEOPLE, NUTRITION_LABEL, batchesFor, lineText, shoppingList, shoppingListText, summariseMeal } from './nutrition'
 import { useMealsUI } from './store'
 import { BigButton, Chip, EmojiPicker, Field, Headcount, KIND_META, OCCASION_META, POP, Stat, TextArea, TextInput, occasionEmoji } from './ui'
@@ -63,6 +64,7 @@ export function MealSheet({
   const [picking, setPicking] = useState<number | null>(null)
   /** Index of the course a new dish is being written for, while it is. */
   const [newFor, setNewFor] = useState<number | null>(null)
+  const [missingOpen, setMissingOpen] = useState(false)
   const [adding, setAdding] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -86,6 +88,7 @@ export function MealSheet({
     setCustomOccasion('')
     setPicking(null)
     setNewFor(null)
+    setMissingOpen(false)
     setAdding(false)
     setConfirmDelete(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -147,6 +150,13 @@ export function MealSheet({
   const newCourse = newFor != null ? courses[newFor] ?? null : null
   const newRole = newCourse?.role ?? null
   const newDraft = useMemo<Partial<DishInput> | undefined>(() => (newRole ? { kind: newRole, name: '' } : undefined), [newRole])
+
+  // The draft as the missing-ingredients sheet sees it. Memoised so its
+  // derived lists don't churn on every keystroke in the name field.
+  const draftMeal = useMemo(
+    () => [{ name: name.trim() || 'this meal', emoji: emoji || occasionEmoji(occasion), courses, people }],
+    [name, emoji, occasion, courses, people],
+  )
 
   return (
     <>
@@ -336,6 +346,17 @@ export function MealSheet({
           <>
             <Totals summary={summary} />
             <ShoppingCard name={name} people={people} courses={courses} dishes={dishes} />
+            <BigButton
+              onClick={() => {
+                fire('tap')
+                setMissingOpen(true)
+              }}
+              tone="var(--m-sky)"
+              ink="var(--m-ink)"
+              className="!py-3 !text-[14px]"
+            >
+              🛒 Missing ingredients?
+            </BigButton>
           </>
         )}
 
@@ -367,6 +388,8 @@ export function MealSheet({
         setNewFor(null)
       }}
     />
+
+    <MissingSheet open={missingOpen} meals={draftMeal} onClose={() => setMissingOpen(false)} />
     </>
   )
 }
