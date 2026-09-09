@@ -8,7 +8,8 @@ import { openExternal } from '@/apps/things/routing/deeplink'
 import { fire } from '@/lib/haptics'
 import { DISH_KINDS, NUTRITION_KEYS, type Dish, type DishKind, type Ingredient, type Nutrition } from '@/data/types'
 import { addDish, removeDish, updateDish, type DishInput } from './actions'
-import { NUTRITION_LABEL, guessEmoji, ingredientCostSum } from './nutrition'
+import { NUTRITION_LABEL, guessEmoji, hasNutrition, ingredientCostSum } from './nutrition'
+import { UNKNOWN_REASON, dishMacros, isUnknown, lineMacros } from './macros'
 import { SHELF_TAG, isShelved } from './shelf'
 import { useMealsUI } from './store'
 import { BigButton, Chip, EmojiPicker, Field, KIND_META, POP, Stepper, TextArea, TextInput } from './ui'
@@ -49,6 +50,8 @@ export function DishSheet({
   const [ingredients, setIngredients] = useState<Ingredient[]>([])
   const [steps, setSteps] = useState<string[]>([])
   const [nutrition, setNutrition] = useState<Record<keyof Nutrition, string>>(blankNutrition())
+  /** Work the numbers out from the ingredients, rather than typing them. */
+  const [auto, setAuto] = useState(true)
   const [sourceUrl, setSourceUrl] = useState<string | null>(null)
   const [sourceKind, setSourceKind] = useState<Dish['source_kind']>('manual')
   const [imageUrl, setImageUrl] = useState<string | null>(null)
@@ -73,6 +76,9 @@ export function DishSheet({
     setIngredients(src.ingredients?.length ? src.ingredients : [blankIngredient()])
     setSteps(src.steps?.length ? src.steps : [''])
     setNutrition(nutritionToInputs(src.nutrition ?? {}))
+    // A saved dish remembers which; a new one starts automatic unless the
+    // import already brought numbers, which are worth more than a guess.
+    setAuto(dish ? Boolean(dish.nutrition_auto) : (draft?.nutrition_auto ?? !hasNutrition(src.nutrition ?? {})))
     setSourceUrl(src.source_url ?? null)
     setSourceKind(src.source_kind ?? 'manual')
     setImageUrl(src.image_url ?? null)
@@ -89,6 +95,16 @@ export function DishSheet({
 
   const costCents = parsePrice(cost)
   const ingredientTotal = useMemo(() => ingredientCostSum(ingredients), [ingredients])
+  const macros = useMemo(() => dishMacros(ingredients, servings), [ingredients, servings])
+  const lineKcal = useMemo(
+    () =>
+      ingredients.map((ing) => {
+        if (!ing.name.trim()) return null
+        const l = lineMacros(ing)
+        return isUnknown(l) ? { reason: l.reason } : { kcal: l.nutrition.calories ?? 0, food: l.food }
+      }),
+    [ingredients],
+  )
   const valid = name.trim().length > 0 && (cost.trim() === '' || costCents !== null)
 
   function collect(): DishInput {
@@ -100,7 +116,8 @@ export function DishSheet({
       cost_cents: cost.trim() === '' ? null : costCents,
       ingredients: ingredients.filter((i) => i.name.trim()),
       steps: steps.map((s) => s.trim()).filter(Boolean),
-      nutrition: inputsToNutrition(nutrition),
+      nutrition: auto ? macros.perServing : inputsToNutrition(nutrition),
+      nutrition_auto: auto,
       source_url: sourceUrl,
       source_kind: sourceKind,
       image_url: imageUrl,
@@ -276,6 +293,21 @@ export function DishSheet({
                 </motion.div>
               ))}
             </AnimatePresence>
+            {auto && lineKcal.some(Boolean) && (
+              <div className="flex flex-wrap gap-1 px-0.5">
+                {lineKcal.map((l, i) =>
+                  !l ? null : 'kcal' in l && l.kcal != null ? (
+                    <span key={i} className="rounded-full px-2 py-0.5 text-[10.5px] font-bold" style={{ background: 'var(--m-mint-soft)' }}>
+                      {ingredients[i].name.trim()} · {Math.round(l.kcal)} kcal
+                    </span>
+                  ) : (
+                    <span key={i} className="rounded-full px-2 py-0.5 text-[10.5px] font-bold" style={{ background: 'var(--m-card-2)', color: 'var(--m-ink-dim)' }}>
+                      {ingredients[i].name.trim()} · {UNKNOWN_REASON[l.reason]}
+                    </span>
+                  ),
+                )}
+              </div>
+            )}
             <AddRowButton
               label="Add an ingredient"
               onClick={() => setIngredients((list) => [...list, blankIngredient()])}
@@ -327,23 +359,72 @@ export function DishSheet({
           </div>
         </Field>
 
-        <Field label="Nutrition, per serving" hint="Leave blank what you don't know — blanks stay blank in the totals.">
-          <div className="grid grid-cols-3 gap-2">
-            {NUTRITION_KEYS.map((key) => (
-              <label key={key} className="flex flex-col gap-1">
-                <span className="px-0.5 text-[11px] font-bold" style={{ color: 'var(--m-ink-dim)' }}>
-                  {NUTRITION_LABEL[key].label}
-                </span>
-                <TextInput
-                  value={nutrition[key]}
-                  onChange={(e) => setNutrition((n) => ({ ...n, [key]: e.target.value }))}
-                  inputMode="decimal"
-                  placeholder={key === 'calories' ? 'kcal' : key === 'sodium_mg' ? 'mg' : 'g'}
-                  className="!py-2 !text-[13.5px]"
-                />
-              </label>
-            ))}
-          </div>
+        <Field
+          label="Nutrition, per serving"
+          right={
+            <button
+              onClick={() => {
+                fire(auto ? 'toggleOff' : 'toggleOn')
+                // Switching to typing keeps the worked-out numbers as a start.
+                if (auto) setNutrition(nutritionToInputs(macros.perServing))
+                setAuto((a) => !a)
+              }}
+              role="switch"
+              aria-checked={auto}
+              className="flex items-center gap-1.5 text-[12px] font-extrabold"
+              style={{ color: 'var(--m-tomato)' }}
+            >
+              <span className="relative h-5 w-9 rounded-full" style={{ background: auto ? 'var(--m-mint)' : 'var(--m-card-2)', border: '2px solid var(--m-line)' }}>
+                <span className="absolute top-[1px] h-3 w-3 rounded-full" style={{ left: auto ? 17 : 1, background: 'var(--m-card)', border: '2px solid var(--m-line)', transition: 'left 120ms ease' }} />
+              </span>
+              Work it out
+            </button>
+          }
+          hint={
+            auto
+              ? macros.known.length === 0
+                ? 'Worked out from the ingredients as you add them — amounts like “2 cups”, “400g” or “3” are enough.'
+                : `From ${macros.known.length} of ${macros.known.length + macros.unknown.length} ingredients, divided by ${servings}. Rough, but honest: what it couldn't place is left out, not counted as zero.`
+              : 'Typed in. Leave blank what you don’t know — blanks stay blank in the totals.'
+          }
+        >
+          {auto ? (
+            <div className="grid grid-cols-3 gap-2">
+              {NUTRITION_KEYS.map((key) => {
+                const v = macros.perServing[key]
+                return (
+                  <div key={key} className="m-card-flat px-2.5 py-2" style={{ background: 'var(--m-card)' }}>
+                    <span className="block text-[10.5px] font-black uppercase tracking-wide" style={{ color: 'var(--m-ink-dim)' }}>
+                      {NUTRITION_LABEL[key].label}
+                    </span>
+                    <span className="block text-[15px] font-black tabular-nums">{v != null ? NUTRITION_LABEL[key].fmt(v) : '—'}</span>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-2">
+              {NUTRITION_KEYS.map((key) => (
+                <label key={key} className="flex flex-col gap-1">
+                  <span className="px-0.5 text-[11px] font-bold" style={{ color: 'var(--m-ink-dim)' }}>
+                    {NUTRITION_LABEL[key].label}
+                  </span>
+                  <TextInput
+                    value={nutrition[key]}
+                    onChange={(e) => setNutrition((n) => ({ ...n, [key]: e.target.value }))}
+                    inputMode="decimal"
+                    placeholder={key === 'calories' ? 'kcal' : key === 'sodium_mg' ? 'mg' : 'g'}
+                    className="!py-2 !text-[13.5px]"
+                  />
+                </label>
+              ))}
+            </div>
+          )}
+          {auto && macros.unknown.length > 0 && (
+            <p className="text-[11.5px] font-semibold" style={{ color: 'var(--m-ink-dim)' }}>
+              Couldn’t place: {macros.unknown.map((u) => `${u.ingredient.name.trim()} (${UNKNOWN_REASON[u.reason]})`).join(', ')}.
+            </p>
+          )}
         </Field>
 
         {sourceUrl && (

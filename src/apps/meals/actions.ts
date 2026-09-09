@@ -85,7 +85,7 @@ function remove<T extends Row>(table: MealTable, row: T, failure: string): void 
 export type DishInput = Pick<
   Dish,
   | 'name' | 'emoji' | 'kind' | 'ingredients' | 'steps' | 'servings' | 'cost_cents'
-  | 'nutrition' | 'source_url' | 'source_kind' | 'image_url' | 'notes' | 'tags'
+  | 'nutrition' | 'nutrition_auto' | 'source_url' | 'source_kind' | 'image_url' | 'notes' | 'tags'
 >
 
 export function addDish(input: DishInput, profileId: string | null): Dish | null {
@@ -99,6 +99,7 @@ export function addDish(input: DishInput, profileId: string | null): Dish | null
     ingredients: input.ingredients.filter((i) => i.name.trim()),
     steps: input.steps.map((s) => s.trim()).filter(Boolean),
     tags: input.tags ?? [],
+    nutrition_auto: input.nutrition_auto ?? false,
     created_by: profileId,
     updated_by: null,
     created_at: nowIso(),

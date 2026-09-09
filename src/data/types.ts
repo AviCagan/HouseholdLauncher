@@ -460,6 +460,12 @@ export interface Dish {
   /** The whole dish, in cents. Null is "not entered", shown blank, not $0. */
   cost_cents: number | null
   nutrition: Nutrition
+  /**
+   * Whether `nutrition` is worked out from the ingredients (see
+   * apps/meals/macros.ts) rather than typed in. Optional because rows written
+   * before 020_nutrition_auto.sql don't carry it; absent means typed.
+   */
+  nutrition_auto?: boolean
   source_url: string | null
   source_kind: DishSource
   image_url: string | null

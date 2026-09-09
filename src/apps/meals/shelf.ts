@@ -39,6 +39,7 @@ export function linkOnly(url: string): DishInput {
     servings: 4,
     cost_cents: null,
     nutrition: {},
+    nutrition_auto: false,
     source_url: url,
     source_kind: /instagram\.com/i.test(url) ? 'instagram' : 'web',
     image_url: null,

@@ -165,10 +165,10 @@ function DayCard({
       }}
     >
       <div
-        className="flex w-[60px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5"
+        className="flex w-[68px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5"
         style={{ background: 'var(--m-card)', border: '2px solid var(--m-line)' }}
       >
-        <span className="max-w-full truncate text-[9px] font-black uppercase tracking-[0.02em]" style={{ color: isToday ? 'var(--m-tomato)' : 'var(--m-ink-dim)' }}>
+        <span className="max-w-full truncate text-[8.5px] font-black uppercase tracking-[0.01em]" style={{ color: isToday ? 'var(--m-tomato)' : 'var(--m-ink-dim)' }}>
           {day.label}
         </span>
         <span className="m-title text-[20px] leading-none">{dayNum}</span>

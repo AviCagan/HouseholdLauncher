@@ -184,6 +184,21 @@ export function formatQuantity(n: number): string {
 export const scalable = (amount: string | null): boolean => !!amount && LEADING.test(amount)
 
 /**
+ * The number an amount starts with, and what follows it: "2-3 cups" →
+ * { value: 2.5, rest: "cups" } (a range counts as its middle), "400g" →
+ * { value: 400, rest: "g" }. Null when it doesn't start with a number.
+ */
+export function leadingQuantity(amount: string): { value: number; rest: string } | null {
+  const m = amount.match(LEADING)
+  if (!m) return null
+  const first = parseQuantity(m[2])
+  if (first == null) return null
+  const second = m[4] ? parseQuantity(m[4]) : null
+  const value = second != null ? (first + second) / 2 : first
+  return { value, rest: amount.slice(m[0].length).trim() }
+}
+
+/**
  * "½ tsp" ×3 → "1½ tsp"; "2-3 cloves" ×2 → "4-6 cloves"; "400g" ×2 → "800g".
  *
  * An amount with no number in front — "a pinch", "to taste" — can't be
