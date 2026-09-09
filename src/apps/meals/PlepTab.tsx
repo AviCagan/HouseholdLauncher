@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'motion/react'
 import { toast } from 'sonner'
 import { Icon } from '@/components/primitives/Icon'
@@ -7,14 +7,15 @@ import { dataActions, useData } from '@/store/useData'
 import { useProfile } from '@/store/useProfile'
 import { fire } from '@/lib/haptics'
 import { isConfigured } from '@/lib/env'
-import { feedUrl, googleSubscribeUrl, newCalendarToken, webcalUrl } from '@/lib/calendar'
+import { calendarPath, feedUrl, googleSubscribeUrl, newCalendarToken, webcalUrl } from '@/lib/calendar'
+import { shareText } from '@/lib/share'
 import { openExternal } from '@/apps/things/routing/deeplink'
-import type { Dish, HouseholdSettings, Meal, MealTemplate } from '@/data/types'
+import { DISH_KINDS, type Dish, type HouseholdSettings, type Meal, type MealTemplate } from '@/data/types'
 import { addMeal } from './actions'
 import { MissingSheet } from './MissingSheet'
-import { copyMealForDate, googleMealEventUrl, mealsInRange, planWeeks, quickMeal, repeatable, type PlanDay } from './plan'
+import { copyMealForDate, googleMealEventUrl, mealFromDishes, mealsInRange, planWeeks, quickMeal, repeatable, type PlanDay } from './plan'
 import { useMealsUI } from './store'
-import { BigButton, Chip, Field, Heading, MCard, POP, TextInput, occasionEmoji } from './ui'
+import { BigButton, Chip, Field, Heading, KIND_META, MCard, POP, Stepper, TextInput, occasionEmoji } from './ui'
 
 /**
  * Plep — plan and prep.
@@ -62,6 +63,16 @@ export function PlepTab() {
     if (!day || !name.trim()) return
     setPlanning(null)
     if (addMeal(quickMeal(name, day.date, 2), profileId)) fire('success')
+  }
+
+  function fromDishes(picked: Dish[], people: number) {
+    const day = planning
+    if (!day || picked.length === 0) return
+    setPlanning(null)
+    const row = addMeal(mealFromDishes(picked, day.date, people), profileId)
+    if (!row) return
+    celebrate()
+    toast.success(`${row.emoji} ${row.name} — ${day.label === 'Today' ? 'today' : day.label === 'Tomorrow' ? 'tomorrow' : day.short}`)
   }
 
   return (
@@ -122,6 +133,7 @@ export function PlepTab() {
         }}
         onRepeat={repeat}
         onQuick={quick}
+        onDishes={fromDishes}
       />
       <CalendarSheet open={calendarOpen} onClose={() => setCalendarOpen(false)} household={household} />
       <MissingSheet open={shopOpen} meals={onBoard} onClose={() => setShopOpen(false)} />
@@ -153,10 +165,10 @@ function DayCard({
       }}
     >
       <div
-        className="flex w-[54px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl py-1.5"
+        className="flex w-[60px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5"
         style={{ background: 'var(--m-card)', border: '2px solid var(--m-line)' }}
       >
-        <span className="text-[10px] font-black uppercase tracking-wide" style={{ color: isToday ? 'var(--m-tomato)' : 'var(--m-ink-dim)' }}>
+        <span className="max-w-full truncate text-[9px] font-black uppercase tracking-[0.02em]" style={{ color: isToday ? 'var(--m-tomato)' : 'var(--m-ink-dim)' }}>
           {day.label}
         </span>
         <span className="m-title text-[20px] leading-none">{dayNum}</span>
@@ -206,7 +218,7 @@ function DayCard({
   )
 }
 
-/** Three ways to fill a day, quickest last. */
+/** Four ways to fill a day, quickest last. */
 function DayPlanSheet({
   day,
   templates,
@@ -215,6 +227,7 @@ function DayPlanSheet({
   onTemplate,
   onRepeat,
   onQuick,
+  onDishes,
 }: {
   day: PlanDay | null
   templates: MealTemplate[]
@@ -223,16 +236,42 @@ function DayPlanSheet({
   onTemplate: (t: MealTemplate) => void
   onRepeat: (m: Meal) => void
   onQuick: (name: string) => void
+  onDishes: (dishes: Dish[], people: number) => void
 }) {
   const [note, setNote] = useState('')
+  const [picking, setPicking] = useState(false)
+  const dishes = useData((s) => s.dishes)
   const again = useMemo(() => repeatable(meals), [meals])
   const sorted = useMemo(() => [...templates].sort((a, b) => a.sort_order - b.sort_order), [templates])
   const when = !day ? '' : day.label === 'Today' ? 'today' : day.label === 'Tomorrow' ? 'tomorrow' : `${day.label} ${day.short}`
+  const usable = dishes.filter((d) => !d.tags.includes('want-to-try'))
 
   return (
+    <>
     <Sheet open={day !== null} onClose={onClose} title={<span className="m-title text-[18px]">What’s for {when}?</span>}>
       <div className="meals -mx-4 -mb-4 flex flex-col gap-5 rounded-t-[26px] px-4 pb-8 pt-2" style={{ background: 'var(--m-paper)' }}>
-        <Field label="Start from a template" hint="Opens the meal with the day already set.">
+        <MCard
+          onClick={() => {
+            if (usable.length === 0) {
+              toast('No dishes yet — add a few on the Dishes tab first.')
+              return
+            }
+            setPicking(true)
+          }}
+          className="flex items-center gap-3 px-3.5 py-3"
+          tone="var(--m-mint-soft)"
+        >
+          <span className="text-[26px]">🥘</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] font-extrabold leading-tight">Put together a meal from dishes</span>
+            <span className="block text-[11.5px] font-bold" style={{ color: 'var(--m-ink-dim)' }}>
+              Tick what you’re making, say how many, done.
+            </span>
+          </span>
+          <Icon name="chevron" size={16} />
+        </MCard>
+
+        <Field label="Or start from a template" hint="Opens the meal with the day already set.">
           <div className="scroll-x -mx-4 flex gap-1.5 px-4 pb-1">
             {sorted.map((t) => (
               <Chip key={t.id} onClick={() => onTemplate(t)}>
@@ -293,6 +332,123 @@ function DayPlanSheet({
         </Field>
       </div>
     </Sheet>
+
+    <DishPickSheet
+      open={picking && day !== null}
+      day={day}
+      dishes={usable}
+      onClose={() => setPicking(false)}
+      onDone={(picked, people) => {
+        setPicking(false)
+        onDishes(picked, people)
+      }}
+    />
+    </>
+  )
+}
+
+/**
+ * A meal from the dishes themselves: tick the ones you're making, say how
+ * many are coming, and it lands on the day with a course per dish — no
+ * template, no slots to fill, because "chicken, rice and a salad on Tuesday"
+ * is most dinners and shouldn't take a form.
+ */
+function DishPickSheet({
+  open,
+  day,
+  dishes,
+  onClose,
+  onDone,
+}: {
+  open: boolean
+  day: PlanDay | null
+  dishes: Dish[]
+  onClose: () => void
+  onDone: (picked: Dish[], people: number) => void
+}) {
+  const [query, setQuery] = useState('')
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [people, setPeople] = useState(2)
+
+  useEffect(() => {
+    if (!open) return
+    setQuery('')
+    setPicked(new Set())
+  }, [open])
+
+  const q = query.trim().toLowerCase()
+  const groups = DISH_KINDS.map((kind) => ({
+    kind,
+    dishes: dishes
+      .filter((d) => d.kind === kind && (!q || d.name.toLowerCase().includes(q)))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+  })).filter((g) => g.dishes.length > 0)
+  const chosen = dishes.filter((d) => picked.has(d.id))
+
+  const toggle = (id: string) => {
+    fire('snap')
+    setPicked((set) => {
+      const next = new Set(set)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  return (
+    <Sheet open={open} onClose={onClose} title={<span className="m-title text-[18px]">What are you making?</span>} height="88vh">
+      <div className="meals -mx-4 -mb-4 flex flex-col gap-4 rounded-t-[26px] px-4 pb-8 pt-2" style={{ background: 'var(--m-paper)' }}>
+        <div className="flex items-center gap-3">
+          <TextInput value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search dishes…" aria-label="Search dishes" className="min-w-0 flex-1 !py-2 !text-[14px]" />
+          <Stepper value={people} onChange={setPeople} suffix={people === 1 ? 'person' : 'people'} />
+        </div>
+
+        {groups.map((g) => (
+          <div key={g.kind} className="flex flex-col gap-1.5">
+            <span className="px-0.5 text-[11px] font-black uppercase tracking-wide" style={{ color: 'var(--m-ink-dim)' }}>
+              {KIND_META[g.kind].emoji} {KIND_META[g.kind].label}s
+            </span>
+            {g.dishes.map((d) => {
+              const on = picked.has(d.id)
+              return (
+                <motion.button
+                  key={d.id}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => toggle(d.id)}
+                  aria-pressed={on}
+                  className="m-card-flat flex items-center gap-2.5 px-3 py-2.5 text-left"
+                  style={{ background: on ? 'var(--m-mint-soft)' : 'var(--m-card)' }}
+                >
+                  <span
+                    className="grid h-6 w-6 shrink-0 place-items-center rounded-lg"
+                    style={{ border: '2px solid var(--m-line)', background: on ? 'var(--m-mint)' : 'transparent', color: 'var(--m-ink)' }}
+                  >
+                    {on && <Icon name="check" size={14} strokeWidth={3.5} />}
+                  </span>
+                  <span className="text-[20px]">{d.emoji}</span>
+                  <span className="min-w-0 flex-1 truncate text-[14px] font-extrabold">{d.name}</span>
+                  <span className="shrink-0 text-[11.5px] font-bold" style={{ color: 'var(--m-ink-faint)' }}>
+                    serves {d.servings}
+                  </span>
+                </motion.button>
+              )
+            })}
+          </div>
+        ))}
+
+        {groups.length === 0 && (
+          <p className="px-2 py-6 text-center text-[14px] font-semibold" style={{ color: 'var(--m-ink-faint)' }}>
+            Nothing matches that.
+          </p>
+        )}
+
+        <BigButton onClick={() => onDone(chosen, people)} disabled={chosen.length === 0}>
+          {chosen.length === 0
+            ? 'Tick a dish or two'
+            : `Plan it${day ? ` for ${day.label === 'Today' ? 'today' : day.label === 'Tomorrow' ? 'tomorrow' : day.short}` : ''} · ${chosen.length} ${chosen.length === 1 ? 'dish' : 'dishes'}`}
+        </BigButton>
+      </div>
+    </Sheet>
   )
 }
 
@@ -308,7 +464,15 @@ function CalendarSheet({ open, onClose, household }: { open: boolean; onClose: (
   const [copied, setCopied] = useState(false)
   const token = household?.calendar_token ?? null
   const url = feedUrl(token)
+  const path = calendarPath()
   const patch = (p: Partial<HouseholdSettings>) => void dataActions.patchRow('household_settings', 'singleton', p)
+
+  async function share() {
+    fire('tap')
+    const outcome = await shareText({ title: 'Household calendar', text: `Our meal plan and chores, as a calendar feed: ${url}`, url })
+    if (outcome === 'copied') toast.success('Link copied — nothing here to share with, so it’s on the clipboard')
+    if (outcome === 'unavailable') toast.error("Couldn't share or copy here — long-press the link instead")
+  }
 
   async function copy() {
     try {
@@ -364,27 +528,57 @@ function CalendarSheet({ open, onClose, household }: { open: boolean; onClose: (
 
             {token && (
               <>
-                <BigButton
-                  onClick={() => {
-                    fire('success')
-                    openExternal(googleSubscribeUrl(token))
-                  }}
-                  tone="var(--m-sky)"
-                  ink="var(--m-ink)"
-                >
-                  📅 Subscribe in Google Calendar
-                </BigButton>
+                {path === 'desktop' && (
+                  <BigButton
+                    onClick={() => {
+                      fire('success')
+                      openExternal(googleSubscribeUrl(token))
+                    }}
+                    tone="var(--m-sky)"
+                    ink="var(--m-ink)"
+                  >
+                    📅 Subscribe in Google Calendar
+                  </BigButton>
+                )}
+                {path === 'ios' && (
+                  <BigButton
+                    onClick={() => {
+                      fire('success')
+                      openExternal(webcalUrl(token))
+                    }}
+                    tone="var(--m-sky)"
+                    ink="var(--m-ink)"
+                  >
+                    📲 Open in the Calendar app
+                  </BigButton>
+                )}
+                {path === 'android' && (
+                  <BigButton onClick={() => void share()} tone="var(--m-sky)" ink="var(--m-ink)">
+                    📤 Send the link to a computer
+                  </BigButton>
+                )}
                 <div className="flex flex-wrap gap-1.5">
                   <Chip onClick={() => void copy()}>{copied ? '✓ Copied' : '📋 Copy the link'}</Chip>
-                  <Chip onClick={() => openExternal(webcalUrl(token))}>📲 Open on this phone</Chip>
+                  {path !== 'android' && <Chip onClick={() => void share()}>📤 Share</Chip>}
                 </div>
                 <p className="m-card-flat break-all px-3 py-2 text-[11px] font-semibold" style={{ background: 'var(--m-card)', color: 'var(--m-ink-faint)' }}>
                   {url}
                 </p>
+                {path === 'android' ? (
+                  <p className="text-[12.5px] font-semibold" style={{ color: 'var(--m-ink-dim)' }}>
+                    Google Calendar can’t add a calendar from a link on the phone itself — only its website can. Send
+                    yourself the link, open <span className="font-black">calendar.google.com</span> on a computer, and under
+                    “Other calendars” choose <span className="font-black">＋ → From URL</span> and paste it. From then on the
+                    plan shows up in the Google Calendar app on your phone by itself.
+                  </p>
+                ) : (
+                  <p className="text-[12.5px] font-semibold" style={{ color: 'var(--m-ink-dim)' }}>
+                    Once subscribed, the calendar follows the plan as it changes.
+                  </p>
+                )}
                 <p className="text-[12.5px] font-semibold" style={{ color: 'var(--m-ink-dim)' }}>
-                  On a phone, “Subscribe” works best from a browser signed in to Google; the calendar then shows up in the
-                  Google Calendar app on its own. Google refreshes feeds on its own schedule — often hours later — so for
-                  something you want on the calendar right now, tap 📅 next to the meal.
+                  Google refreshes feeds on its own schedule — often hours later — so for something you want on the
+                  calendar right now, tap 📅 next to the meal: that one lands the moment you press Save.
                 </p>
                 <p className="text-[12px] font-semibold" style={{ color: 'var(--m-ink-faint)' }}>
                   Anyone with the link can see the plan and the chores, and nothing else — it can’t change anything. Turning the

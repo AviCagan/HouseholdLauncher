@@ -51,12 +51,19 @@ export function mealsOn(meals: Meal[], date: string): Meal[] {
 }
 
 /**
- * The next `count` days from today, cut into weeks that end on Saturday —
- * the week a Shabbat household actually plans in — and labelled from where
- * today sits. Two weeks ahead from a Wednesday is the rest of this week,
- * all of next, and the start of the one after.
+ * How many days the board shows: the rest of this week, then two whole
+ * weeks — through the Saturday two weeks out, never a week cut off
+ * mid-Tuesday. From a Wednesday that is 18 days; from a Sunday, 21.
  */
-export function planWeeks(meals: Meal[], today: Date, count = 14): PlanWeek[] {
+export function boardLength(today: Date): number {
+  return 6 - today.getDay() + 1 + 14
+}
+
+/**
+ * The board from today, cut into weeks that end on Saturday — the week a
+ * Shabbat household actually plans in — and labelled from where today sits.
+ */
+export function planWeeks(meals: Meal[], today: Date, count = boardLength(today)): PlanWeek[] {
   const start = isoDate(today)
   const weeks: PlanWeek[] = []
   const labels = ['This week', 'Next week', 'In two weeks', 'In three weeks']
@@ -82,7 +89,7 @@ export function planWeeks(meals: Meal[], today: Date, count = 14): PlanWeek[] {
 }
 
 /** Every planned meal inside the board, in date order. */
-export function mealsInRange(meals: Meal[], today: Date, count = 14): Meal[] {
+export function mealsInRange(meals: Meal[], today: Date, count = boardLength(today)): Meal[] {
   const from = isoDate(today)
   const to = addDays(from, count - 1)
   return meals
@@ -131,6 +138,40 @@ export function quickMeal(name: string, date: string, people: number): MealInput
     courses: [],
     notes: null,
   }
+}
+
+/**
+ * A meal made of the dishes themselves: one course per dish, named after
+ * them ("Roast chicken, rice & salad"), Shabbat if the day is one.
+ */
+export function mealFromDishes(dishes: Dish[], date: string, people: number): MealInput {
+  const order = (d: Dish) => DISH_ORDER.indexOf(d.kind)
+  const sorted = [...dishes].sort((a, b) => order(a) - order(b))
+  const names = sorted.map((d) => d.name)
+  const name =
+    names.length === 1
+      ? names[0]
+      : names.length <= 3
+        ? `${names.slice(0, -1).join(', ')} & ${names[names.length - 1]}`
+        : `${names.slice(0, 2).join(', ')} & ${names.length - 2} more`
+  const weekday = weekdayOf(date)
+  return {
+    name,
+    emoji: sorted[0]?.emoji || '🍽️',
+    occasion: weekday === 5 || weekday === 6 ? 'shabbat' : 'dinner',
+    template_id: null,
+    planned_for: date,
+    people: people > 0 ? people : 2,
+    courses: sorted.map((d) => ({ role: d.kind, label: COURSE_LABEL[d.kind] ?? 'Course', dish_id: d.id })),
+    notes: null,
+  }
+}
+
+/** The order courses come to the table in. */
+const DISH_ORDER = ['bread', 'snack', 'soup', 'salad', 'main', 'side', 'dessert', 'drink', 'other']
+const COURSE_LABEL: Record<string, string> = {
+  bread: 'Bread', snack: 'Nibbles', soup: 'Soup', salad: 'Salad', main: 'Main',
+  side: 'Side', dessert: 'Dessert', drink: 'Drink', other: 'Course',
 }
 
 function guessNoteEmoji(name: string): string {

@@ -11,11 +11,13 @@ import { AUTO_CLEAR_OPTIONS } from '@/lib/cleanup'
 import { RECURRENCE_PRESETS } from '@/lib/time'
 import {
   ALARM_OPTIONS,
+  calendarPath,
   feedUrl,
   googleSubscribeUrl,
   newCalendarToken,
   webcalUrl,
 } from '@/lib/calendar'
+import { shareText } from '@/lib/share'
 import { openExternal, copyToClipboard } from '@/apps/things/routing/deeplink'
 import { isConfigured } from '@/lib/env'
 import { toast } from 'sonner'
@@ -254,6 +256,7 @@ function CalendarGroup({ household }: { household: HouseholdSettings | undefined
   const token = household?.calendar_token ?? null
   const alarm = household?.calendar_alarm_minutes ?? 0
   const url = feedUrl(token)
+  const path = calendarPath()
 
   const patch = (p: Partial<HouseholdSettings>) =>
     void dataActions.patchRow('household_settings', 'singleton', p)
@@ -283,17 +286,31 @@ function CalendarGroup({ household }: { household: HouseholdSettings | undefined
 
       {token && (
         <>
+          {/* Which button leads anywhere depends on the device — see
+              calendarPath(). On Android nothing on the phone can subscribe
+              to a link, so the primary action is getting the link to a
+              computer rather than a button that silently does nothing. */}
           <button
             onClick={() => {
               fire('success')
-              openExternal(googleSubscribeUrl(token))
+              if (path === 'desktop') openExternal(googleSubscribeUrl(token))
+              else if (path === 'ios') openExternal(webcalUrl(token))
+              else
+                void shareText({
+                  title: 'Household calendar',
+                  text: `Our chores and meal plan, as a calendar feed: ${url}`,
+                  url,
+                }).then((outcome) => {
+                  if (outcome === 'copied') toast.success('Link copied — add it at calendar.google.com on a computer')
+                  if (outcome === 'unavailable') toast.error("Couldn't share here — copy the link below instead")
+                })
             }}
             className="flex items-center justify-between rounded-2xl px-4 py-4"
             style={{ background: 'var(--accent)', color: '#fff' }}
           >
             <span className="flex items-center gap-2.5 text-[14px] font-semibold">
               <Icon name="calendar" size={17} />
-              Add to Google Calendar
+              {path === 'desktop' ? 'Add to Google Calendar' : path === 'ios' ? 'Open in the Calendar app' : 'Send the link to a computer'}
             </span>
             <Icon name="chevron" size={15} />
           </button>
@@ -323,22 +340,30 @@ function CalendarGroup({ household }: { household: HouseholdSettings | undefined
                 <Icon name="copy" size={14} />
                 {copied ? 'Copied' : 'Copy link'}
               </button>
-              {/* webcal: hands straight to the phone's calendar app, which is
-                  the one-tap path on iOS where Google's web flow is awkward. */}
-              <button
-                onClick={() => {
-                  fire('tap')
-                  openExternal(webcalUrl(token))
-                }}
-                className="rounded-full px-3.5 py-2 text-[13px] font-medium"
-                style={{ background: 'var(--surface-3)' }}
-              >
-                Open on this phone
-              </button>
+              {path !== 'android' && (
+                <button
+                  onClick={() => {
+                    fire('tap')
+                    void shareText({ title: 'Household calendar', text: `Our chores and meal plan, as a calendar feed: ${url}`, url })
+                  }}
+                  className="rounded-full px-3.5 py-2 text-[13px] font-medium"
+                  style={{ background: 'var(--surface-3)' }}
+                >
+                  Share
+                </button>
+              )}
             </div>
+            {path === 'android' && (
+              <p className="text-[12px]" style={{ color: 'var(--text-dim)' }}>
+                Google Calendar can't add a calendar from a link on the phone — only
+                its website can. Open calendar.google.com on a computer, and under
+                "Other calendars" choose ＋ → From URL and paste this. It then shows
+                up in the Google Calendar app on your phone by itself.
+              </p>
+            )}
             <p className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
-              Anyone with this link can see your chores. Nothing else — it can't
-              change anything.
+              Anyone with this link can see your chores and meal plan. Nothing
+              else — it can't change anything.
             </p>
           </div>
 

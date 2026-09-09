@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import type { Meal } from '@/data/types'
+import type { Dish, Meal } from '@/data/types'
 import {
   addDays,
+  boardLength,
   copyMealForDate,
   googleMealEventUrl,
   isoDate,
   mealEventDescription,
+  mealFromDishes,
   mealsInRange,
   planWeeks,
   quickMeal,
@@ -45,13 +47,16 @@ describe('dates', () => {
 })
 
 describe('the board', () => {
-  it('cuts fourteen days into weeks that end on Saturday', () => {
+  it('runs to the Saturday two whole weeks out, never a week cut off midway', () => {
+    expect(boardLength(WED)).toBe(18)
+    expect(boardLength(new Date(2026, 8, 13))).toBe(21) // a Sunday
+    expect(boardLength(new Date(2026, 8, 12))).toBe(15) // a Saturday
     const weeks = planWeeks([], WED)
     expect(weeks.map((w) => w.label)).toEqual(['This week', 'Next week', 'In two weeks'])
-    expect(weeks.map((w) => w.days.length)).toEqual([4, 7, 3])
+    expect(weeks.map((w) => w.days.length)).toEqual([4, 7, 7])
     expect(weeks[1].days[0].weekday).toBe(0)
-    expect(weeks[1].days[6].weekday).toBe(6)
-    expect(weeks.flatMap((w) => w.days)).toHaveLength(14)
+    expect(weeks[2].days[6].weekday).toBe(6)
+    expect(weeks.flatMap((w) => w.days)).toHaveLength(18)
   })
 
   it('labels today and tomorrow, then the weekday, and marks Shabbat', () => {
@@ -70,17 +75,17 @@ describe('the board', () => {
     expect(planWeeks([a, b, c], WED).flatMap((w) => w.days).flatMap((d) => d.meals)).toHaveLength(2)
   })
 
-  it('starts a fresh board from a Sunday with one full week first', () => {
+  it('starts a fresh board from a Sunday with three full weeks', () => {
     const weeks = planWeeks([], new Date(2026, 8, 13))
-    expect(weeks.map((w) => w.days.length)).toEqual([7, 7])
+    expect(weeks.map((w) => w.days.length)).toEqual([7, 7, 7])
   })
 })
 
 describe('what is on the board', () => {
-  it('is every dated meal inside the two weeks, in order', () => {
-    const inside = meal({ id: 'in', planned_for: '2026-09-22' })
+  it('is every dated meal on the board, in order', () => {
+    const inside = meal({ id: 'in', planned_for: '2026-09-26' }) // the last Saturday
     const edge = meal({ id: 'edge', planned_for: '2026-09-09' })
-    const outside = meal({ id: 'out', planned_for: '2026-09-23' })
+    const outside = meal({ id: 'out', planned_for: '2026-09-27' })
     const undated = meal({ id: 'none' })
     expect(mealsInRange([outside, inside, undated, edge], WED).map((m) => m.id)).toEqual(['edge', 'in'])
   })
@@ -143,5 +148,33 @@ describe('calendar event', () => {
 
   it('has nothing to add for an undated meal', () => {
     expect(googleMealEventUrl(meal({}), dishes)).toBeNull()
+  })
+})
+
+describe('a meal from dishes', () => {
+  const dish = (id: string, name: string, kind: Dish['kind'], emoji = '🍽️'): Dish => ({
+    id, name, emoji, kind, ingredients: [], steps: [], servings: 4, cost_cents: null, nutrition: {},
+    source_url: null, source_kind: 'manual', image_url: null, notes: null, tags: [],
+    created_by: null, updated_by: null, created_at: '2026-09-01T00:00:00.000Z', updated_at: '2026-09-01T00:00:00.000Z',
+  })
+  const chicken = dish('c', 'Roast chicken', 'main', '🍗')
+  const rice = dish('r', 'Rice', 'side')
+  const salad = dish('s', 'Green salad', 'salad')
+  const cake = dish('k', 'Honey cake', 'dessert')
+
+  it('puts a course per dish in table order and names the meal after them', () => {
+    const m = mealFromDishes([rice, cake, chicken], '2026-09-15', 3)
+    expect(m.courses.map((c) => `${c.label}:${c.dish_id}`)).toEqual(['Main:c', 'Side:r', 'Dessert:k'])
+    expect(m.name).toBe('Roast chicken, Rice & Honey cake')
+    expect(m.emoji).toBe('🍗')
+    expect(m.people).toBe(3)
+    expect(m.planned_for).toBe('2026-09-15')
+    expect(m.occasion).toBe('dinner')
+  })
+
+  it('keeps a long list readable and calls a Friday Shabbat', () => {
+    expect(mealFromDishes([chicken, rice, salad, cake], '2026-09-11', 6).name).toBe('Green salad, Roast chicken & 2 more')
+    expect(mealFromDishes([chicken], '2026-09-11', 6).name).toBe('Roast chicken')
+    expect(mealFromDishes([chicken], '2026-09-11', 6).occasion).toBe('shabbat')
   })
 })

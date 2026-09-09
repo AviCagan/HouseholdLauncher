@@ -1,4 +1,5 @@
 import { SUPABASE_URL } from './env'
+import { isAndroid, isIOS } from './platform'
 import type { Chore, RecurrenceUnit, Weekday } from '@/data/types'
 
 /**
@@ -87,6 +88,26 @@ export function icsStamp(d: Date): string {
 export function nextOccurrence(chore: Chore, now = Date.now()): Date {
   const at = chore.next_due_at ? new Date(chore.next_due_at) : null
   return at && !Number.isNaN(at.getTime()) ? at : new Date(now)
+}
+
+/**
+ * How a subscription actually gets made on this device.
+ *
+ *   ios      — a webcal: link hands the feed straight to the Calendar app.
+ *   android  — nothing on the phone can subscribe to a link: Google Calendar
+ *              only adds calendars by URL from its desktop site, and the
+ *              Android app has no such screen. The feed has to be sent to a
+ *              computer, added there once, and it then appears in the phone
+ *              app on its own. The buttons say so instead of opening a
+ *              webcal: link that no app on the phone will answer.
+ *   desktop  — Google's own "add by URL" page, pre-filled.
+ */
+export type CalendarPath = 'ios' | 'android' | 'desktop'
+
+export function calendarPath(): CalendarPath {
+  if (isIOS()) return 'ios'
+  if (isAndroid()) return 'android'
+  return 'desktop'
 }
 
 /** A fresh, unguessable feed token. Regenerating one revokes the old URL. */
