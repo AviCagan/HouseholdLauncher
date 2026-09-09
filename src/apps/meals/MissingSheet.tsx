@@ -57,7 +57,6 @@ export function MissingSheet({
   const [brush, setBrush] = useState<string | null>(null)
   /** Lines that opened with a store already on them, from past shopping. */
   const [remembered, setRemembered] = useState<Set<string>>(new Set())
-  const [busy, setBusy] = useState(false)
 
   const lines = useMemo(() => missingCandidates(meals, dishes), [meals, dishes])
   const listed = useMemo(
@@ -69,7 +68,6 @@ export function MissingSheet({
     if (!open) return
     setStep('pick')
     setSelected(new Set())
-    setBusy(false)
     // Start every line where it was bought last time.
     const guesses: Record<string, string | null> = {}
     for (const l of lines) guesses[l.key] = rememberedStore(l.name, items)
@@ -114,17 +112,15 @@ export function MissingSheet({
     setStoreOf((map) => ({ ...map, [key]: map[key] === brush ? null : brush }))
   }
 
-  async function exportToThings() {
-    if (busy || plan.rows.length === 0) return
-    setBusy(true)
-    let sent = 0
+  function exportToThings() {
+    if (plan.rows.length === 0) return
+    // Each add puts its row in the store before touching the network and
+    // rolls itself back with a toast if the commit fails, so this doesn't
+    // wait on any of them — the sheet closes now, the list is already there.
     for (const row of plan.rows) {
-      // dataActions rolls back and toasts on its own failure; a partial export
-      // leaves what was written, since those items are real.
-      await dataActions.addShoppingItem(row.title, 1, row.storeId, profileId, row.quantity)
-      sent += 1
+      void dataActions.addShoppingItem(row.title, 1, row.storeId, profileId, row.quantity)
     }
-    setBusy(false)
+    const sent = plan.rows.length
     fire('success')
     celebrate()
     const skipped = plan.skipped.length
@@ -264,7 +260,7 @@ export function MissingSheet({
               )}
 
               <div className="flex flex-col gap-2">
-                <BigButton onClick={() => void exportToThings()} busy={busy} disabled={plan.rows.length === 0} tone="var(--m-mint)" ink="var(--m-ink)">
+                <BigButton onClick={exportToThings} disabled={plan.rows.length === 0} tone="var(--m-mint)" ink="var(--m-ink)">
                   🛒 Export to Things · {plan.rows.length}
                 </BigButton>
                 <BigButton

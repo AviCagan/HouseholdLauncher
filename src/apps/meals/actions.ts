@@ -7,10 +7,15 @@ import type { Dish, Meal, MealTemplate } from '@/data/types'
 /**
  * Writes for Meals — dishes, meals and templates.
  *
- * Same optimistic shape as Things and Owe: put the row in the store first,
- * fire the haptic, then commit, and if the commit fails put the store back
- * exactly as it was. The three tables are identical in this respect, so one
- * generic trio of helpers serves all of them.
+ * Optimistic in the strict sense the rest of the app means it: the row is in
+ * the store — and handed back to the caller — before the network is touched.
+ * The commit runs on its own; if it fails, the store is put back exactly as
+ * it was and a toast says so. No sheet ever waits on the round-trip, because
+ * on a phone that round-trip can take a second or three minutes, and a
+ * button stuck on "Saving…" is the worse of the two.
+ *
+ * The three tables are identical in this respect, so one generic trio of
+ * helpers serves all of them.
  */
 
 type Row = Dish | Meal | MealTemplate
@@ -30,53 +35,49 @@ function replaceRow<T extends Row>(table: MealTable, id: string, next: T | null)
   useData.setState({ [table]: updated } as never)
 }
 
-async function insert<T extends Row>(table: MealTable, row: T, failure: string): Promise<boolean> {
+/** Put the row in the store now; commit in the background. */
+function insert<T extends Row>(table: MealTable, row: T, failure: string): void {
   replaceRow(table, row.id, row)
-  try {
-    await useData.getState().adapter.insert(table, row as never)
-    return true
-  } catch (err) {
-    replaceRow(table, row.id, null)
-    fire('error')
-    toast.error(failure)
-    console.error(`[${table}]`, err)
-    return false
-  }
+  void (async () => {
+    try {
+      await useData.getState().adapter.insert(table, row as never)
+    } catch (err) {
+      replaceRow(table, row.id, null)
+      fire('error')
+      toast.error(failure)
+      console.error(`[${table}]`, err)
+    }
+  })()
 }
 
-async function update<T extends Row>(
-  table: MealTable,
-  before: T,
-  patch: Partial<T>,
-  failure: string,
-): Promise<boolean> {
+function update<T extends Row>(table: MealTable, before: T, patch: Partial<T>, failure: string): void {
   const next = { ...before, ...patch, updated_at: nowIso() } as T
   replaceRow(table, before.id, next)
-  try {
-    await useData.getState().adapter.update(table, before.id, patch as never)
-    return true
-  } catch (err) {
-    replaceRow(table, before.id, before)
-    fire('error')
-    toast.error(failure)
-    console.error(`[${table}]`, err)
-    return false
-  }
+  void (async () => {
+    try {
+      await useData.getState().adapter.update(table, before.id, patch as never)
+    } catch (err) {
+      replaceRow(table, before.id, before)
+      fire('error')
+      toast.error(failure)
+      console.error(`[${table}]`, err)
+    }
+  })()
 }
 
-async function remove<T extends Row>(table: MealTable, row: T, failure: string): Promise<boolean> {
+function remove<T extends Row>(table: MealTable, row: T, failure: string): void {
   fire('delete')
   replaceRow(table, row.id, null)
-  try {
-    await useData.getState().adapter.remove(table, row.id)
-    return true
-  } catch (err) {
-    replaceRow(table, row.id, row)
-    fire('error')
-    toast.error(failure)
-    console.error(`[${table}]`, err)
-    return false
-  }
+  void (async () => {
+    try {
+      await useData.getState().adapter.remove(table, row.id)
+    } catch (err) {
+      replaceRow(table, row.id, row)
+      fire('error')
+      toast.error(failure)
+      console.error(`[${table}]`, err)
+    }
+  })()
 }
 
 // --- dishes -------------------------------------------------------------------
@@ -87,7 +88,7 @@ export type DishInput = Pick<
   | 'nutrition' | 'source_url' | 'source_kind' | 'image_url' | 'notes'
 >
 
-export async function addDish(input: DishInput, profileId: string | null): Promise<Dish | null> {
+export function addDish(input: DishInput, profileId: string | null): Dish | null {
   const name = input.name.trim()
   if (!name) return null
   const row: Dish = {
@@ -104,26 +105,27 @@ export async function addDish(input: DishInput, profileId: string | null): Promi
     updated_at: nowIso(),
   }
   fire('success')
-  return (await insert('dishes', row, "Couldn't save that dish")) ? row : null
+  insert('dishes', row, "Couldn't save that dish")
+  return row
 }
 
-export async function updateDish(dish: Dish, patch: Partial<DishInput>, profileId: string | null): Promise<boolean> {
+export function updateDish(dish: Dish, patch: Partial<DishInput>, profileId: string | null): Dish {
   const full: Partial<Dish> = { ...patch, updated_by: profileId }
   if (patch.name !== undefined) full.name = patch.name.trim()
   if (patch.ingredients) full.ingredients = patch.ingredients.filter((i) => i.name.trim())
   if (patch.steps) full.steps = patch.steps.map((s) => s.trim()).filter(Boolean)
   fire('success')
-  return update('dishes', dish, full, "Couldn't save that dish")
+  update('dishes', dish, full, "Couldn't save that dish")
+  return { ...dish, ...full }
 }
 
-export const removeDish = (dish: Dish): Promise<boolean> =>
-  remove('dishes', dish, "Couldn't delete that dish")
+export const removeDish = (dish: Dish): void => remove('dishes', dish, "Couldn't delete that dish")
 
 // --- meals --------------------------------------------------------------------
 
 export type MealInput = Pick<Meal, 'name' | 'emoji' | 'occasion' | 'template_id' | 'planned_for' | 'people' | 'courses' | 'notes'>
 
-export async function addMeal(input: MealInput, profileId: string | null): Promise<Meal | null> {
+export function addMeal(input: MealInput, profileId: string | null): Meal | null {
   const name = input.name.trim()
   if (!name) return null
   const row: Meal = {
@@ -137,24 +139,24 @@ export async function addMeal(input: MealInput, profileId: string | null): Promi
     updated_at: nowIso(),
   }
   fire('success')
-  return (await insert('meals', row, "Couldn't save that meal")) ? row : null
+  insert('meals', row, "Couldn't save that meal")
+  return row
 }
 
-export async function updateMeal(meal: Meal, patch: Partial<MealInput>, profileId: string | null): Promise<boolean> {
+export function updateMeal(meal: Meal, patch: Partial<MealInput>, profileId: string | null): void {
   const full: Partial<Meal> = { ...patch, updated_by: profileId }
   if (patch.name !== undefined) full.name = patch.name.trim()
   fire('success')
-  return update('meals', meal, full, "Couldn't save that meal")
+  update('meals', meal, full, "Couldn't save that meal")
 }
 
-export const removeMeal = (meal: Meal): Promise<boolean> =>
-  remove('meals', meal, "Couldn't delete that meal")
+export const removeMeal = (meal: Meal): void => remove('meals', meal, "Couldn't delete that meal")
 
 // --- templates ----------------------------------------------------------------
 
 export type TemplateInput = Pick<MealTemplate, 'name' | 'emoji' | 'occasion' | 'people' | 'slots'>
 
-export async function addTemplate(input: TemplateInput, profileId: string | null): Promise<MealTemplate | null> {
+export function addTemplate(input: TemplateInput, profileId: string | null): MealTemplate | null {
   const name = input.name.trim()
   if (!name) return null
   const row: MealTemplate = {
@@ -171,20 +173,21 @@ export async function addTemplate(input: TemplateInput, profileId: string | null
     updated_at: nowIso(),
   }
   fire('success')
-  return (await insert('meal_templates', row, "Couldn't save that template")) ? row : null
+  insert('meal_templates', row, "Couldn't save that template")
+  return row
 }
 
-export async function updateTemplate(
+export function updateTemplate(
   template: MealTemplate,
   patch: Partial<TemplateInput>,
   profileId: string | null,
-): Promise<boolean> {
+): void {
   const full: Partial<MealTemplate> = { ...patch, updated_by: profileId }
   if (patch.name !== undefined) full.name = patch.name.trim()
   if (patch.slots) full.slots = patch.slots.filter((s) => s.label.trim())
   fire('success')
-  return update('meal_templates', template, full, "Couldn't save that template")
+  update('meal_templates', template, full, "Couldn't save that template")
 }
 
-export const removeTemplate = (template: MealTemplate): Promise<boolean> =>
+export const removeTemplate = (template: MealTemplate): void =>
   remove('meal_templates', template, "Couldn't delete that template")

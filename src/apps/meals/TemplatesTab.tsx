@@ -96,7 +96,6 @@ export function TemplateSheet({ template, open, onClose }: { template: MealTempl
   const [people, setPeople] = useState(DEFAULT_PEOPLE)
   const [slots, setSlots] = useState<TemplateSlot[]>([])
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -113,9 +112,10 @@ export function TemplateSheet({ template, open, onClose }: { template: MealTempl
 
   const valid = name.trim().length > 0 && slots.some((s) => s.label.trim())
 
-  async function save() {
-    if (!valid || busy) return
-    setBusy(true)
+  // Closes at once — the template is in the store before the network is
+  // touched (see actions.ts).
+  function save() {
+    if (!valid) return
     const input: TemplateInput = {
       name,
       emoji: emoji || '📋',
@@ -123,9 +123,9 @@ export function TemplateSheet({ template, open, onClose }: { template: MealTempl
       people,
       slots,
     }
-    const ok = template ? await updateTemplate(template, input, profileId) : Boolean(await addTemplate(input, profileId))
-    setBusy(false)
-    if (ok) onClose()
+    if (template) updateTemplate(template, input, profileId)
+    else if (!addTemplate(input, profileId)) return
+    onClose()
   }
 
   async function remove() {
@@ -230,7 +230,7 @@ export function TemplateSheet({ template, open, onClose }: { template: MealTempl
         </Field>
 
         <div className="flex flex-col gap-2 pt-1">
-          <BigButton onClick={() => void save()} disabled={!valid} busy={busy}>
+          <BigButton onClick={() => void save()} disabled={!valid}>
             {template ? 'Save changes' : 'Save template'}
           </BigButton>
           {template && (

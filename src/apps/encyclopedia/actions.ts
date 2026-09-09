@@ -5,9 +5,14 @@ import { fire } from '@/lib/haptics'
 import type { LexiconEntry } from '@/data/types'
 
 /**
- * Writes for the Encyclopedia. Optimistic, like everything else: the entry
- * appears on the page at once and is put back the way it was if the commit
- * fails.
+ * Writes for the Encyclopedia.
+ *
+ * Optimistic in the strict sense the rest of the app means it: the entry is
+ * on the page — and the caller has its row back — before the network is
+ * involved at all. The commit runs on its own; if it fails, the row is put
+ * back the way it was and a toast says so. Nothing in the UI ever waits on
+ * the round-trip, because on a phone that round-trip can take a second or
+ * three minutes and a sheet stuck on "Saving…" is the worse of the two.
  */
 
 const TABLE = 'lexicon_entries'
@@ -32,7 +37,30 @@ const clean = (s: string | null | undefined): string | null => {
   return t ? t : null
 }
 
-export async function addEntry(input: EntryInput, profileId: string | null): Promise<LexiconEntry | null> {
+async function commitInsert(row: LexiconEntry): Promise<void> {
+  try {
+    await useData.getState().adapter.insert(TABLE, row)
+  } catch (err) {
+    replaceRow(row.id, null)
+    fire('error')
+    toast.error("Couldn't add that entry — it's been taken back off the page")
+    console.error(`[${TABLE}]`, err)
+  }
+}
+
+async function commitUpdate(before: LexiconEntry, patch: Partial<LexiconEntry>): Promise<void> {
+  try {
+    await useData.getState().adapter.update(TABLE, before.id, patch)
+  } catch (err) {
+    replaceRow(before.id, before)
+    fire('error')
+    toast.error("Couldn't save that revision — the entry is back as it was")
+    console.error(`[${TABLE}]`, err)
+  }
+}
+
+/** The new row, already on the page, or null when there was nothing to add. */
+export function addEntry(input: EntryInput, profileId: string | null): LexiconEntry | null {
   const term = input.term.trim()
   const definition = input.definition.trim()
   if (!term || !definition) return null
@@ -52,23 +80,12 @@ export async function addEntry(input: EntryInput, profileId: string | null): Pro
   }
   replaceRow(row.id, row)
   fire('success')
-  try {
-    await useData.getState().adapter.insert(TABLE, row)
-    return row
-  } catch (err) {
-    replaceRow(row.id, null)
-    fire('error')
-    toast.error("Couldn't add that entry")
-    console.error(`[${TABLE}]`, err)
-    return null
-  }
+  void commitInsert(row)
+  return row
 }
 
-export async function updateEntry(
-  entry: LexiconEntry,
-  input: EntryInput,
-  profileId: string | null,
-): Promise<boolean> {
+/** False only when the revision would blank the term or definition. */
+export function updateEntry(entry: LexiconEntry, input: EntryInput, profileId: string | null): boolean {
   const patch: Partial<LexiconEntry> = {
     term: input.term.trim(),
     pronunciation: clean(input.pronunciation),
@@ -79,32 +96,23 @@ export async function updateEntry(
     updated_by: profileId,
   }
   if (!patch.term || !patch.definition) return false
-  const next = { ...entry, ...patch, updated_at: nowIso() }
-  replaceRow(entry.id, next)
+  replaceRow(entry.id, { ...entry, ...patch, updated_at: nowIso() })
   fire('success')
-  try {
-    await useData.getState().adapter.update(TABLE, entry.id, patch)
-    return true
-  } catch (err) {
-    replaceRow(entry.id, entry)
-    fire('error')
-    toast.error("Couldn't save that entry")
-    console.error(`[${TABLE}]`, err)
-    return false
-  }
+  void commitUpdate(entry, patch)
+  return true
 }
 
-export async function removeEntry(entry: LexiconEntry): Promise<boolean> {
+export function removeEntry(entry: LexiconEntry): void {
   fire('delete')
   replaceRow(entry.id, null)
-  try {
-    await useData.getState().adapter.remove(TABLE, entry.id)
-    return true
-  } catch (err) {
-    replaceRow(entry.id, entry)
-    fire('error')
-    toast.error("Couldn't remove that entry")
-    console.error(`[${TABLE}]`, err)
-    return false
-  }
+  void (async () => {
+    try {
+      await useData.getState().adapter.remove(TABLE, entry.id)
+    } catch (err) {
+      replaceRow(entry.id, entry)
+      fire('error')
+      toast.error("Couldn't remove that entry — it's back")
+      console.error(`[${TABLE}]`, err)
+    }
+  })()
 }

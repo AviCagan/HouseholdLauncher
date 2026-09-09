@@ -53,7 +53,6 @@ export function DishSheet({
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [notes, setNotes] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const [busy, setBusy] = useState(false)
 
   /*
     Reloaded when the sheet opens for a different dish or draft — keyed on
@@ -106,14 +105,12 @@ export function DishSheet({
     }
   }
 
-  async function save() {
-    if (!valid || busy) return
-    setBusy(true)
+  // Closes at once: the dish is in the store before the network is touched
+  // (see actions.ts), so there is nothing to wait for.
+  function save() {
+    if (!valid) return
     const input = collect()
-    const saved = dish
-      ? (await updateDish(dish, input, profileId)) ? { ...dish, ...input } : null
-      : await addDish(input, profileId)
-    setBusy(false)
+    const saved = dish ? updateDish(dish, input, profileId) : addDish(input, profileId)
     if (!saved) return
     if (!dish) celebrate()
     onSaved?.(saved)
@@ -347,7 +344,7 @@ export function DishSheet({
         </Field>
 
         <div className="flex flex-col gap-2 pt-1">
-          <BigButton onClick={() => void save()} disabled={!valid} busy={busy}>
+          <BigButton onClick={() => void save()} disabled={!valid}>
             {dish ? 'Save changes' : 'Add to my dishes'}
           </BigButton>
           {dish && (

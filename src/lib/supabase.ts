@@ -9,11 +9,33 @@ import {
 
 let client: SupabaseClient | null = null
 
+/**
+ * How long one request may take before it is given up on.
+ *
+ * Generous — the first load pulls every table — but finite. Without it a
+ * write on a phone that has just lost its signal sits in flight for as long
+ * as the OS lets it (minutes, in practice), and nothing in the app can tell
+ * the difference between "slow" and "never". With it, the write fails, the
+ * optimistic row is rolled back with a toast, and the person taps again once
+ * they have a bar.
+ */
+const REQUEST_TIMEOUT_MS = 30_000
+
+function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+  const signal =
+    init?.signal && typeof AbortSignal.any === 'function'
+      ? AbortSignal.any([init.signal, timeout])
+      : (init?.signal ?? timeout)
+  return fetch(input, { ...init, signal })
+}
+
 /** Null until credentials are configured — the app runs locally until then. */
 export function supabase(): SupabaseClient | null {
   if (!isConfigured()) return null
   if (!client) {
     client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { fetch: fetchWithTimeout },
       auth: {
         // The whole point of the one-time PIN: the session is persisted and
         // silently refreshed forever, so it is asked for once per device.

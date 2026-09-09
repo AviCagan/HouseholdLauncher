@@ -70,7 +70,6 @@ export function MealSheet({
   const [missingOpen, setMissingOpen] = useState(false)
   const [adding, setAdding] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -123,13 +122,13 @@ export function MealSheet({
     }
   }
 
-  async function save() {
-    if (!valid || busy) return
-    setBusy(true)
+  // Closes at once: the meal is in the store before the network is touched
+  // (see actions.ts), so there is nothing to wait for.
+  function save() {
+    if (!valid) return
     const input = collect()
-    const ok = meal ? await updateMeal(meal, input, profileId) : Boolean(await addMeal(input, profileId))
-    setBusy(false)
-    if (!ok) return
+    if (meal) updateMeal(meal, input, profileId)
+    else if (!addMeal(input, profileId)) return
     if (!meal) celebrate()
     onClose()
   }
@@ -368,7 +367,7 @@ export function MealSheet({
         </Field>
 
         <div className="flex flex-col gap-2 pt-1">
-          <BigButton onClick={() => void save()} disabled={!valid} busy={busy}>
+          <BigButton onClick={() => void save()} disabled={!valid}>
             {meal ? 'Save changes' : 'Save this meal'}
           </BigButton>
           {meal && (

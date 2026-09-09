@@ -47,22 +47,21 @@ export function PlepTab() {
   const weeks = useMemo(() => planWeeks(meals, new Date()), [meals])
   const onBoard = useMemo(() => mealsInRange(meals, new Date()), [meals])
 
-  async function repeat(source: Meal) {
+  function repeat(source: Meal) {
     const day = planning
     if (!day) return
     setPlanning(null)
-    const row = await addMeal(copyMealForDate(source, day.date), profileId)
+    const row = addMeal(copyMealForDate(source, day.date), profileId)
     if (!row) return
     celebrate()
     toast.success(`${row.emoji} ${row.name} — ${day.label === 'Today' ? 'today' : day.label === 'Tomorrow' ? 'tomorrow' : day.short}`)
   }
 
-  async function quick(name: string) {
+  function quick(name: string) {
     const day = planning
     if (!day || !name.trim()) return
     setPlanning(null)
-    const row = await addMeal(quickMeal(name, day.date, 2), profileId)
-    if (row) fire('success')
+    if (addMeal(quickMeal(name, day.date, 2), profileId)) fire('success')
   }
 
   return (
@@ -121,8 +120,8 @@ export function PlepTab() {
           setPlanning(null)
           if (day) openSheet({ kind: 'meal', meal: null, template: t, date: day.date })
         }}
-        onRepeat={(m) => void repeat(m)}
-        onQuick={(name) => void quick(name)}
+        onRepeat={repeat}
+        onQuick={quick}
       />
       <CalendarSheet open={calendarOpen} onClose={() => setCalendarOpen(false)} household={household} />
       <MissingSheet open={shopOpen} meals={onBoard} onClose={() => setShopOpen(false)} />

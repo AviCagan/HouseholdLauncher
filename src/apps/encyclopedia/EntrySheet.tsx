@@ -42,7 +42,6 @@ export function EntrySheet({
   const [example, setExample] = useState('')
   const [origin, setOrigin] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -58,9 +57,14 @@ export function EntrySheet({
 
   const valid = term.trim().length > 0 && definition.trim().length > 0
 
-  async function save() {
-    if (!valid || busy) return
-    setBusy(true)
+  /*
+    Closes at once. The entry is on the page before the network is touched
+    (see actions.ts), so there is nothing to wait for — and waiting is how a
+    sheet ends up stuck on "Saving…" for as long as a phone takes to find a
+    signal. A failed commit takes the entry back off and says so.
+  */
+  function save() {
+    if (!valid) return
     const input: EntryInput = {
       term,
       pronunciation: pronunciation || null,
@@ -69,19 +73,18 @@ export function EntrySheet({
       example: example || null,
       origin: origin || null,
     }
-    const ok = entry ? await updateEntry(entry, input, profileId) : Boolean(await addEntry(input, profileId))
-    setBusy(false)
+    const ok = entry ? updateEntry(entry, input, profileId) : addEntry(input, profileId) !== null
     if (ok) onClose()
   }
 
-  async function remove() {
+  function remove() {
     if (!entry) return
     if (!confirmDelete) {
       fire('warning')
       setConfirmDelete(true)
       return
     }
-    await removeEntry(entry)
+    removeEntry(entry)
     onClose()
   }
 
@@ -96,7 +99,7 @@ export function EntrySheet({
     <Sheet open={open} onClose={onClose} title={title} height={mode === 'edit' ? '92vh' : undefined}>
       <div className="lex -mx-5 -mb-8 px-5 pb-10 pt-1" style={{ backgroundImage: 'none', background: 'var(--lex-page)' }}>
         {mode === 'view' && entry ? (
-          <Reading entry={entry} nameOf={nameOf} onEdit={onEdit} onDelete={() => void remove()} confirmDelete={confirmDelete} />
+          <Reading entry={entry} nameOf={nameOf} onEdit={onEdit} onDelete={remove} confirmDelete={confirmDelete} />
         ) : (
           <div className="flex flex-col gap-5">
             <Field label="Headword">
@@ -193,12 +196,12 @@ export function EntrySheet({
             )}
 
             <div className="flex flex-col gap-2 pt-1">
-              <button onClick={() => void save()} disabled={!valid || busy} className="lex-stamp w-full py-3.5 text-[15px]">
-                {busy ? 'Saving…' : entry ? 'Save the revision' : 'Add to the encyclopedia'}
+              <button onClick={save} disabled={!valid} className="lex-stamp w-full py-3.5 text-[15px]">
+                {entry ? 'Save the revision' : 'Add to the encyclopedia'}
               </button>
               {entry && (
                 <button
-                  onClick={() => void remove()}
+                  onClick={remove}
                   className="lex-outline w-full py-3 text-[14px]"
                   style={confirmDelete ? { background: 'var(--lex-ox)', borderColor: 'var(--lex-ox)', color: '#fff' } : undefined}
                 >
