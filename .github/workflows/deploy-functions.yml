@@ -57,6 +57,7 @@ jobs:
           supabase functions deploy unfurl    --project-ref "$PROJECT_REF" --no-verify-jwt
           supabase functions deploy notify    --project-ref "$PROJECT_REF" --no-verify-jwt
           supabase functions deploy add       --project-ref "$PROJECT_REF" --no-verify-jwt
+          supabase functions deploy recipe    --project-ref "$PROJECT_REF" --no-verify-jwt
           # `household` also runs without JWT verification, and has to: the
           # `redeem` action is called by someone with no session yet, which is
           # the entire point of it. Every other action authenticates the caller

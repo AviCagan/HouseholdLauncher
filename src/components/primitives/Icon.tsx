@@ -33,6 +33,7 @@ export type IconName =
   | 'arrowRight'
   | 'checkCircle'
   | 'history'
+  | 'chef'
 
 const PATHS: Record<IconName, string> = {
   check: 'M4 12.5 9 17.5 20 6.5',
@@ -73,6 +74,8 @@ const PATHS: Record<IconName, string> = {
     'M10.6 5.2A9.9 9.9 0 0 1 12 5c6.4 0 10 7 10 7a17.7 17.7 0 0 1-3.1 4M6.3 6.4A17.6 17.6 0 0 0 2 12s3.6 7 10 7a9.7 9.7 0 0 0 4.3-1M3 3l18 18M9.9 9.9a3 3 0 0 0 4.2 4.2',
   lock: 'M6 11h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1Z M8 11V7a4 4 0 0 1 8 0v4',
   back: 'M15 6l-6 6 6 6',
+  // A chef's hat: the puffy crown on its band.
+  chef: 'M6.5 14.5v4.5h11v-4.5 M6.5 14.5a3.5 3.5 0 0 1-1-6.9A4 4 0 0 1 12 4.5a4 4 0 0 1 6.5 3.1 3.5 3.5 0 0 1-1 6.9 M6.5 19h11',
   arrowRight: 'M4 12h15m0 0-5-5m5 5-5 5',
   checkCircle: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z M8 12.2l2.7 2.8L16 9.5',
   history:

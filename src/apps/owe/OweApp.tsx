@@ -10,7 +10,17 @@ import { fire } from '@/lib/haptics'
 import { markPaid, markUnpaid, removeDebt } from './actions'
 import { AddDebtBar } from './AddDebtBar'
 import { DebtEditSheet } from './DebtEditSheet'
-import { openDebts, outstandingTotal, paidDebts, summarise } from './summary'
+import { SettleSheet } from './SettleSheet'
+import {
+  SETTLED_MARK,
+  openDebts,
+  outstandingTotal,
+  paidDebts,
+  planSettlement,
+  settleCandidates,
+  summarise,
+  type SettlePlan,
+} from './summary'
 import type { Debt, DebtDirection } from '@/data/types'
 
 /**
@@ -27,6 +37,7 @@ import type { Debt, DebtDirection } from '@/data/types'
 export function OweApp() {
   const [direction, setDirection] = useState<DebtDirection>('owed_to_us')
   const [editing, setEditing] = useState<Debt | null>(null)
+  const [settling, setSettling] = useState<SettlePlan | null>(null)
   const debts = useData((s) => s.debts)
   const profileId = useProfile((s) => s.profileId)
 
@@ -34,6 +45,16 @@ export function OweApp() {
   const paid = useMemo(() => paidDebts(debts, direction), [debts, direction])
   const people = useMemo(() => summarise(debts, direction), [debts, direction])
   const total = outstandingTotal(debts, direction)
+  // People on both lists at once — the only case where settling means anything.
+  const candidates = useMemo(() => settleCandidates(debts), [debts])
+  const canSettle = new Set(candidates.map((c) => c.key))
+
+  const openSettle = (key: string) => {
+    const plan = planSettlement(debts, key)
+    if (!plan) return
+    fire('tap')
+    setSettling(plan)
+  }
 
   const inbound = direction === 'owed_to_us'
 
@@ -44,11 +65,19 @@ export function OweApp() {
       </header>
 
       <div className="scroll-y min-h-0 flex-1 px-3 pb-[190px]">
+        <AnimatePresence initial={false}>
+          {candidates.map((c) => (
+            <SettleBanner key={c.key} candidate={c} onSettle={() => openSettle(c.key)} />
+          ))}
+        </AnimatePresence>
+
         <SummaryPanel
           people={people}
           total={total}
           label={inbound ? 'Owed to us' : 'We owe'}
           tone={inbound ? 'var(--ok)' : 'var(--warn)'}
+          settleable={canSettle}
+          onSettle={openSettle}
         />
 
         {open.length === 0 && paid.length === 0 ? (
@@ -104,7 +133,58 @@ export function OweApp() {
 
       <AddDebtBar direction={direction} />
       <DebtEditSheet debt={editing} onClose={() => setEditing(null)} />
+      <SettleSheet plan={settling} onClose={() => setSettling(null)} />
     </div>
+  )
+}
+
+/**
+ * The offer to settle, one per person who is on both lists.
+ *
+ * A banner rather than only the little icon on the card, because the card is
+ * in a horizontal strip that may be scrolled out of view — and this is the
+ * one thing on the screen that can make a number go down without anyone
+ * paying anything, which is worth being told about.
+ */
+function SettleBanner({
+  candidate,
+  onSettle,
+}: {
+  candidate: ReturnType<typeof settleCandidates>[number]
+  onSettle: () => void
+}) {
+  const net = candidate.owedToUs - candidate.weOwe
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      transition={{ duration: 0.2 }}
+      className="mt-2 flex items-center gap-3 rounded-2xl px-3.5 py-3"
+      style={{ background: 'var(--accent-soft)', border: '1px solid var(--border)' }}
+    >
+      <span className="text-[20px]" aria-hidden>
+        ⚖️
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[13.5px] font-semibold">{candidate.name} is on both lists</span>
+        <span className="block text-[12px]" style={{ color: 'var(--text-dim)' }}>
+          {net === 0
+            ? 'It cancels out exactly'
+            : net > 0
+              ? `Nets to ${formatPrice(net)} owed to you`
+              : `Nets to ${formatPrice(-net)} you owe`}
+        </span>
+      </span>
+      <button
+        onClick={onSettle}
+        className="shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-semibold text-white"
+        style={{ background: 'var(--accent)' }}
+      >
+        Settle
+      </button>
+    </motion.div>
   )
 }
 
@@ -177,11 +257,16 @@ function SummaryPanel({
   total,
   label,
   tone,
+  settleable,
+  onSettle,
 }: {
   people: ReturnType<typeof summarise>
   total: number
   label: string
   tone: string
+  /** Keys of people who are on both lists, and so can be settled. */
+  settleable: Set<string>
+  onSettle: (key: string) => void
 }) {
   if (people.length === 0) return null
 
@@ -203,9 +288,19 @@ function SummaryPanel({
         {people.map((person) => (
           <div
             key={person.key}
-            className="min-w-[124px] shrink-0 rounded-2xl px-3 py-2.5"
+            className="relative min-w-[124px] shrink-0 rounded-2xl px-3 py-2.5"
             style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
           >
+            {settleable.has(person.key) && (
+              <button
+                onClick={() => onSettle(person.key)}
+                aria-label={`Settle balances with ${person.name}`}
+                className="absolute -right-1.5 -top-1.5 grid h-7 w-7 place-items-center rounded-full text-[14px]"
+                style={{ background: 'var(--accent-soft)', border: '1px solid var(--border)' }}
+              >
+                ⚖️
+              </button>
+            )}
             <span className="block truncate text-[13px] font-semibold">{person.name}</span>
             <span className="block text-[18px] font-bold tabular-nums" style={{ color: tone }}>
               {formatPrice(person.total)}
@@ -253,11 +348,12 @@ function DebtRow({
             {formatPrice(debt.amount_cents)}
           </span>
         </span>
-        {debt.reason && (
+        {(debt.reason || debt.notes?.includes(SETTLED_MARK)) && (
           <span
             className="mt-0.5 block truncate text-[12.5px]"
             style={{ color: 'var(--text-dim)' }}
           >
+            {debt.notes?.includes(SETTLED_MARK) ? '⚖️ ' : ''}
             {debt.reason}
           </span>
         )}
@@ -299,6 +395,7 @@ function PaidRow({
           </span>
         </span>
         <span className="mt-0.5 block truncate text-[11.5px]" style={{ color: 'var(--text-faint)' }}>
+          {debt.notes?.includes(SETTLED_MARK) ? '⚖️ Settled · ' : ''}
           {debt.reason ? `${debt.reason} · ` : ''}
           {paidLabel(debt.paid_at)}
         </span>

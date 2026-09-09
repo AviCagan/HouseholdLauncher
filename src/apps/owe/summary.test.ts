@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
+  appendNote,
   knownNames,
   normaliseName,
   openDebts,
   outstandingTotal,
   paidDebts,
+  planSettlement,
+  settleCandidates,
+  settledAgainst,
   summarise,
 } from './summary'
 import type { Debt } from '@/data/types'
@@ -153,5 +157,102 @@ describe('knownNames', () => {
       debt({ counterparty: 'Sam R', created_at: '2026-05-01T00:00:00.000Z' }),
     ]
     expect(knownNames(rows)[0]).toBe('Sam R')
+  })
+})
+
+describe('settling balances', () => {
+  const nuri = (patch: Partial<Debt>) => debt({ counterparty: 'Nuri', counterparty_key: 'nuri', ...patch })
+
+  it('only offers people who are open on both lists', () => {
+    const rows = [
+      nuri({ direction: 'we_owe', amount_cents: 20000 }),
+      nuri({ direction: 'owed_to_us', amount_cents: 10000 }),
+      debt({ counterparty: 'Sam', counterparty_key: 'sam', direction: 'owed_to_us' }),
+      // Paid rows don't count as "on the list".
+      debt({ counterparty: 'Sam', counterparty_key: 'sam', direction: 'we_owe', is_paid: true, paid_at: 'x' }),
+    ]
+    const c = settleCandidates(rows)
+    expect(c).toHaveLength(1)
+    expect(c[0]).toMatchObject({ name: 'Nuri', owedToUs: 10000, weOwe: 20000 })
+    expect(planSettlement(rows, 'sam')).toBeNull()
+  })
+
+  it('pays the small entries off in full and leaves the big one alone', () => {
+    // We owe Nuri 100 + 100; he owes us 6 + 94. His side is wiped; on ours
+    // the smallest entry that fits is paid and the other is untouched.
+    const rows = [
+      nuri({ id: 'a', direction: 'we_owe', amount_cents: 10000, reason: 'flights' }),
+      nuri({ id: 'b', direction: 'we_owe', amount_cents: 10000, reason: 'hotel' }),
+      nuri({ id: 'c', direction: 'owed_to_us', amount_cents: 600, reason: 'coffee' }),
+      nuri({ id: 'd', direction: 'owed_to_us', amount_cents: 9400, reason: 'dinner' }),
+    ]
+    const plan = planSettlement(rows, 'nuri')!
+    expect(plan.smaller).toBe('owed_to_us')
+    expect(plan.amount).toBe(10000)
+    expect(plan.wipe.map((d) => d.id).sort()).toEqual(['c', 'd'])
+    expect(plan.payOff.map((d) => d.id)).toEqual(['a'])
+    expect(plan.reduce).toBeNull()
+    expect(plan.remaining).toBe(10000)
+  })
+
+  it('reduces one entry when nothing fits exactly', () => {
+    // We owe 100 in one entry, Nuri owes us 50: our entry comes down to 50.
+    const rows = [
+      nuri({ id: 'ours', direction: 'we_owe', amount_cents: 10000, reason: 'flights' }),
+      nuri({ id: 'his', direction: 'owed_to_us', amount_cents: 5000, reason: 'coffee' }),
+    ]
+    const plan = planSettlement(rows, 'nuri')!
+    expect(plan.wipe.map((d) => d.id)).toEqual(['his'])
+    expect(plan.payOff).toEqual([])
+    expect(plan.reduce).toEqual({ debt: rows[0], by: 5000 })
+    expect(plan.remaining).toBe(5000)
+    expect(settledAgainst(plan)).toBe('"coffee"')
+  })
+
+  it('goes smallest-first and trims at most one entry', () => {
+    // Larger side: 30, 40, 80. Absorb 100: 30 and 40 paid, 80 reduced by 30.
+    const rows = [
+      nuri({ id: 'x', direction: 'we_owe', amount_cents: 8000 }),
+      nuri({ id: 'y', direction: 'we_owe', amount_cents: 3000 }),
+      nuri({ id: 'z', direction: 'we_owe', amount_cents: 4000 }),
+      nuri({ id: 'w', direction: 'owed_to_us', amount_cents: 10000 }),
+    ]
+    const plan = planSettlement(rows, 'nuri')!
+    expect(plan.payOff.map((d) => d.id)).toEqual(['y', 'z'])
+    expect(plan.reduce?.debt.id).toBe('x')
+    expect(plan.reduce?.by).toBe(3000)
+    expect(plan.remaining).toBe(5000)
+  })
+
+  it('wipes both lists when they are equal', () => {
+    const rows = [
+      nuri({ id: 'a', direction: 'we_owe', amount_cents: 5000 }),
+      nuri({ id: 'b', direction: 'owed_to_us', amount_cents: 2000 }),
+      nuri({ id: 'c', direction: 'owed_to_us', amount_cents: 3000 }),
+    ]
+    const plan = planSettlement(rows, 'nuri')!
+    expect([...plan.wipe, ...plan.payOff].map((d) => d.id).sort()).toEqual(['a', 'b', 'c'])
+    expect(plan.reduce).toBeNull()
+    expect(plan.remaining).toBe(0)
+  })
+
+  it('works the other way round too', () => {
+    // Nuri owes us more than we owe him: our side is wiped, his comes down.
+    const rows = [
+      nuri({ id: 'a', direction: 'we_owe', amount_cents: 2500 }),
+      nuri({ id: 'b', direction: 'owed_to_us', amount_cents: 9000 }),
+    ]
+    const plan = planSettlement(rows, 'nuri')!
+    expect(plan.smaller).toBe('we_owe')
+    expect(plan.larger).toBe('owed_to_us')
+    expect(plan.wipe.map((d) => d.id)).toEqual(['a'])
+    expect(plan.reduce).toEqual({ debt: rows[1], by: 2500 })
+    expect(plan.remaining).toBe(6500)
+  })
+
+  it('appends to notes without eating what was there', () => {
+    expect(appendNote(null, 'x')).toBe('x')
+    expect(appendNote('  ', 'x')).toBe('x')
+    expect(appendNote('keep this', 'x')).toBe('keep this\nx')
   })
 })

@@ -42,14 +42,14 @@ self.addEventListener('push', (event) => {
     payload = { body: event.data?.text() }
   }
 
-  const title = payload.title ?? 'Things'
+  const title = payload.title ?? 'Household'
   event.waitUntil(
     self.registration.showNotification(title, {
       body: payload.body ?? '',
       icon: 'icons/icon-192.png',
       badge: 'icons/icon-192.png',
       // Re-using a tag collapses repeats instead of stacking them.
-      tag: payload.tag ?? 'things',
+      tag: payload.tag ?? 'household',
       data: { tab: payload.tab, itemId: payload.itemId },
     }),
   )

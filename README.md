@@ -18,6 +18,7 @@ from Safari on iPhone.
 |---|---|
 | **Things** | To-dos, chores, shopping and wishlist. Recurring chores rest after each time and come back on their own; shopping groups by store and plans the driving order. |
 | **Owe & Owed** | Two lists — who owes us, and who we owe. Adds up a person listed more than once, and settling is a deliberate zipper-swipe, not a tap. |
+| **Meals** | Dishes with what they cost and what's in them, meals built from templates — Shabbat, every holiday, a weeknight — that add up cost and nutrition per plate, and a recipe importer that reads a link or an Instagram caption. The one app that's allowed to look like a sticker book. |
 | **Bluetooth** | One switch per paired device, so the car can be dropped without four taps into system settings. Android only — see below. |
 
 Adding another is one entry in [`src/launcher/registry.ts`](src/launcher/registry.ts)
@@ -181,6 +182,11 @@ Worth knowing up front rather than discovering later:
   rethrows anything a plugin method throws as an uncaught RuntimeException, and
   `PushNotifications.register()` throws when the APK was built with no
   credentials. See **Turning Android push on** below.
+- **Instagram sometimes refuses to show a post to anyone not logged in.** A
+  public post usually serves its caption in the page's own metadata, and that
+  is enough for the importer. When Instagram serves a login wall instead there
+  is nothing a server can do about it, so the import sheet turns into a box to
+  paste the caption into — same parser, text you copied yourself.
 - **The Supabase key in the bundle is public.** That's why every table is gated
   behind an authenticated session and per-app RLS, and why turning off email
   signups in the dashboard actually matters.

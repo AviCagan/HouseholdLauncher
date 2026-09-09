@@ -6,7 +6,10 @@ import type {
   AppPref,
   Chore,
   Debt,
+  Dish,
   HouseholdSettings,
+  Meal,
+  MealTemplate,
   Profile,
   ProfileSettings,
   ShoppingItem,
@@ -35,6 +38,10 @@ export const TABLES = [
   'app_notify_prefs',
   'notifications',
   'debts',
+  // Meals.
+  'dishes',
+  'meal_templates',
+  'meals',
 ] as const
 
 export type TableName = (typeof TABLES)[number]
@@ -55,6 +62,9 @@ export interface TableMap {
   app_notify_prefs: AppNotifyPref
   notifications: AppNotification
   debts: Debt
+  dishes: Dish
+  meal_templates: MealTemplate
+  meals: Meal
 }
 
 export type ChangeEvent<T extends TableName = TableName> =

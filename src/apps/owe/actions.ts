@@ -2,7 +2,8 @@ import { toast } from 'sonner'
 import { useData } from '@/store/useData'
 import { newId, nowIso } from '@/data/adapter'
 import { fire } from '@/lib/haptics'
-import { normaliseName } from './summary'
+import { formatPrice } from '@/lib/money'
+import { SETTLED_MARK, appendNote, normaliseName, settledAgainst, type SettlePlan } from './summary'
 import type { Debt, DebtDirection } from '@/data/types'
 
 /**
@@ -151,4 +152,67 @@ export async function removeDebt(debt: Debt): Promise<void> {
     toast.error("Couldn't delete that")
     console.error('[debts]', err)
   }
+}
+
+/**
+ * Carry out a settlement plan.
+ *
+ * Several rows change in one go, and each one is written the way marking a
+ * debt paid is written anywhere else — `is_paid` and `paid_at` together, so
+ * the database's own check accepts it — plus a line in the notes saying it
+ * was the two lists cancelling out rather than money changing hands.
+ *
+ * Applied optimistically as a set and committed one row at a time. If a
+ * write fails part way, only the rows not yet committed are put back: the
+ * ones already written are real and realtime will confirm them, and undoing
+ * them locally would show a state the database no longer agrees with.
+ */
+export async function applySettlement(plan: SettlePlan, profileId: string | null): Promise<boolean> {
+  const at = nowIso()
+  const stamp = new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+  const paidLine = `Paid via ${SETTLED_MARK} with ${plan.name} · ${stamp}`
+  const reducedLine = (by: number) =>
+    `-${formatPrice(by)} via ${SETTLED_MARK} with ${plan.name}, for ${settledAgainst(plan)} · ${stamp}`
+
+  const changes: { before: Debt; patch: Partial<Debt> }[] = []
+  for (const debt of [...plan.wipe, ...plan.payOff]) {
+    changes.push({
+      before: debt,
+      patch: {
+        is_paid: true,
+        paid_at: at,
+        paid_by: profileId,
+        updated_by: profileId,
+        notes: appendNote(debt.notes, paidLine),
+      },
+    })
+  }
+  if (plan.reduce) {
+    const { debt, by } = plan.reduce
+    changes.push({
+      before: debt,
+      patch: {
+        amount_cents: debt.amount_cents - by,
+        updated_by: profileId,
+        notes: appendNote(debt.notes, reducedLine(by)),
+      },
+    })
+  }
+
+  fire('zipperDone')
+  for (const c of changes) replaceRow(c.before.id, { ...c.before, ...c.patch, updated_at: at })
+
+  const adapter = useData.getState().adapter
+  for (let i = 0; i < changes.length; i++) {
+    try {
+      await adapter.update('debts', changes[i].before.id, changes[i].patch)
+    } catch (err) {
+      for (const c of changes.slice(i)) replaceRow(c.before.id, c.before)
+      fire('error')
+      toast.error(i === 0 ? "Couldn't settle that" : 'Settled part of it — check the lists')
+      console.error('[debts] settlement', err)
+      return false
+    }
+  }
+  return true
 }

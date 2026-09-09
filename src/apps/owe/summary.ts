@@ -122,3 +122,124 @@ export function knownNames(debts: Debt[]): string[] {
   }
   return [...seen.values()].sort((a, b) => b.at.localeCompare(a.at)).map((v) => v.name)
 }
+
+// --- Settling balances ---------------------------------------------------------
+
+/**
+ * The marker written into the notes of every row a settlement touched, so the
+ * history can show which payments were real money and which were the two
+ * lists cancelling each other out.
+ */
+export const SETTLED_MARK = 'settled balances'
+
+export interface SettleCandidate {
+  key: string
+  name: string
+  owedToUs: number
+  weOwe: number
+}
+
+/** People who are open on both lists at once. */
+export function settleCandidates(debts: Debt[]): SettleCandidate[] {
+  const inbound = new Map(summarise(debts, 'owed_to_us').map((p) => [p.key, p]))
+  const outbound = summarise(debts, 'we_owe')
+  const out: SettleCandidate[] = []
+  for (const o of outbound) {
+    const i = inbound.get(o.key)
+    if (!i) continue
+    out.push({ key: o.key, name: i.name, owedToUs: i.total, weOwe: o.total })
+  }
+  return out.sort((a, b) => Math.min(b.owedToUs, b.weOwe) - Math.min(a.owedToUs, a.weOwe))
+}
+
+export interface SettlePlan {
+  key: string
+  name: string
+  /** The list wiped out entirely. */
+  smaller: DebtDirection
+  larger: DebtDirection
+  /** What moves across: the smaller list's whole balance, in cents. */
+  amount: number
+  /** Every open entry on the smaller list — all marked paid. */
+  wipe: Debt[]
+  /** Entries on the larger list marked paid in full, smallest first. */
+  payOff: Debt[]
+  /** The one larger-list entry trimmed rather than paid, and by how much. */
+  reduce: { debt: Debt; by: number } | null
+  /** What the larger list still shows for this person afterwards. */
+  remaining: number
+}
+
+/**
+ * Work out how two lists cancel for one person.
+ *
+ * The smaller balance is paid off entirely. The larger absorbs that amount
+ * smallest-entry-first: whole entries are marked paid while they fit, and the
+ * first one that does not fit is reduced by whatever is left. At most one
+ * entry is ever partially changed, so the history reads as "these were paid,
+ * this one came down" rather than as a spread of odd fractions.
+ *
+ * Smallest-first is a choice, and the reason is legibility: if you owe Nuri
+ * $6 and $94 and he owes you $100, the two small entries closing is the
+ * story a person expects, and "the $6 was reduced to $0 and the $94 to $0"
+ * is the same arithmetic told worse.
+ */
+export function planSettlement(debts: Debt[], key: string): SettlePlan | null {
+  const open = debts.filter((d) => !d.is_paid && normaliseName(d.counterparty) === key)
+  const inbound = open.filter((d) => d.direction === 'owed_to_us')
+  const outbound = open.filter((d) => d.direction === 'we_owe')
+  if (inbound.length === 0 || outbound.length === 0) return null
+
+  const sum = (rows: Debt[]) => rows.reduce((t, d) => t + d.amount_cents, 0)
+  const inTotal = sum(inbound)
+  const outTotal = sum(outbound)
+
+  // Equal balances wipe both; the tie-break only decides which list is
+  // labelled "smaller" and makes no difference to what gets written.
+  const smallerIsInbound = inTotal <= outTotal
+  const smaller: DebtDirection = smallerIsInbound ? 'owed_to_us' : 'we_owe'
+  const larger: DebtDirection = smallerIsInbound ? 'we_owe' : 'owed_to_us'
+  const wipe = smallerIsInbound ? inbound : outbound
+  const amount = smallerIsInbound ? inTotal : outTotal
+
+  const ascending = [...(smallerIsInbound ? outbound : inbound)].sort(
+    (a, b) => a.amount_cents - b.amount_cents || a.created_at.localeCompare(b.created_at),
+  )
+
+  const payOff: Debt[] = []
+  let reduce: SettlePlan['reduce'] = null
+  let left = amount
+  for (const debt of ascending) {
+    if (left <= 0) break
+    if (debt.amount_cents <= left) {
+      payOff.push(debt)
+      left -= debt.amount_cents
+    } else {
+      reduce = { debt, by: left }
+      left = 0
+    }
+  }
+
+  return {
+    key,
+    name: pickDisplayName(open),
+    smaller,
+    larger,
+    amount,
+    wipe,
+    payOff,
+    reduce,
+    remaining: Math.max(inTotal, outTotal) - amount,
+  }
+}
+
+/** What the entries on the wiped side were for, for the reduced row's note. */
+export function settledAgainst(plan: SettlePlan): string {
+  const reasons = plan.wipe.map((d) => (d.reason ? `"${d.reason}"` : null)).filter(Boolean)
+  if (reasons.length === 0) return `${plan.wipe.length} ${plan.wipe.length === 1 ? 'entry' : 'entries'}`
+  return reasons.join(', ')
+}
+
+/** Append a line to a notes field that may or may not already have text. */
+export const appendNote = (notes: string | null, line: string): string =>
+  notes && notes.trim() ? `${notes.trimEnd()}\n${line}` : line

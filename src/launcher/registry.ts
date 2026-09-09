@@ -60,6 +60,15 @@ export const APPS: AppDef[] = [
     platforms: ['android', 'web'],
   },
   {
+    id: 'meals',
+    name: 'Meals',
+    blurb: 'Dishes, dinners, and what they cost',
+    icon: 'chef',
+    color: '#ff7a59',
+    platforms: ['android', 'web'],
+    defaultForEveryone: true,
+  },
+  {
     id: 'bluetooth',
     name: 'Bluetooth',
     blurb: 'Drop the car without digging through settings',

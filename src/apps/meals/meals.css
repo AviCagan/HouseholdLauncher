@@ -1,0 +1,212 @@
+/*
+  Meals — the one app that is allowed to be silly.
+
+  Everything else in the launcher is quiet and flat. This is a picture book:
+  cream paper with a faint polka dot, chunky ink outlines, sticker cards that
+  sit on a hard offset shadow and press *into* the page when tapped, and food
+  emoji doing the work an icon set would do anywhere else. All of it is scoped
+  under `.meals` so none of it leaks into Things or the launcher chrome.
+
+  Dark mode keeps the same bones — outlines and offset shadows — on a warm
+  near-black rather than the launcher's cool one, so the app still reads as
+  itself with the lights off. OLED gets true black like everything else.
+*/
+
+/* Pin the cascade layers in Tailwind's order before declaring anything into
+   one. A layer's precedence is set by where it is FIRST seen, so without this
+   a bundle that placed this file ahead of the global stylesheet would make
+   `components` the lowest layer of all — beneath even the preflight reset. */
+@layer theme, base, components, utilities;
+
+.meals {
+  --m-paper: #fff6ea;
+  --m-dot: rgb(255 122 89 / 0.13);
+  --m-card: #ffffff;
+  --m-card-2: #fff1e2;
+  --m-ink: #3a2418;
+  --m-ink-dim: #7a5a48;
+  --m-ink-faint: #a8907f;
+  --m-line: #3a2418;
+  --m-tomato: #ff7a59;
+  --m-tomato-soft: #ffd7cb;
+  --m-butter: #ffd166;
+  --m-butter-soft: #fff0c2;
+  --m-mint: #7ad3a1;
+  --m-mint-soft: #d5f3e2;
+  --m-berry: #c77dff;
+  --m-berry-soft: #ead9ff;
+  --m-sky: #74c0fc;
+  --m-sky-soft: #d7ecff;
+  --m-shadow: 4px 4px 0 var(--m-line);
+  --m-shadow-sm: 2px 2px 0 var(--m-line);
+
+  color: var(--m-ink);
+  background-color: var(--m-paper);
+  background-image: radial-gradient(var(--m-dot) 1.6px, transparent 1.7px);
+  background-size: 22px 22px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .meals {
+    --m-paper: #1d1612;
+    --m-dot: rgb(255 122 89 / 0.1);
+    --m-card: #2a201a;
+    --m-card-2: #33271f;
+    --m-ink: #f7ebdd;
+    --m-ink-dim: #cdb5a3;
+    --m-ink-faint: #8f7a6b;
+    --m-line: #f7ebdd;
+    --m-tomato-soft: #5a3128;
+    --m-butter-soft: #514322;
+    --m-mint-soft: #234534;
+    --m-berry-soft: #3f2a55;
+    --m-sky-soft: #24384d;
+  }
+}
+:root[data-theme='dark'] .meals {
+  --m-paper: #1d1612;
+  --m-dot: rgb(255 122 89 / 0.1);
+  --m-card: #2a201a;
+  --m-card-2: #33271f;
+  --m-ink: #f7ebdd;
+  --m-ink-dim: #cdb5a3;
+  --m-ink-faint: #8f7a6b;
+  --m-line: #f7ebdd;
+  --m-tomato-soft: #5a3128;
+  --m-butter-soft: #514322;
+  --m-mint-soft: #234534;
+  --m-berry-soft: #3f2a55;
+  --m-sky-soft: #24384d;
+}
+:root[data-theme='oled'] .meals {
+  --m-paper: #000000;
+  --m-dot: rgb(255 122 89 / 0.12);
+  --m-card: #120d0a;
+  --m-card-2: #1b140f;
+  --m-ink: #ffffff;
+  --m-ink-dim: #d3c0b0;
+  --m-ink-faint: #8a7767;
+  --m-line: #ffffff;
+  --m-tomato-soft: #4a281f;
+  --m-butter-soft: #45391a;
+  --m-mint-soft: #1d3a2b;
+  --m-berry-soft: #34224a;
+  --m-sky-soft: #1d2f42;
+}
+
+/*
+  Component classes live in Tailwind's `components` layer on purpose.
+
+  Unlayered CSS beats layered CSS regardless of specificity or order, so an
+  unlayered `.m-input { width: 100% }` silently won over every `w-[92px]` in
+  the app — which is how the ingredient row's first field grew to the full
+  width and pushed the other two off the screen. In the components layer,
+  utilities (a later layer) override these as they should.
+*/
+@layer components {
+  /* The sticker: hard outline, hard offset shadow, and a press that moves the
+     card down onto its shadow instead of dimming it.
+
+     Only the shadow is handled here. The 3px nudge that goes with it is done
+     by the motion element (`whileTap` in MCard / BigButton), because a CSS
+     transition on `transform` and a framer `layout` animation on the same
+     element fight over the property — framer's own docs warn about exactly
+     this — and several cards here are both. */
+  .m-card {
+    background: var(--m-card);
+    border: 2.5px solid var(--m-line);
+    border-radius: 22px;
+    box-shadow: var(--m-shadow);
+    transition: box-shadow 120ms ease;
+  }
+  .m-card.m-press:active,
+  .m-card.m-pressed {
+    box-shadow: 1px 1px 0 var(--m-line);
+  }
+  .m-card-flat {
+    background: var(--m-card);
+    border: 2px solid var(--m-line);
+    border-radius: 18px;
+  }
+
+  .m-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 2px solid var(--m-line);
+    border-radius: 999px;
+    padding: 5px 11px;
+    font-size: 12.5px;
+    font-weight: 700;
+    line-height: 1;
+    background: var(--m-card);
+    color: var(--m-ink);
+    white-space: nowrap;
+    transition: transform 100ms ease;
+  }
+  .m-chip:active {
+    transform: scale(0.94);
+  }
+
+  .m-input {
+    border: 2px solid var(--m-line);
+    border-radius: 14px;
+    padding: 10px 12px;
+    font-size: 15px;
+    font-weight: 600;
+    background: var(--m-card);
+    color: var(--m-ink);
+    outline: none;
+  }
+  .m-input::placeholder {
+    color: var(--m-ink-faint);
+    font-weight: 500;
+  }
+  .m-input:focus {
+    box-shadow: var(--m-shadow-sm);
+    transform: translate(-1px, -1px);
+  }
+}
+
+/* A wobble for an emoji that has just been tapped or has just arrived. */
+@keyframes m-wobble {
+  0% { transform: rotate(0) scale(1); }
+  20% { transform: rotate(-10deg) scale(1.12); }
+  50% { transform: rotate(8deg) scale(1.08); }
+  80% { transform: rotate(-4deg) scale(1.03); }
+  100% { transform: rotate(0) scale(1); }
+}
+.m-wobble {
+  animation: m-wobble 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* Steam rising off the empty-state pot. */
+@keyframes m-steam {
+  0% { transform: translateY(0) scaleX(1); opacity: 0; }
+  30% { opacity: 0.8; }
+  100% { transform: translateY(-14px) scaleX(1.25); opacity: 0; }
+}
+.m-steam {
+  transform-origin: 50% 100%;
+  animation: m-steam 2.2s ease-in-out infinite;
+}
+.m-steam-2 { animation-delay: 0.7s; }
+.m-steam-3 { animation-delay: 1.4s; }
+
+/* The floating add button bobs, gently, so it reads as a thing to poke. */
+@keyframes m-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+.m-bob {
+  animation: m-bob 2.6s ease-in-out infinite;
+}
+
+/* Hand-lettered feel for headings without shipping a font: heavy weight,
+   tight tracking, and a squiggle underneath drawn in SVG. */
+@layer components {
+  .m-title {
+    font-weight: 900;
+    letter-spacing: -0.03em;
+  }
+}

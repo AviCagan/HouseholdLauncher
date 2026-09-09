@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { BUILTIN_TEMPLATES } from '@/apps/meals/builtins'
 import { Preferences } from '@capacitor/preferences'
 import type { Profile, ProfileSettings, ProfileSlug } from '@/data/types'
 import { useData, dataActions } from './useData'
@@ -158,6 +159,18 @@ async function seedOnce(): Promise<void> {
       useData
         .getState()
         .applyChange({ table: 'profile_settings', type: 'insert', row: s })
+    }
+  }
+
+  /*
+    Built-in meal templates, on a device with no backend only. The live
+    project gets them from 017_meals.sql; inserting here as well would either
+    duplicate them or, if someone had deliberately deleted one, resurrect it.
+  */
+  if (adapter.kind === 'local' && useData.getState().meal_templates.length === 0) {
+    for (const template of BUILTIN_TEMPLATES) {
+      await adapter.insert('meal_templates', template)
+      useData.getState().applyChange({ table: 'meal_templates', type: 'insert', row: template })
     }
   }
 

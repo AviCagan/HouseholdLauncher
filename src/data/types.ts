@@ -402,3 +402,113 @@ export interface Debt {
   created_at: string
   updated_at: string
 }
+
+// --- Meals -------------------------------------------------------------------
+
+/** What role a dish plays on the table. Also what a template slots by. */
+export type DishKind =
+  | 'main'
+  | 'side'
+  | 'soup'
+  | 'salad'
+  | 'bread'
+  | 'dessert'
+  | 'drink'
+  | 'snack'
+  | 'other'
+
+export const DISH_KINDS: DishKind[] = [
+  'main', 'side', 'soup', 'salad', 'bread', 'dessert', 'drink', 'snack', 'other',
+]
+
+export interface Ingredient {
+  name: string
+  /** Free text — "2 cups", "a pinch". Never normalised, never summed. */
+  amount: string | null
+  /** What this one ingredient cost, in cents, if you happen to know. */
+  cost_cents: number | null
+}
+
+/**
+ * Per serving. Every key optional: a dish typed in by hand usually has none
+ * of these, one imported from a recipe site usually has all of them, and the
+ * totals treat a missing value as unknown rather than as zero.
+ */
+export interface Nutrition {
+  calories?: number | null
+  protein_g?: number | null
+  carbs_g?: number | null
+  fat_g?: number | null
+  fiber_g?: number | null
+  sodium_mg?: number | null
+}
+
+export const NUTRITION_KEYS: (keyof Nutrition)[] = [
+  'calories', 'protein_g', 'carbs_g', 'fat_g', 'fiber_g', 'sodium_mg',
+]
+
+export type DishSource = 'manual' | 'web' | 'instagram'
+
+export interface Dish {
+  id: string
+  name: string
+  emoji: string
+  kind: DishKind
+  ingredients: Ingredient[]
+  steps: string[]
+  servings: number
+  /** The whole dish, in cents. Null is "not entered", shown blank, not $0. */
+  cost_cents: number | null
+  nutrition: Nutrition
+  source_url: string | null
+  source_kind: DishSource
+  image_url: string | null
+  notes: string | null
+  tags: string[]
+  created_by: string | null
+  updated_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface TemplateSlot {
+  role: DishKind
+  /** What the slot is called on this occasion: "Round challah", not "bread". */
+  label: string
+}
+
+export interface MealTemplate {
+  id: string
+  name: string
+  emoji: string
+  /** 'weeknight' | 'special' | 'shabbat' | 'holiday' | anything else typed in. */
+  occasion: string
+  slots: TemplateSlot[]
+  is_builtin: boolean
+  sort_order: number
+  created_by: string | null
+  updated_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** A template slot with a dish in it — or not yet. */
+export interface MealCourse extends TemplateSlot {
+  dish_id: string | null
+}
+
+export interface Meal {
+  id: string
+  name: string
+  emoji: string
+  occasion: string
+  template_id: string | null
+  /** ISO date (YYYY-MM-DD) or null for a saved combination with no date. */
+  planned_for: string | null
+  courses: MealCourse[]
+  notes: string | null
+  created_by: string | null
+  updated_by: string | null
+  created_at: string
+  updated_at: string
+}

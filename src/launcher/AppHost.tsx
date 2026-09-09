@@ -7,6 +7,7 @@ import { useLauncher } from '@/store/useLauncher'
 import { fire } from '@/lib/haptics'
 import { ThingsApp } from '@/apps/things/ThingsApp'
 import { OweApp } from '@/apps/owe/OweApp'
+import { MealsApp } from '@/apps/meals/MealsApp'
 
 /**
  * Renders whichever app is open, with the guards that every app shares.
@@ -67,6 +68,9 @@ export function AppHost({ appId }: { appId: string }) {
   return (
     <>
       {appId === 'things' && <ThingsApp />}
+      {/* Meals brings its own header, with its own way back — the flat frame
+          would look like a different app bolted on top of it. */}
+      {appId === 'meals' && <MealsApp />}
       {appId === 'owe' && (
         <AppFrame name={app.name} color={app.color} onBack={goHome}>
           <OweApp />

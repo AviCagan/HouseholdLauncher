@@ -17,6 +17,9 @@ export type NotifyEvent =
   // Owe & Owed
   | 'debt_added'
   | 'debt_paid'
+  // Meals
+  | 'dish_added'
+  | 'meal_planned'
 
 export interface Push {
   title: string
@@ -55,6 +58,8 @@ export const APP_FOR: Record<string, string> = {
   shopping_items: 'things',
   wishlist_items: 'things',
   debts: 'owe',
+  dishes: 'meals',
+  meals: 'meals',
 }
 
 export interface Row {
@@ -67,6 +72,12 @@ export interface Row {
   completed_by?: string | null
   is_done?: boolean
   last_completed_by?: string | null
+
+  // dishes, meals
+  name?: string
+  emoji?: string
+  occasion?: string
+  planned_for?: string | null
 
   // debts
   counterparty?: string
@@ -115,6 +126,7 @@ export function classify(body: WebhookBody): Classified | null {
   if (!appId) return null
 
   if (table === 'debts') return classifyDebt(type, record, old_record)
+  if (table === 'dishes' || table === 'meals') return classifyMeal(table, type, record)
 
   const tab = TAB_FOR[table]
   const noun = NOUN[table] ?? 'item'
@@ -307,6 +319,59 @@ function classifyDebt(
   }
 
   return null
+}
+
+/**
+ * Meals announces two things and nothing else: a dish joining the library,
+ * and a meal being planned. Edits are silent — the trigger only fires on
+ * INSERT — so correcting a typo in a recipe never buzzes the other phone.
+ */
+function classifyMeal(
+  table: 'dishes' | 'meals',
+  type: WebhookBody['type'],
+  record: Row,
+): Classified | null {
+  if (type !== 'INSERT') return null
+  const name = record.name ?? 'Something'
+  const emoji = record.emoji ?? '🍽️'
+
+  if (table === 'dishes') {
+    return {
+      event: 'dish_added',
+      appId: 'meals',
+      actorId: record.created_by ?? null,
+      targetId: null,
+      push: {
+        title: 'New dish',
+        body: `${emoji} ${name}`,
+        tab: 'dishes',
+        itemId: record.id,
+        tag: `dish-${record.id}`,
+      },
+    }
+  }
+
+  const when = record.planned_for ? ` for ${prettyDate(record.planned_for)}` : ''
+  return {
+    event: 'meal_planned',
+    appId: 'meals',
+    actorId: record.created_by ?? null,
+    targetId: null,
+    push: {
+      title: `${emoji} ${name}`,
+      body: `Meal planned${when}`,
+      tab: 'meals',
+      itemId: record.id,
+      tag: `meal-${record.id}`,
+    },
+  }
+}
+
+/** "2026-09-12" → "Fri 12 Sep". Not localised: the household is one place. */
+function prettyDate(iso: string): string {
+  const d = new Date(`${iso}T12:00:00Z`)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
 }
 
 /** 1250 -> "$12.50", 20000 -> "$200". Whole amounts drop the cents. */

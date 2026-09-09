@@ -1,3 +1,6 @@
+/* Stated here as well as inside Tailwind's import, so the order is pinned
+   even if a bundler ever places another stylesheet ahead of this one. */
+@layer theme, base, components, utilities;
 @import 'tailwindcss';
 
 /* ---------------------------------------------------------------------------
