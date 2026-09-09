@@ -106,7 +106,7 @@ export function SwipeRow({
       className="relative overflow-hidden rounded-[var(--radius)] no-select"
       /* The hairline matters most in OLED mode, where every surface is true
          black — without it a row has no edge against the page at all. */
-      style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
+      style={{ background: 'var(--surface-2)', border: 'var(--card-border)', boxShadow: 'var(--card-shadow)' }}
     >
       {/* Right-swipe: completion fill + drawn checkmark */}
       <motion.div

@@ -70,8 +70,8 @@ export function ShoppingTab() {
                 openSheet({ kind: 'stores' })
               }}
               aria-label="Manage stores"
-              className="grid h-9 w-9 place-items-center rounded-full"
-              style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
+              className="rail-btn grid h-9 w-9 place-items-center rounded-full"
+              style={{ background: 'var(--surface)', border: 'var(--card-border)' }}
             >
               <Icon name="pin" size={16} />
             </button>
@@ -82,14 +82,14 @@ export function ShoppingTab() {
               }}
               disabled={routableCount === 0}
               aria-label="Plan a shopping trip"
-              /* Just "Trip": the header also carries the stores button and the
-                 bell/settings rail, and the full label pushed the tab title
-                 into an ellipsis on a phone-width screen. */
-              className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-2 text-[13px] font-semibold text-white disabled:opacity-40"
+              title="Plan a shopping trip"
+              /* Icon only: the header also carries the stores button and the
+                 bell/settings rail, and even a "Trip" label pushed the tab
+                 title into an ellipsis once the buttons grew their outlines. */
+              className="rail-btn grid h-9 w-9 shrink-0 place-items-center rounded-full text-white disabled:opacity-40"
               style={{ background: 'var(--accent)' }}
             >
-              <Icon name="route" size={15} strokeWidth={2.4} />
-              Trip
+              <Icon name="route" size={17} strokeWidth={2.4} />
             </button>
           </div>
         }

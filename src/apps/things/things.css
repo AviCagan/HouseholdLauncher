@@ -1,0 +1,198 @@
+/*
+  Things — the notebook on the fridge.
+
+  Meals is a sticker book; this is the pad of graph paper the lists were
+  always going to end up on. Squared paper, blue-black ink, cards with a
+  hard outline that sit on a hard shadow, a yellow highlighter stroke behind
+  each tab's title, label tape on the section headings, and sticky-note tape
+  on the wishlist. Same bones as Meals — outlines and offset shadows — so the
+  two read as siblings, and a different paper so they never read as the same
+  app.
+
+  Two mechanisms, deliberately:
+
+    1. The launcher's own tokens (--surface, --border, --text …) are re-pointed
+       inside `.things`, so every sheet and control that never heard of the
+       notebook still lands on the right paper in the right ink.
+    2. A handful of *shape* tokens (--card-border, --card-shadow, --dock-border,
+       --claim-border) that default to the launcher's hairlines in
+       styles/index.css and become 2.5px ink here. Components read the token;
+       Owe and the launcher chrome keep their quiet look untouched.
+
+  The class rules at the bottom are unlayered on purpose: they restyle
+  elements that also carry Tailwind utilities for the same property, and an
+  unlayered rule is the only thing that outranks a utility without !important.
+*/
+
+@layer theme, base, components, utilities;
+
+.things {
+  --t-paper: #f6f8fc;
+  --t-grid: rgb(60 90 160 / 0.13);
+  --t-card: #ffffff;
+  --t-card-2: #eef3fb;
+  --t-card-3: #dfe7f4;
+  --t-ink: #26304a;
+  --t-ink-dim: #5a6684;
+  --t-ink-faint: #8f98ad;
+  --t-yellow: #fff0a3;
+  --t-pink: #ffd6e2;
+  --t-mint: #d2f4e1;
+  --t-sky: #d8ecff;
+  --t-tape: rgb(255 255 255 / 0.55);
+  --t-shadow: 3px 3px 0 var(--t-ink);
+  --t-shadow-sm: 2px 2px 0 var(--t-ink);
+
+  --bg: var(--t-paper);
+  --bg-elevated: var(--t-card);
+  --surface: var(--t-card);
+  --surface-2: var(--t-card-2);
+  --surface-3: var(--t-card-3);
+  --border: rgb(38 48 74 / 0.42);
+  --border-strong: var(--t-ink);
+  --text: var(--t-ink);
+  --text-dim: var(--t-ink-dim);
+  --text-faint: var(--t-ink-faint);
+  --dock-bg: var(--t-card);
+  --shadow-dock: var(--t-shadow);
+  --shadow-lg: 4px 4px 0 var(--t-ink);
+  --radius: 18px;
+  --radius-sm: 12px;
+
+  --card-border: 2.5px solid var(--t-ink);
+  --card-shadow: var(--t-shadow);
+  --dock-border: 2.5px solid var(--t-ink);
+  --claim-border: 2px solid var(--t-ink);
+
+  color: var(--t-ink);
+  background-color: var(--t-paper);
+  background-image:
+    linear-gradient(var(--t-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--t-grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: -1px -1px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .things {
+    --t-paper: #121826;
+    --t-grid: rgb(140 170 230 / 0.1);
+    --t-card: #1b2333;
+    --t-card-2: #232d40;
+    --t-card-3: #2c3850;
+    --t-ink: #e9eefa;
+    --t-ink-dim: #aab4cb;
+    --t-ink-faint: #6f7a94;
+    --t-yellow: #5b4c14;
+    --t-pink: #5a2f3e;
+    --t-mint: #1f4a37;
+    --t-sky: #223a55;
+    --t-tape: rgb(255 255 255 / 0.18);
+    --border: rgb(233 238 250 / 0.35);
+  }
+}
+:root[data-theme='dark'] .things {
+  --t-paper: #121826;
+  --t-grid: rgb(140 170 230 / 0.1);
+  --t-card: #1b2333;
+  --t-card-2: #232d40;
+  --t-card-3: #2c3850;
+  --t-ink: #e9eefa;
+  --t-ink-dim: #aab4cb;
+  --t-ink-faint: #6f7a94;
+  --t-yellow: #5b4c14;
+  --t-pink: #5a2f3e;
+  --t-mint: #1f4a37;
+  --t-sky: #223a55;
+  --t-tape: rgb(255 255 255 / 0.18);
+  --border: rgb(233 238 250 / 0.35);
+}
+:root[data-theme='oled'] .things {
+  --t-paper: #000000;
+  --t-grid: rgb(140 170 230 / 0.14);
+  --t-card: #0e1219;
+  --t-card-2: #161c27;
+  --t-card-3: #1f2735;
+  --t-ink: #f4f7ff;
+  --t-ink-dim: #b3bdd3;
+  --t-ink-faint: #6f7a94;
+  --t-yellow: #4d4010;
+  --t-pink: #4d2634;
+  --t-mint: #173d2c;
+  --t-sky: #1b3049;
+  --t-tape: rgb(255 255 255 / 0.16);
+  --border: rgb(244 247 255 / 0.35);
+}
+
+/* The tab title, with a highlighter dragged through it. */
+.things .screen-title {
+  font-weight: 900;
+  font-size: 25px;
+  letter-spacing: -0.02em;
+  padding: 0 6px;
+  margin-left: -6px;
+  border-radius: 4px;
+  background: linear-gradient(transparent 55%, var(--t-yellow) 55%, var(--t-yellow) 94%, transparent 94%);
+}
+
+/* Section headings as a strip of label tape, slightly askew. */
+.things .section-label {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 3px;
+  background: var(--t-yellow);
+  transform: rotate(-1.2deg);
+}
+
+.things .empty-state {
+  margin: 10px 4px 0;
+  border: 2.5px dashed var(--t-ink);
+  border-radius: 22px;
+  background: var(--t-card);
+}
+
+.things .sort-chip {
+  border: 2px solid var(--t-ink);
+  box-shadow: var(--t-shadow-sm);
+  font-weight: 700;
+  transition: transform 100ms ease, box-shadow 100ms ease;
+}
+.things .sort-chip:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+
+.things .row-title {
+  font-weight: 700;
+}
+
+.things .quick-add-btn,
+.things .rail-btn {
+  border: 2px solid var(--t-ink);
+  box-shadow: var(--t-shadow-sm);
+}
+.things .quick-add-btn:active,
+.things .rail-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+
+.things .dock-pill {
+  border: 2px solid var(--t-ink);
+}
+
+/* A strip of tape across the top of every wish, like a note on the fridge. */
+.things .wish-card::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: 50%;
+  z-index: 30;
+  width: 56px;
+  height: 14px;
+  margin-left: -28px;
+  background: var(--t-tape);
+  border: 1px solid rgb(38 48 74 / 0.25);
+  transform: rotate(-3deg);
+  pointer-events: none;
+}

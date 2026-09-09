@@ -21,6 +21,7 @@ import { useProfile } from '@/store/useProfile'
 import { useUI } from '@/store/useUI'
 import { useLauncher } from '@/store/useLauncher'
 import type { TabKey } from '@/data/types'
+import './things.css'
 
 /**
  * Things, as a launcher app.
@@ -31,6 +32,9 @@ import type { TabKey } from '@/data/types'
  * gets notified — all of which the launcher owns and every app shares. What is
  * left is the four tabs, the things that hang off them, and the settings that
  * only mean anything inside Things.
+ *
+ * The look — graph paper, ink outlines, label tape — is scoped by the
+ * `things` class on the root; see things.css for how it is done.
  */
 export function ThingsApp() {
   const profileId = useProfile((s) => s.profileId)
@@ -70,7 +74,7 @@ export function ThingsApp() {
   }, [profileId])
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <div className="things flex h-full flex-col overflow-hidden">
       <div className="relative min-h-0 flex-1">
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
@@ -105,10 +109,10 @@ export function ThingsApp() {
               useUI.getState().openSheet({ kind: 'settings' })
             }}
             aria-label="Things settings"
-            className="grid h-9 w-9 place-items-center rounded-full"
+            className="rail-btn grid h-9 w-9 place-items-center rounded-full"
             style={{
-              background: 'var(--surface-2)',
-              border: '1px solid var(--border)',
+              background: 'var(--surface)',
+              border: 'var(--card-border)',
               color: 'var(--text-dim)',
             }}
           >

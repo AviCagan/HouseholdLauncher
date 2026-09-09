@@ -243,10 +243,11 @@ function WishCard({ wish, profiles }: { wish: WishlistItem; profiles: Profile[] 
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.94, transition: { duration: 0.15 } }}
       transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-      className="relative flex flex-col justify-between overflow-hidden rounded-[var(--radius)] p-3"
+      className="wish-card relative flex flex-col justify-between overflow-hidden rounded-[var(--radius)] p-3"
       style={{
         background: 'var(--surface)',
-        border: '1px solid var(--border)',
+        border: 'var(--card-border)',
+        boxShadow: 'var(--card-shadow)',
         opacity: wish.is_purchased ? 0.55 : 1,
         minHeight: wish.image_url ? 180 : 132,
       }}

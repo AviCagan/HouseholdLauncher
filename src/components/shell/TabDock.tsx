@@ -75,7 +75,7 @@ export function TabDock() {
           background: 'var(--dock-bg)',
           backdropFilter: 'blur(22px) saturate(180%)',
           WebkitBackdropFilter: 'blur(22px) saturate(180%)',
-          border: '1px solid var(--border)',
+          border: 'var(--dock-border)',
           boxShadow: 'var(--shadow-dock)',
           color: 'var(--text-dim)',
         }}
@@ -92,7 +92,7 @@ export function TabDock() {
           background: 'var(--dock-bg)',
           backdropFilter: 'blur(22px) saturate(180%)',
           WebkitBackdropFilter: 'blur(22px) saturate(180%)',
-          border: '1px solid var(--border)',
+          border: 'var(--dock-border)',
           boxShadow: 'var(--shadow-dock)',
           // Stops the browser claiming the horizontal drag for a scroll.
           touchAction: 'none',
@@ -140,7 +140,7 @@ export function TabDock() {
                 <motion.span
                   layoutId="dock-pill"
                   transition={{ type: 'spring', stiffness: 480, damping: 38 }}
-                  className="absolute inset-0 rounded-[21px]"
+                  className="dock-pill absolute inset-0 rounded-[21px]"
                   style={{ background: 'var(--accent)' }}
                 />
               )}

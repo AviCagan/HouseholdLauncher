@@ -52,7 +52,7 @@ export function DeadlinePrompt({
           background: 'var(--dock-bg)',
           backdropFilter: 'blur(20px)',
           WebkitBackdropFilter: 'blur(20px)',
-          border: '1px solid var(--border)',
+          border: 'var(--card-border)',
         }}
       >
         <div className="flex items-baseline justify-between gap-2 px-1">

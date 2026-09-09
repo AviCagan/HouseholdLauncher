@@ -30,7 +30,7 @@ export function Screen({
           {/* min-w-0 so a long action keeps its own width and squeezes the
               title instead of wrapping itself onto two lines. */}
           <h1 className="min-w-0 truncate text-[27px] font-bold tracking-tight">
-            {title}
+            <span className="screen-title">{title}</span>
             {count !== undefined && count > 0 && (
               <span className="ml-2 text-[16px] font-semibold" style={{ color: 'var(--text-faint)' }}>
                 {count}
@@ -81,7 +81,7 @@ export function Section({
         </motion.span>
         {icon}
         <span
-          className="text-[13px] font-semibold uppercase tracking-wide"
+          className="section-label text-[13px] font-semibold uppercase tracking-wide"
           style={{ color: accent ?? 'var(--text-dim)' }}
         >
           {label}
@@ -121,7 +121,7 @@ export function EmptyState({
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="grid place-items-center gap-3 px-8 py-16 text-center"
+      className="empty-state grid place-items-center gap-3 px-8 py-16 text-center"
     >
       <span style={{ color: 'var(--text-faint)', opacity: 0.5 }}>{icon}</span>
       <span className="text-[16px] font-semibold">{title}</span>

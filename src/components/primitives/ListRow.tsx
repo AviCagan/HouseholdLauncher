@@ -94,7 +94,7 @@ export function ListRow({
 
         <div className="min-w-0 flex-1">
           <div
-            className="truncate text-[15px] font-medium"
+            className="row-title truncate text-[15px] font-medium"
             style={{
               color: done ? 'var(--text-faint)' : 'var(--text)',
               textDecoration: done ? 'line-through' : 'none',

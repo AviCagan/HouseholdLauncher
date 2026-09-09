@@ -55,6 +55,14 @@
   --radius: 16px;
   --radius-sm: 10px;
   --dock-h: 62px;
+
+  /* Shapes. Hairlines and no shadow here; an app with its own look (see
+     apps/things/things.css) re-points these to thick ink and a hard offset
+     shadow, and every component that reads them follows without knowing. */
+  --card-border: 1px solid var(--border);
+  --card-shadow: none;
+  --dock-border: 1px solid var(--border);
+  --claim-border: 1px solid var(--accent-muted);
 }
 
 /* Dark. Applies on explicit choice, and on system preference unless the user

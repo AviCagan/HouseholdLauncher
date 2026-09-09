@@ -237,7 +237,8 @@ function RestingCard({
       className="flex items-center gap-3 rounded-[var(--radius)] px-4 py-3"
       style={{
         background: 'var(--surface-2)',
-        border: '1px solid var(--border)',
+        border: 'var(--card-border)',
+        boxShadow: 'var(--card-shadow)',
         opacity: 0.82,
       }}
     >

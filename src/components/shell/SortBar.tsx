@@ -39,7 +39,7 @@ export function SortBar({
               if (on) toggleDir(tab)
               else setSort(tab, o.key)
             }}
-            className="flex min-w-0 flex-1 items-center justify-center gap-1 rounded-full px-2 py-2 text-[12px] font-medium"
+            className="sort-chip flex min-w-0 flex-1 items-center justify-center gap-1 rounded-full px-2 py-2 text-[12px] font-medium"
             style={{
               background: on ? 'var(--accent)' : 'var(--surface-2)',
               color: on ? '#fff' : 'var(--text-dim)',

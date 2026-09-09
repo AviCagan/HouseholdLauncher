@@ -58,7 +58,7 @@ export function QuickAdd({
         background: 'var(--dock-bg)',
         backdropFilter: 'blur(20px) saturate(180%)',
         WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-        border: `1px solid ${focused ? 'var(--accent-muted)' : 'var(--border)'}`,
+        border: focused ? '1px solid var(--accent-muted)' : 'var(--dock-border)',
         boxShadow: 'var(--shadow-dock)',
         transition: 'border-color .18s ease',
       }}
@@ -115,7 +115,7 @@ export function QuickAdd({
           opacity: value.trim() ? 1 : 0.45,
         }}
         transition={{ type: 'spring', stiffness: 500, damping: 26 }}
-        className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-white"
+        className="quick-add-btn grid h-9 w-9 shrink-0 place-items-center rounded-full text-white"
         style={{ background: 'var(--accent)' }}
       >
         <Icon name="plus" size={19} strokeWidth={2.6} />

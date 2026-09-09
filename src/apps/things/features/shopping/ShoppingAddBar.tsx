@@ -54,7 +54,7 @@ export function ShoppingAddBar() {
                 background: 'var(--dock-bg)',
                 backdropFilter: 'blur(20px)',
                 WebkitBackdropFilter: 'blur(20px)',
-                border: '1px solid var(--border)',
+                border: 'var(--card-border)',
               }}
             >
               <button

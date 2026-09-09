@@ -38,7 +38,7 @@ export function ClaimChip({
         className="shrink-0 rounded-full px-3 py-1.5 text-[12px] font-semibold"
         style={{
           background: 'var(--accent-soft)',
-          border: '1px solid var(--accent-muted)',
+          border: 'var(--claim-border)',
           color: 'var(--accent-text)',
         }}
       >
