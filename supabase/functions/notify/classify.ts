@@ -20,6 +20,8 @@ export type NotifyEvent =
   // Meals
   | 'dish_added'
   | 'meal_planned'
+  // A&J Encyclopedia
+  | 'entry_added'
 
 export interface Push {
   title: string
@@ -60,6 +62,7 @@ export const APP_FOR: Record<string, string> = {
   debts: 'owe',
   dishes: 'meals',
   meals: 'meals',
+  lexicon_entries: 'encyclopedia',
 }
 
 export interface Row {
@@ -79,6 +82,11 @@ export interface Row {
   occasion?: string
   planned_for?: string | null
   people?: number
+
+  // lexicon_entries
+  term?: string
+  part_of_speech?: string
+  definition?: string
 
   // debts
   counterparty?: string
@@ -128,6 +136,7 @@ export function classify(body: WebhookBody): Classified | null {
 
   if (table === 'debts') return classifyDebt(type, record, old_record)
   if (table === 'dishes' || table === 'meals') return classifyMeal(table, type, record)
+  if (table === 'lexicon_entries') return classifyEntry(type, record)
 
   const tab = TAB_FOR[table]
   const noun = NOUN[table] ?? 'item'
@@ -365,6 +374,37 @@ function classifyMeal(
       tab: 'meals',
       itemId: record.id,
       tag: `meal-${record.id}`,
+    },
+  }
+}
+
+/** How a dictionary abbreviates the part of speech. Must track PARTS_OF_SPEECH in src/data/types.ts. */
+const POS_ABBR: Record<string, string> = {
+  noun: 'n.', verb: 'v.', adjective: 'adj.', adverb: 'adv.',
+  interjection: 'interj.', phrase: 'phr.', name: 'prop. n.', other: '',
+}
+
+/**
+ * The Encyclopedia announces one thing: a new word. The notification is laid
+ * out like the entry itself — headword, part of speech, the first line of the
+ * definition — because that is the whole pleasure of it arriving.
+ */
+function classifyEntry(type: WebhookBody['type'], record: Row): Classified | null {
+  if (type !== 'INSERT') return null
+  const term = record.term?.trim() || 'A new word'
+  const abbr = record.part_of_speech ? POS_ABBR[record.part_of_speech] ?? '' : ''
+  const definition = (record.definition ?? '').trim()
+  return {
+    event: 'entry_added',
+    appId: 'encyclopedia',
+    actorId: record.created_by ?? null,
+    targetId: null,
+    push: {
+      title: `📖 ${term}${abbr ? ` (${abbr})` : ''}`,
+      body: definition ? (definition.length > 120 ? `${definition.slice(0, 117)}…` : definition) : 'Added to the encyclopedia',
+      tab: 'entries',
+      itemId: record.id,
+      tag: `entry-${record.id}`,
     },
   }
 }

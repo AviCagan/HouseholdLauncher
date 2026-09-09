@@ -516,3 +516,37 @@ export interface Meal {
   created_at: string
   updated_at: string
 }
+
+// ---------------------------------------------------------------------------
+// A&J Encyclopedia
+// ---------------------------------------------------------------------------
+
+export const PARTS_OF_SPEECH = [
+  'noun', 'verb', 'adjective', 'adverb', 'interjection', 'phrase', 'name', 'other',
+] as const
+export type PartOfSpeech = (typeof PARTS_OF_SPEECH)[number]
+
+/**
+ * One word in the household's own dictionary.
+ *
+ * Laid out like a real entry — headword, pronunciation, part of speech,
+ * definition, an example, and an origin — because the form is half the joke:
+ * a made-up word treated with full lexicographic seriousness. Everything but
+ * the term and the definition is optional, since most entries will be typed
+ * on a phone in the middle of the conversation that produced them.
+ */
+export interface LexiconEntry {
+  id: string
+  term: string
+  pronunciation: string | null
+  part_of_speech: PartOfSpeech
+  definition: string
+  example: string | null
+  /** Where it came from — for a private word, usually a story, not a language. */
+  origin: string | null
+  tags: string[]
+  created_by: string | null
+  updated_by: string | null
+  created_at: string
+  updated_at: string
+}

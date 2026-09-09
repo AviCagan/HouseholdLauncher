@@ -166,3 +166,31 @@ describe('classify: no-ops', () => {
     expect(c).toBeNull()
   })
 })
+
+describe('classify: encyclopedia', () => {
+  it('announces a new entry the way the book prints it', () => {
+    const c = classify({
+      type: 'INSERT',
+      table: 'lexicon_entries',
+      record: {
+        id: 'e1',
+        term: 'schlumpy',
+        part_of_speech: 'adjective',
+        definition: 'Looking as though one has been rained on, emotionally.',
+        created_by: 'jackie',
+      },
+      old_record: null,
+    })
+    expect(c?.event).toBe('entry_added')
+    expect(c?.appId).toBe('encyclopedia')
+    expect(c?.actorId).toBe('jackie')
+    expect(c?.push.title).toBe('📖 schlumpy (adj.)')
+    expect(c?.push.body).toBe('Looking as though one has been rained on, emotionally.')
+    expect(c?.push.itemId).toBe('e1')
+  })
+
+  it('says nothing about a revision', () => {
+    const record = { id: 'e1', term: 'schlumpy', definition: 'x', updated_by: 'avi' }
+    expect(classify({ type: 'UPDATE', table: 'lexicon_entries', record, old_record: record })).toBeNull()
+  })
+})

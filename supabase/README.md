@@ -55,6 +55,8 @@ in one go, and it's safe to re-run.
 > | `007_list_settings.sql` | Auto-clearing finished items, custom repeat quick picks, yearly chores |
 > | `008_calendar.sql` | Google Calendar sync |
 > | `009_weekday_recurrence.sql` | Chores that repeat on specific days of the week |
+> | `015_launcher.sql` … `018_meal_people.sql` | The launcher, Owe & Owed, Meals |
+> | `019_encyclopedia.sql` | The A&J Encyclopedia |
 >
 > Without `007`, setting a chore to repeat *yearly* fails; without `009`,
 > picking specific weekdays fails; without `006`, changing a profile photo

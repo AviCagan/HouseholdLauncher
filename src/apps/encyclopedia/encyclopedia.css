@@ -1,0 +1,195 @@
+/*
+  A&J Encyclopedia — the one app that is allowed to be pompous.
+
+  Everything else in the launcher is a rounded sans on a flat surface. This is
+  a dictionary: an ivory page, a serif with real italics, small capitals for
+  the running heads, a double rule under the title, drop-cap letters between
+  the sections. The joke is that it takes a private vocabulary completely
+  seriously, and the typography has to be straight-faced for that to land.
+
+  Scoped under `.lex`, like `.meals`, so none of it leaks into the launcher.
+*/
+
+@layer theme, base, components, utilities;
+
+.lex {
+  --lex-serif: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Palatino, Charter,
+    'Times New Roman', Georgia, serif;
+  --lex-paper: #f1e8d6;
+  --lex-page: #fbf6ea;
+  --lex-page-2: #f4ecda;
+  --lex-ink: #2a211b;
+  --lex-ink-dim: #6b5a4b;
+  --lex-ink-faint: #a08c78;
+  --lex-rule: #cdbc9d;
+  --lex-rule-strong: #8d7a5e;
+  --lex-ox: #7c2f3a;
+  --lex-ox-soft: #f0dcdd;
+  --lex-gold: #a8862f;
+  --lex-shadow: 0 1px 0 var(--lex-rule), 0 8px 22px rgb(70 45 20 / 0.1);
+
+  color: var(--lex-ink);
+  font-family: var(--lex-serif);
+  background-color: var(--lex-paper);
+  /* Laid paper: faint horizontal chain lines, and a vignette toward the edges
+     so the page reads as a page and not a flat fill. */
+  background-image:
+    radial-gradient(120% 80% at 50% 0%, rgb(255 255 255 / 0.35), transparent 70%),
+    repeating-linear-gradient(0deg, transparent 0 23px, rgb(60 40 20 / 0.035) 23px 24px);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .lex {
+    --lex-paper: #1a1512;
+    --lex-page: #241d18;
+    --lex-page-2: #2c2420;
+    --lex-ink: #efe4d0;
+    --lex-ink-dim: #bfa98f;
+    --lex-ink-faint: #7f6d5b;
+    --lex-rule: #4c3f33;
+    --lex-rule-strong: #8a7660;
+    --lex-ox: #d8717f;
+    --lex-ox-soft: #4a262c;
+    --lex-gold: #d4b06a;
+    --lex-shadow: 0 1px 0 var(--lex-rule), 0 8px 22px rgb(0 0 0 / 0.4);
+    background-image: repeating-linear-gradient(0deg, transparent 0 23px, rgb(255 255 255 / 0.025) 23px 24px);
+  }
+}
+:root[data-theme='dark'] .lex {
+  --lex-paper: #1a1512;
+  --lex-page: #241d18;
+  --lex-page-2: #2c2420;
+  --lex-ink: #efe4d0;
+  --lex-ink-dim: #bfa98f;
+  --lex-ink-faint: #7f6d5b;
+  --lex-rule: #4c3f33;
+  --lex-rule-strong: #8a7660;
+  --lex-ox: #d8717f;
+  --lex-ox-soft: #4a262c;
+  --lex-gold: #d4b06a;
+  --lex-shadow: 0 1px 0 var(--lex-rule), 0 8px 22px rgb(0 0 0 / 0.4);
+  background-image: repeating-linear-gradient(0deg, transparent 0 23px, rgb(255 255 255 / 0.025) 23px 24px);
+}
+:root[data-theme='oled'] .lex {
+  --lex-paper: #000000;
+  --lex-page: #100c0a;
+  --lex-page-2: #181210;
+  --lex-ink: #f5ecdc;
+  --lex-ink-dim: #c4ae94;
+  --lex-ink-faint: #7a6957;
+  --lex-rule: #3d3128;
+  --lex-rule-strong: #8a7660;
+  --lex-ox: #e07e8c;
+  --lex-ox-soft: #3e2025;
+  --lex-gold: #d4b06a;
+  --lex-shadow: 0 0 0 1px var(--lex-rule);
+  background-image: none;
+}
+
+@layer components {
+  .lex-serif {
+    font-family: var(--lex-serif);
+  }
+  /* Running heads and labels: small capitals, spaced out, never bold. */
+  .lex-caps {
+    font-variant-caps: small-caps;
+    letter-spacing: 0.14em;
+    font-size: 12px;
+    color: var(--lex-ink-dim);
+  }
+  .lex-page {
+    background: var(--lex-page);
+    border: 1px solid var(--lex-rule);
+    border-radius: 6px;
+    box-shadow: var(--lex-shadow);
+  }
+  .lex-rule-double {
+    border-top: 3px double var(--lex-rule-strong);
+  }
+  .lex-headword {
+    font-weight: 700;
+    letter-spacing: -0.005em;
+  }
+  .lex-pron {
+    font-style: italic;
+    color: var(--lex-ink-dim);
+  }
+  .lex-pos {
+    font-style: italic;
+    color: var(--lex-ox);
+  }
+  .lex-dropcap {
+    font-size: 42px;
+    line-height: 0.9;
+    font-weight: 700;
+    color: var(--lex-ox);
+  }
+  /* Fields are a rule to write on, not a box. */
+  .lex-input {
+    width: 100%;
+    font-family: var(--lex-serif);
+    font-size: 16px;
+    color: var(--lex-ink);
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--lex-rule-strong);
+    border-radius: 0;
+    padding: 8px 2px;
+    outline: none;
+  }
+  .lex-input:focus {
+    border-bottom-color: var(--lex-ox);
+    border-bottom-width: 2px;
+    padding-bottom: 7px;
+  }
+  .lex-input::placeholder {
+    color: var(--lex-ink-faint);
+    font-style: italic;
+  }
+  .lex-chip {
+    font-family: var(--lex-serif);
+    font-style: italic;
+    font-size: 13.5px;
+    padding: 6px 11px;
+    border: 1px solid var(--lex-rule-strong);
+    border-radius: 3px;
+    color: var(--lex-ink);
+    background: transparent;
+    white-space: nowrap;
+  }
+  .lex-chip[data-on='true'] {
+    background: var(--lex-ink);
+    border-color: var(--lex-ink);
+    color: var(--lex-page);
+  }
+  /* The stamp: a solid oxblood block with a hard bottom edge. */
+  .lex-stamp {
+    font-family: var(--lex-serif);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: #fff;
+    background: var(--lex-ox);
+    border: 1px solid rgb(0 0 0 / 0.25);
+    border-radius: 6px;
+    box-shadow: 0 3px 0 rgb(0 0 0 / 0.28);
+  }
+  .lex-stamp:active {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 rgb(0 0 0 / 0.28);
+  }
+  .lex-stamp:disabled {
+    opacity: 0.45;
+  }
+  .lex-outline {
+    font-family: var(--lex-serif);
+    font-weight: 600;
+    color: var(--lex-ink);
+    border: 1px solid var(--lex-rule-strong);
+    border-radius: 6px;
+    background: transparent;
+  }
+  .lex-ornament {
+    color: var(--lex-gold);
+    letter-spacing: 0.4em;
+  }
+}

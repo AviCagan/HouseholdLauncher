@@ -69,6 +69,16 @@ export const APPS: AppDef[] = [
     defaultForEveryone: true,
   },
   {
+    id: 'encyclopedia',
+    name: 'A&J Encyclopedia',
+    blurb: 'The words only the two of you use',
+    icon: 'book',
+    color: '#7c2f3a',
+    platforms: ['android', 'web'],
+    // Not for everyone by default: a private vocabulary is exactly the kind
+    // of personal history the comment on `defaultForEveryone` is about.
+  },
+  {
     id: 'bluetooth',
     name: 'Bluetooth',
     blurb: 'Drop the car without digging through settings',

@@ -8,6 +8,7 @@ import { fire } from '@/lib/haptics'
 import { ThingsApp } from '@/apps/things/ThingsApp'
 import { OweApp } from '@/apps/owe/OweApp'
 import { MealsApp } from '@/apps/meals/MealsApp'
+import { EncyclopediaApp } from '@/apps/encyclopedia/EncyclopediaApp'
 
 /**
  * Renders whichever app is open, with the guards that every app shares.
@@ -71,6 +72,8 @@ export function AppHost({ appId }: { appId: string }) {
       {/* Meals brings its own header, with its own way back — the flat frame
           would look like a different app bolted on top of it. */}
       {appId === 'meals' && <MealsApp />}
+      {/* Likewise the Encyclopedia: its title page is the header. */}
+      {appId === 'encyclopedia' && <EncyclopediaApp />}
       {appId === 'owe' && (
         <AppFrame name={app.name} color={app.color} onBack={goHome}>
           <OweApp />

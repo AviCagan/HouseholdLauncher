@@ -8,6 +8,7 @@ import type {
   Debt,
   Dish,
   HouseholdSettings,
+  LexiconEntry,
   Meal,
   MealTemplate,
   Profile,
@@ -42,6 +43,8 @@ export const TABLES = [
   'dishes',
   'meal_templates',
   'meals',
+  // A&J Encyclopedia.
+  'lexicon_entries',
 ] as const
 
 export type TableName = (typeof TABLES)[number]
@@ -65,6 +68,7 @@ export interface TableMap {
   dishes: Dish
   meal_templates: MealTemplate
   meals: Meal
+  lexicon_entries: LexiconEntry
 }
 
 export type ChangeEvent<T extends TableName = TableName> =
