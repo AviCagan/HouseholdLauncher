@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { motion } from 'motion/react'
+import { AnimatePresence, motion } from 'motion/react'
 import { useSettings } from '@/store/useProfile'
 import { fire } from '@/lib/haptics'
 import type { DishKind } from '@/data/types'
@@ -243,6 +243,97 @@ export function Stepper({
  * changes, and a text field for anything not in the row. The keyboard's own
  * emoji picker is the real picker; this is the shortcut.
  */
+/**
+ * How many people: the number big, a slider under it, −/+ for the exact
+ * figure, and a row of little plates that fills up as it goes.
+ */
+export function Headcount({
+  value,
+  onChange,
+  max = 24,
+}: {
+  value: number
+  onChange: (next: number) => void
+  /** Where the slider ends. The +/− buttons go past it. */
+  max?: number
+}) {
+  const reduce = useReduceMotion()
+  const top = Math.max(max, value)
+  const set = (n: number) => {
+    const next = Math.min(99, Math.max(1, Math.round(n)))
+    if (next === value) return
+    fire('snap')
+    onChange(next)
+  }
+  const fill = ((Math.min(value, top) - 1) / Math.max(1, top - 1)) * 100
+  const plates = Math.min(value, 30)
+  const Btn = ({ label, delta }: { label: string; delta: number }) => (
+    <motion.button
+      whileTap={{ scale: 0.85 }}
+      onClick={() => set(value + delta)}
+      aria-label={delta > 0 ? 'More people' : 'Fewer people'}
+      className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-[20px] font-black"
+      style={{ border: '2px solid var(--m-line)', background: 'var(--m-card)', color: 'var(--m-ink)' }}
+    >
+      {label}
+    </motion.button>
+  )
+  return (
+    <div className="m-card-flat flex flex-col gap-2.5 px-3.5 pb-3 pt-2.5" style={{ background: 'var(--m-card)' }}>
+      <div className="flex items-center gap-3">
+        <Btn label="−" delta={-1} />
+        <div className="flex min-w-0 flex-1 flex-col items-center leading-none">
+          <motion.span
+            key={value}
+            initial={reduce ? false : { scale: 1.3 }}
+            animate={{ scale: 1 }}
+            transition={POP}
+            className="m-title text-[36px] tabular-nums"
+          >
+            {value}
+          </motion.span>
+          <span className="mt-1 text-[11px] font-black uppercase tracking-wide" style={{ color: 'var(--m-ink-dim)' }}>
+            {value === 1 ? 'person' : 'people'}
+          </span>
+        </div>
+        <Btn label="+" delta={1} />
+      </div>
+      <input
+        type="range"
+        min={1}
+        max={top}
+        step={1}
+        value={value}
+        onChange={(e) => set(Number(e.target.value))}
+        aria-label="How many people"
+        className="m-range w-full"
+        style={{ '--m-range-fill': `${fill}%` } as React.CSSProperties}
+      />
+      <div className="flex min-h-[18px] flex-wrap items-center gap-0.5" aria-hidden>
+        <AnimatePresence initial={false}>
+          {Array.from({ length: plates }, (_, i) => (
+            <motion.span
+              key={i}
+              initial={reduce ? false : { scale: 0, rotate: -40 }}
+              animate={{ scale: 1, rotate: 0 }}
+              exit={reduce ? undefined : { scale: 0, rotate: 40 }}
+              transition={POP}
+              className="text-[15px] leading-none"
+            >
+              🍽️
+            </motion.span>
+          ))}
+        </AnimatePresence>
+        {value > plates && (
+          <span className="ml-1 text-[11px] font-black" style={{ color: 'var(--m-ink-dim)' }}>
+            +{value - plates}
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function EmojiPicker({ value, onChange }: { value: string; onChange: (e: string) => void }) {
   const [wobbleKey, setWobbleKey] = useState(0)
   const reduce = useReduceMotion()

@@ -26,12 +26,15 @@ export function DishSheet({
   note,
   open,
   onClose,
+  onSaved,
 }: {
   dish: Dish | null
   draft?: Partial<DishInput>
   note?: string
   open: boolean
   onClose: () => void
+  /** Told about the saved row — how a meal gets the dish it asked for. */
+  onSaved?: (dish: Dish) => void
 }) {
   const profileId = useProfile((s) => s.profileId)
   const celebrate = useMealsUI((s) => s.celebrate)
@@ -107,10 +110,13 @@ export function DishSheet({
     if (!valid || busy) return
     setBusy(true)
     const input = collect()
-    const ok = dish ? await updateDish(dish, input, profileId) : Boolean(await addDish(input, profileId))
+    const saved = dish
+      ? (await updateDish(dish, input, profileId)) ? { ...dish, ...input } : null
+      : await addDish(input, profileId)
     setBusy(false)
-    if (!ok) return
+    if (!saved) return
     if (!dish) celebrate()
+    onSaved?.(saved)
     onClose()
   }
 

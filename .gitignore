@@ -14,3 +14,5 @@ android/local.properties
 android/app/release
 *.keystore
 *.jks
+# A local-only build used for screenshots; never shipped.
+dist-local/

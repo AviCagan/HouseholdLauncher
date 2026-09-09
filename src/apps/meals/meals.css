@@ -166,6 +166,70 @@
     box-shadow: var(--m-shadow-sm);
     transform: translate(-1px, -1px);
   }
+
+  /* The headcount slider: a fat track that fills with tomato as it goes, and
+     a thumb drawn like everything else here — round, outlined, shadowed. The
+     fill is a gradient stop set from the component (`--m-range-fill`), since
+     WebKit has no progress pseudo-element and Firefox's is separate. */
+  .m-range {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 30px;
+    margin: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+  .m-range:focus-visible {
+    outline: none;
+  }
+  .m-range::-webkit-slider-runnable-track {
+    box-sizing: border-box;
+    height: 16px;
+    border: 2px solid var(--m-line);
+    border-radius: 999px;
+    background: linear-gradient(
+      to right,
+      var(--m-tomato) 0 var(--m-range-fill, 0%),
+      var(--m-card-2) var(--m-range-fill, 0%) 100%
+    );
+  }
+  .m-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    box-sizing: border-box;
+    width: 28px;
+    height: 28px;
+    margin-top: -8px;
+    border: 2.5px solid var(--m-line);
+    border-radius: 50%;
+    background: var(--m-butter);
+    box-shadow: var(--m-shadow-sm);
+    transition: transform 100ms ease;
+  }
+  .m-range:active::-webkit-slider-thumb {
+    transform: scale(1.15);
+  }
+  .m-range::-moz-range-track {
+    box-sizing: border-box;
+    height: 16px;
+    border: 2px solid var(--m-line);
+    border-radius: 999px;
+    background: var(--m-card-2);
+  }
+  .m-range::-moz-range-progress {
+    height: 12px;
+    border-radius: 999px;
+    background: var(--m-tomato);
+  }
+  .m-range::-moz-range-thumb {
+    box-sizing: border-box;
+    width: 28px;
+    height: 28px;
+    border: 2.5px solid var(--m-line);
+    border-radius: 50%;
+    background: var(--m-butter);
+    box-shadow: var(--m-shadow-sm);
+  }
 }
 
 /* A wobble for an emoji that has just been tapped or has just arrived. */

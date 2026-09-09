@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
+import { toast } from 'sonner'
 import { Sheet } from '@/components/primitives/Sheet'
 import { Icon } from '@/components/primitives/Icon'
 import { useData } from '@/store/useData'
@@ -7,10 +8,11 @@ import { useProfile } from '@/store/useProfile'
 import { formatPrice } from '@/lib/money'
 import { fire } from '@/lib/haptics'
 import { DISH_KINDS, NUTRITION_KEYS, type Dish, type DishKind, type Meal, type MealCourse, type MealTemplate } from '@/data/types'
-import { addMeal, removeMeal, updateMeal, type MealInput } from './actions'
-import { NUTRITION_LABEL, summariseMeal } from './nutrition'
+import { addMeal, removeMeal, updateMeal, type DishInput, type MealInput } from './actions'
+import { DishSheet } from './DishSheet'
+import { DEFAULT_PEOPLE, NUTRITION_LABEL, batchesFor, lineText, shoppingList, shoppingListText, summariseMeal } from './nutrition'
 import { useMealsUI } from './store'
-import { BigButton, Chip, EmojiPicker, Field, KIND_META, OCCASION_META, POP, TextArea, TextInput, occasionEmoji } from './ui'
+import { BigButton, Chip, EmojiPicker, Field, Headcount, KIND_META, OCCASION_META, POP, Stat, TextArea, TextInput, occasionEmoji } from './ui'
 
 /**
  * Build a meal: pick a shape, fill the slots, see what it adds up to.
@@ -20,6 +22,17 @@ import { BigButton, Chip, EmojiPicker, Field, KIND_META, OCCASION_META, POP, Tex
  * sum as the answer — "2 of 5 dishes priced" is printed next to the number,
  * because a Shabbat dinner that "costs $14" is one where three dishes were
  * never priced, and the second reading is the one that matters.
+ *
+ * The headcount is the other half of it. A dinner for two and the same
+ * dinner for twelve are the same courses and very different shopping, so the
+ * slider scales every dish to as many batches as it takes, and the cost and
+ * the shopping list follow it. Nutrition stays per plate: a bigger table
+ * doesn't change what's on one.
+ *
+ * "New dish" inside a course opens the dish editor *over* this sheet rather
+ * than instead of it, and the saved dish lands in the course that asked for
+ * it. The draft meal — name, headcount, the other courses — stays exactly as
+ * it was, because losing it was the one thing that flow must not do.
  */
 export function MealSheet({
   meal,
@@ -37,17 +50,19 @@ export function MealSheet({
   const dishes = useData((s) => s.dishes)
   const templates = useData((s) => s.meal_templates)
   const celebrate = useMealsUI((s) => s.celebrate)
-  const openSheet = useMealsUI((s) => s.openSheet)
 
   const [name, setName] = useState('')
   const [emoji, setEmoji] = useState('')
   const [occasion, setOccasion] = useState('dinner')
   const [customOccasion, setCustomOccasion] = useState('')
   const [plannedFor, setPlannedFor] = useState('')
+  const [people, setPeople] = useState(DEFAULT_PEOPLE)
   const [templateId, setTemplateId] = useState<string | null>(null)
   const [courses, setCourses] = useState<MealCourse[]>([])
   const [notes, setNotes] = useState('')
   const [picking, setPicking] = useState<number | null>(null)
+  /** Index of the course a new dish is being written for, while it is. */
+  const [newFor, setNewFor] = useState<number | null>(null)
   const [adding, setAdding] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -59,6 +74,7 @@ export function MealSheet({
       setEmoji(meal.emoji)
       setOccasion(meal.occasion)
       setPlannedFor(meal.planned_for ?? '')
+      setPeople(meal.people > 0 ? meal.people : DEFAULT_PEOPLE)
       setTemplateId(meal.template_id)
       setCourses(meal.courses)
       setNotes(meal.notes ?? '')
@@ -69,6 +85,7 @@ export function MealSheet({
     }
     setCustomOccasion('')
     setPicking(null)
+    setNewFor(null)
     setAdding(false)
     setConfirmDelete(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -80,13 +97,11 @@ export function MealSheet({
     setName(t?.name ?? '')
     setEmoji(t?.emoji ?? '')
     setOccasion(t?.occasion ?? 'dinner')
+    setPeople(t?.people ?? DEFAULT_PEOPLE)
     setCourses((t?.slots ?? []).map((s) => ({ ...s, dish_id: null })))
   }
 
-  const summary = useMemo(
-    () => summariseMeal({ courses } as Meal, dishes),
-    [courses, dishes],
-  )
+  const summary = useMemo(() => summariseMeal({ courses, people }, dishes), [courses, people, dishes])
   const valid = name.trim().length > 0
 
   function collect(): MealInput {
@@ -96,6 +111,7 @@ export function MealSheet({
       occasion: occasion === '__custom' ? customOccasion.trim().toLowerCase() || 'dinner' : occasion,
       template_id: templateId,
       planned_for: plannedFor || null,
+      people,
       courses,
       notes: notes.trim() || null,
     }
@@ -126,7 +142,14 @@ export function MealSheet({
   const byId = new Map(dishes.map((d) => [d.id, d]))
   const isNewBlank = !meal && courses.length === 0
 
+  // Keyed on the role, not the course object, so the dish editor's form isn't
+  // reset by an unrelated re-render of this sheet while it is open.
+  const newCourse = newFor != null ? courses[newFor] ?? null : null
+  const newRole = newCourse?.role ?? null
+  const newDraft = useMemo<Partial<DishInput> | undefined>(() => (newRole ? { kind: newRole, name: '' } : undefined), [newRole])
+
   return (
+    <>
     <Sheet
       open={open}
       onClose={onClose}
@@ -190,12 +213,17 @@ export function MealSheet({
           </Field>
         </div>
 
+        <Field label="For how many" hint="Every dish gets made in as many batches as it takes. The cost and the shopping list follow.">
+          <Headcount value={people} onChange={setPeople} />
+        </Field>
+
         <Field label="Courses" hint="Tap a course to put a dish in it.">
           <div className="flex flex-col gap-2">
             <AnimatePresence initial={false}>
               {courses.map((course, i) => {
                 const dish = course.dish_id ? byId.get(course.dish_id) ?? null : null
                 const missing = course.dish_id && !dish
+                const batches = dish ? batchesFor(people, dish.servings) : 1
                 const meta = KIND_META[course.role] ?? KIND_META.other
                 return (
                   <motion.div
@@ -227,10 +255,11 @@ export function MealSheet({
                             {course.label}
                           </span>
                           <span
-                            className="block truncate text-[14.5px] font-extrabold"
+                            className="flex items-center gap-1.5 text-[14.5px] font-extrabold"
                             style={{ color: dish ? 'var(--m-ink)' : missing ? '#ff4d4d' : 'var(--m-ink-faint)' }}
                           >
-                            {dish ? dish.name : missing ? 'That dish was deleted' : 'Pick a dish'}
+                            <span className="min-w-0 truncate">{dish ? dish.name : missing ? 'That dish was deleted' : 'Pick a dish'}</span>
+                            {batches > 1 && <Batches n={batches} />}
                           </span>
                         </span>
                         <Icon name="chevron" size={15} />
@@ -266,14 +295,11 @@ export function MealSheet({
                               setCourses((list) => list.map((c, j) => (j === i ? { ...c, dish_id: id } : c)))
                               setPicking(null)
                             }}
-                            onNew={() =>
-                              openSheet({
-                                kind: 'dish',
-                                dish: null,
-                                draft: { kind: course.role, name: '' },
-                                note: `This will go in as ${course.label.toLowerCase()} once you save it.`,
-                              })
-                            }
+                            onNew={() => {
+                              fire('tap')
+                              setPicking(null)
+                              setNewFor(i)
+                            }}
                           />
                         </motion.div>
                       )}
@@ -306,7 +332,12 @@ export function MealSheet({
           </div>
         </Field>
 
-        {summary.dishes.length > 0 && <Totals summary={summary} />}
+        {summary.dishes.length > 0 && (
+          <>
+            <Totals summary={summary} />
+            <ShoppingCard name={name} people={people} courses={courses} dishes={dishes} />
+          </>
+        )}
 
         <Field label="Notes">
           <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Nuri's coming — make extra rice" />
@@ -324,6 +355,19 @@ export function MealSheet({
         </div>
       </div>
     </Sheet>
+
+    <DishSheet
+      open={newFor != null}
+      dish={null}
+      draft={newDraft}
+      note={newCourse ? `This will go in as ${newCourse.label.toLowerCase()} once you save it.` : undefined}
+      onClose={() => setNewFor(null)}
+      onSaved={(d) => {
+        setCourses((list) => list.map((c, j) => (j === newFor ? { ...c, dish_id: d.id } : c)))
+        setNewFor(null)
+      }}
+    />
+    </>
   )
 }
 
@@ -428,10 +472,27 @@ function AddCourse({ onAdd, onCancel }: { onAdd: (c: MealCourse) => void; onCanc
   )
 }
 
+/** A little "×3" for a dish that is made more than once. */
+function Batches({ n }: { n: number }) {
+  return (
+    <motion.span
+      key={n}
+      initial={{ scale: 1.4 }}
+      animate={{ scale: 1 }}
+      transition={POP}
+      className="shrink-0 rounded-full px-1.5 py-0.5 text-[10.5px] font-black tabular-nums leading-none"
+      style={{ background: 'var(--m-tomato-soft)', border: '1.5px solid var(--m-line)', color: 'var(--m-ink)' }}
+    >
+      ×{n}
+    </motion.span>
+  )
+}
+
 /** What the meal adds up to, with honesty about what was never filled in. */
 function Totals({ summary }: { summary: ReturnType<typeof summariseMeal> }) {
   const n = summary.dishes.length
   const { totals, known } = summary.nutrition
+  const repeated = summary.dishes.map((d, i) => [d, summary.batches[i]] as const).filter(([, b]) => b > 1)
   return (
     <motion.div layout className="m-card flex flex-col gap-3 p-4" style={{ background: 'var(--m-butter-soft)' }}>
       <div className="flex items-baseline justify-between">
@@ -445,10 +506,20 @@ function Totals({ summary }: { summary: ReturnType<typeof summariseMeal> }) {
       <div className="flex items-end gap-2">
         <span className="m-title text-[30px] leading-none">{summary.cost != null ? formatPrice(summary.cost) : '—'}</span>
         <span className="pb-1 text-[12px] font-bold" style={{ color: 'var(--m-ink-dim)' }}>
-          to make
+          to make for {summary.people}
           {summary.costKnown < n ? ` · ${summary.costKnown} of ${n} priced` : ''}
         </span>
       </div>
+
+      {repeated.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {repeated.map(([d, b]) => (
+            <Stat key={d.id} tone="var(--m-tomato-soft)">
+              {d.emoji} {d.name} ×{b}
+            </Stat>
+          ))}
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-2">
         {NUTRITION_KEYS.filter((k) => k !== 'sodium_mg' && k !== 'fiber_g').map((key) => {
@@ -474,6 +545,102 @@ function Totals({ summary }: { summary: ReturnType<typeof summariseMeal> }) {
       <span className="text-[11px] font-semibold" style={{ color: 'var(--m-ink-dim)' }}>
         Per plate — one serving of each dish. Blanks mean nobody has entered it yet.
       </span>
+    </motion.div>
+  )
+}
+
+/**
+ * Everything to buy, at this headcount, dish by dish — and a Copy button,
+ * because the place a shopping list is actually used is a messages thread or
+ * a notes app in the aisle, not this sheet.
+ */
+function ShoppingCard({
+  name,
+  people,
+  courses,
+  dishes,
+}: {
+  name: string
+  people: number
+  courses: MealCourse[]
+  dishes: Dish[]
+}) {
+  const [open, setOpen] = useState(false)
+  const groups = useMemo(() => shoppingList({ courses, people }, dishes), [courses, people, dishes])
+  const lines = groups.reduce((sum, g) => sum + g.lines.length, 0)
+
+  async function copy() {
+    const text = shoppingListText({ name: name.trim() || 'Meal', people }, groups)
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable')
+      await navigator.clipboard.writeText(text)
+      fire('success')
+      toast.success(`Shopping list for ${people} copied`)
+    } catch {
+      fire('error')
+      toast.error("Couldn't copy here — open the list and read it off instead")
+      setOpen(true)
+    }
+  }
+
+  return (
+    <motion.div layout className="m-card overflow-hidden" style={{ background: 'var(--m-mint-soft)' }}>
+      <div className="flex items-center gap-2 px-4 py-3">
+        <button
+          onClick={() => {
+            fire('tap')
+            setOpen((o) => !o)
+          }}
+          aria-expanded={open}
+          className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+        >
+          <span className="text-[22px]">🛒</span>
+          <span className="min-w-0 flex-1">
+            <span className="m-title block text-[16px]">Shopping list</span>
+            <span className="block text-[11.5px] font-bold" style={{ color: 'var(--m-ink-dim)' }}>
+              for {people} · {lines} {lines === 1 ? 'thing' : 'things'} across {groups.length} {groups.length === 1 ? 'dish' : 'dishes'}
+            </span>
+          </span>
+          <motion.span animate={{ rotate: open ? 90 : 0 }} transition={POP} className="grid place-items-center">
+            <Icon name="chevron" size={15} />
+          </motion.span>
+        </button>
+        <button onClick={() => void copy()} className="m-chip shrink-0" style={{ background: 'var(--m-card)' }}>
+          📋 Copy
+        </button>
+      </div>
+
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }}>
+            <div className="flex flex-col gap-3 px-4 pb-4" style={{ borderTop: '2px dashed var(--m-line)' }}>
+              {groups.map((g) => (
+                <div key={g.dish.id} className="flex flex-col gap-1 pt-3">
+                  <span className="flex items-center gap-1.5 text-[13.5px] font-black">
+                    <span>{g.dish.emoji}</span>
+                    <span className="min-w-0 truncate">{g.dish.name}</span>
+                    {g.batches > 1 && <Batches n={g.batches} />}
+                    <span className="ml-auto shrink-0 text-[11px] font-bold" style={{ color: 'var(--m-ink-faint)' }}>
+                      serves {g.dish.servings}
+                    </span>
+                  </span>
+                  {g.lines.length === 0 ? (
+                    <span className="text-[12.5px] font-semibold" style={{ color: 'var(--m-ink-faint)' }}>
+                      No ingredients written down for this one.
+                    </span>
+                  ) : (
+                    <ul className="flex flex-col gap-0.5 text-[13px] font-semibold" style={{ color: 'var(--m-ink)' }}>
+                      {g.lines.map((line, i) => (
+                        <li key={i}>• {lineText(line)}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 }

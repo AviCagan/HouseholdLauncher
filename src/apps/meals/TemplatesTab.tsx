@@ -10,7 +10,8 @@ import { addTemplate, removeTemplate, updateTemplate, type TemplateInput } from 
 import { ClipboardDoodle } from './doodles'
 import { Empty } from './DishesTab'
 import { useMealsUI } from './store'
-import { BigButton, Chip, EmojiPicker, Field, KIND_META, MCard, OCCASION_META, POP, TextInput, occasionLabel } from './ui'
+import { DEFAULT_PEOPLE } from './nutrition'
+import { BigButton, Chip, EmojiPicker, Field, Headcount, KIND_META, MCard, OCCASION_META, POP, TextInput, occasionLabel } from './ui'
 
 /**
  * The shapes meals come in.
@@ -19,6 +20,9 @@ import { BigButton, Chip, EmojiPicker, Field, KIND_META, MCard, OCCASION_META, P
  * challah, fish, soup, main, two sides, dessert, with no opinion about which
  * ones. Planning from it gives you those slots to fill. The built-ins cover
  * Shabbat and the holidays; anything can be edited, and new ones added.
+ *
+ * Each one also carries the number it is usually for — the headcount a meal
+ * planned from it starts at, before the slider on the meal moves it.
  */
 export function TemplatesTab() {
   const templates = useData((s) => s.meal_templates)
@@ -48,6 +52,7 @@ export function TemplatesTab() {
                   <span className="block truncate text-[15.5px] font-extrabold leading-tight">{t.name}</span>
                   <span className="mt-0.5 block text-[11.5px] font-bold" style={{ color: 'var(--m-ink-dim)' }}>
                     {occasionLabel(t.occasion)} · {t.slots.length} courses
+                    {t.people > 0 ? ` · usually for ${t.people}` : ''}
                     {t.is_builtin ? ' · built in' : ''}
                   </span>
                 </div>
@@ -88,6 +93,7 @@ export function TemplateSheet({ template, open, onClose }: { template: MealTempl
   const [emoji, setEmoji] = useState('')
   const [occasion, setOccasion] = useState('dinner')
   const [customOccasion, setCustomOccasion] = useState('')
+  const [people, setPeople] = useState(DEFAULT_PEOPLE)
   const [slots, setSlots] = useState<TemplateSlot[]>([])
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -99,6 +105,7 @@ export function TemplateSheet({ template, open, onClose }: { template: MealTempl
     const occ = template?.occasion ?? 'dinner'
     setOccasion(OCCASION_META[occ] ? occ : '__custom')
     setCustomOccasion(OCCASION_META[occ] ? '' : occ)
+    setPeople(template && template.people > 0 ? template.people : DEFAULT_PEOPLE)
     setSlots(template?.slots.length ? template.slots : [{ role: 'main', label: 'Main' }])
     setConfirmDelete(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -113,6 +120,7 @@ export function TemplateSheet({ template, open, onClose }: { template: MealTempl
       name,
       emoji: emoji || '📋',
       occasion: occasion === '__custom' ? customOccasion.trim().toLowerCase() || 'dinner' : occasion,
+      people,
       slots,
     }
     const ok = template ? await updateTemplate(template, input, profileId) : Boolean(await addTemplate(input, profileId))
@@ -161,6 +169,10 @@ export function TemplateSheet({ template, open, onClose }: { template: MealTempl
           {occasion === '__custom' && (
             <TextInput value={customOccasion} onChange={(e) => setCustomOccasion(e.target.value)} placeholder="birthday" className="mt-1 !py-2" />
           )}
+        </Field>
+
+        <Field label="Usually for" hint="Where the slider starts when a meal is planned from this.">
+          <Headcount value={people} onChange={setPeople} />
         </Field>
 
         <Field label="Courses" hint="Tap the little picture to change what kind of dish goes there.">

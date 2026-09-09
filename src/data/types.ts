@@ -484,6 +484,8 @@ export interface MealTemplate {
   /** 'weeknight' | 'special' | 'shabbat' | 'holiday' | anything else typed in. */
   occasion: string
   slots: TemplateSlot[]
+  /** How many this occasion is usually for; a meal planned from it starts here. */
+  people: number
   is_builtin: boolean
   sort_order: number
   created_by: string | null
@@ -505,6 +507,8 @@ export interface Meal {
   template_id: string | null
   /** ISO date (YYYY-MM-DD) or null for a saved combination with no date. */
   planned_for: string | null
+  /** Headcount. Batches, scaled amounts and cost are all derived from this. */
+  people: number
   courses: MealCourse[]
   notes: string | null
   created_by: string | null

@@ -95,6 +95,7 @@ function List({
                 <span className="mt-0.5 block text-[11.5px] font-bold" style={{ color: 'var(--m-ink-dim)' }}>
                   {occasionLabel(meal.occasion)}
                   {meal.planned_for ? ` · ${prettyDate(meal.planned_for)}` : ''}
+                  {meal.people > 0 ? ` · for ${meal.people}` : ''}
                   {` · ${filled}/${meal.courses.length} courses`}
                 </span>
                 <div className="mt-1.5 flex flex-wrap gap-1">

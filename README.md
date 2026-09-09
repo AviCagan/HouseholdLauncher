@@ -18,7 +18,7 @@ from Safari on iPhone.
 |---|---|
 | **Things** | To-dos, chores, shopping and wishlist. Recurring chores rest after each time and come back on their own; shopping groups by store and plans the driving order. |
 | **Owe & Owed** | Two lists — who owes us, and who we owe. Adds up a person listed more than once, and settling is a deliberate zipper-swipe, not a tap. |
-| **Meals** | Dishes with what they cost and what's in them, meals built from templates — Shabbat, every holiday, a weeknight — that add up cost and nutrition per plate, and a recipe importer that reads a link or an Instagram caption. The one app that's allowed to look like a sticker book. |
+| **Meals** | Dishes with what they cost and what's in them, meals built from templates — Shabbat, every holiday, a weeknight — that add up cost and nutrition per plate and scale to however many are coming — a slider sets the headcount, and batches, cost and a copyable shopping list follow it — and a recipe importer that reads a link or an Instagram caption. The one app that's allowed to look like a sticker book. |
 | **Bluetooth** | One switch per paired device, so the car can be dropped without four taps into system settings. Android only — see below. |
 
 Adding another is one entry in [`src/launcher/registry.ts`](src/launcher/registry.ts)

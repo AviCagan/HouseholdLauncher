@@ -78,6 +78,7 @@ export interface Row {
   emoji?: string
   occasion?: string
   planned_for?: string | null
+  people?: number
 
   // debts
   counterparty?: string
@@ -352,6 +353,7 @@ function classifyMeal(
   }
 
   const when = record.planned_for ? ` for ${prettyDate(record.planned_for)}` : ''
+  const heads = record.people && record.people > 0 ? ` · ${record.people} people` : ''
   return {
     event: 'meal_planned',
     appId: 'meals',
@@ -359,7 +361,7 @@ function classifyMeal(
     targetId: null,
     push: {
       title: `${emoji} ${name}`,
-      body: `Meal planned${when}`,
+      body: `Meal planned${when}${heads}`,
       tab: 'meals',
       itemId: record.id,
       tag: `meal-${record.id}`,

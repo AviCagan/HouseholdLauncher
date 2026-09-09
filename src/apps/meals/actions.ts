@@ -121,7 +121,7 @@ export const removeDish = (dish: Dish): Promise<boolean> =>
 
 // --- meals --------------------------------------------------------------------
 
-export type MealInput = Pick<Meal, 'name' | 'emoji' | 'occasion' | 'template_id' | 'planned_for' | 'courses' | 'notes'>
+export type MealInput = Pick<Meal, 'name' | 'emoji' | 'occasion' | 'template_id' | 'planned_for' | 'people' | 'courses' | 'notes'>
 
 export async function addMeal(input: MealInput, profileId: string | null): Promise<Meal | null> {
   const name = input.name.trim()
@@ -152,7 +152,7 @@ export const removeMeal = (meal: Meal): Promise<boolean> =>
 
 // --- templates ----------------------------------------------------------------
 
-export type TemplateInput = Pick<MealTemplate, 'name' | 'emoji' | 'occasion' | 'slots'>
+export type TemplateInput = Pick<MealTemplate, 'name' | 'emoji' | 'occasion' | 'people' | 'slots'>
 
 export async function addTemplate(input: TemplateInput, profileId: string | null): Promise<MealTemplate | null> {
   const name = input.name.trim()
