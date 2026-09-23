@@ -3,7 +3,16 @@ import { useData } from '@/store/useData'
 import { newId, nowIso } from '@/data/adapter'
 import { fire } from '@/lib/haptics'
 import { formatPrice } from '@/lib/money'
-import { SETTLED_MARK, appendNote, normaliseName, settledAgainst, type SettlePlan } from './summary'
+import {
+  PAYMENT_MARK,
+  SETTLED_MARK,
+  appendNote,
+  normaliseName,
+  settledAgainst,
+  type Allocation,
+  type PaymentPlan,
+  type SettlePlan,
+} from './summary'
 import type { Debt, DebtDirection } from '@/data/types'
 
 /**
@@ -157,38 +166,79 @@ export async function removeDebt(debt: Debt): Promise<void> {
 /**
  * Carry out a settlement plan.
  *
- * Several rows change in one go, and each one is written the way marking a
- * debt paid is written anywhere else — `is_paid` and `paid_at` together, so
- * the database's own check accepts it — plus a line in the notes saying it
- * was the two lists cancelling out rather than money changing hands.
- *
- * Applied optimistically as a set and committed one row at a time. If a
- * write fails part way, only the rows not yet committed are put back: the
- * ones already written are real and realtime will confirm them, and undoing
- * them locally would show a state the database no longer agrees with.
+ * Several rows change in one go, each with a line in its notes saying it was
+ * the two lists cancelling out rather than money changing hands.
  */
 export async function applySettlement(plan: SettlePlan, profileId: string | null): Promise<boolean> {
   const at = nowIso()
-  const stamp = new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
-  const paidLine = `Paid via ${SETTLED_MARK} with ${plan.name} · ${stamp}`
-  const reducedLine = (by: number) =>
-    `-${formatPrice(by)} via ${SETTLED_MARK} with ${plan.name}, for ${settledAgainst(plan)} · ${stamp}`
+  const stamp = shortDate(at)
+  const changes = allocationChanges(
+    { payOff: [...plan.wipe, ...plan.payOff], reduce: plan.reduce },
+    at,
+    profileId,
+    `Paid via ${SETTLED_MARK} with ${plan.name} · ${stamp}`,
+    (by) =>
+      `-${formatPrice(by)} via ${SETTLED_MARK} with ${plan.name}, for ${settledAgainst(plan)} · ${stamp}`,
+  )
+  return commitChanges(changes, at, {
+    none: "Couldn't settle that",
+    some: 'Settled part of it — check the lists',
+  })
+}
 
-  const changes: { before: Debt; patch: Partial<Debt> }[] = []
-  for (const debt of [...plan.wipe, ...plan.payOff]) {
-    changes.push({
-      before: debt,
-      patch: {
-        is_paid: true,
-        paid_at: at,
-        paid_by: profileId,
-        updated_by: profileId,
-        notes: appendNote(debt.notes, paidLine),
-      },
-    })
-  }
-  if (plan.reduce) {
-    const { debt, by } = plan.reduce
+/**
+ * Record one payment to or from a person, smallest entries first.
+ *
+ * Written exactly like a settlement — cleared entries marked paid, at most
+ * one trimmed — with a note on each saying which payment did it, so an entry
+ * that reads $2 still shows it started life as $30.
+ */
+export async function applyPayment(plan: PaymentPlan, profileId: string | null): Promise<boolean> {
+  const at = nowIso()
+  const stamp = shortDate(at)
+  const whom = plan.direction === 'we_owe' ? `to ${plan.name}` : `from ${plan.name}`
+  const payment = `${formatPrice(plan.amount)} ${whom}`
+  const changes = allocationChanges(
+    plan,
+    at,
+    profileId,
+    `Cleared · ${PAYMENT_MARK} ${payment} · ${stamp}`,
+    (by) => `-${formatPrice(by)} · ${PAYMENT_MARK} ${payment} · ${stamp}`,
+  )
+  return commitChanges(changes, at, {
+    none: "Couldn't record that payment",
+    some: 'Recorded part of it — check the list',
+  })
+}
+
+type Change = { before: Debt; patch: Partial<Debt> }
+
+const shortDate = (iso: string) =>
+  new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+
+/**
+ * The row writes for an allocation. Paid rows carry `is_paid` and `paid_at`
+ * together, so the database's `paid_has_timestamp` check accepts them.
+ */
+function allocationChanges(
+  allocation: Allocation,
+  at: string,
+  profileId: string | null,
+  paidLine: string,
+  reducedLine: (by: number) => string,
+): Change[] {
+  const changes: Change[] = allocation.payOff.map((debt) => ({
+    before: debt,
+    patch: {
+      is_paid: true,
+      paid_at: at,
+      paid_by: profileId,
+      updated_by: profileId,
+      notes: appendNote(debt.notes, paidLine),
+    },
+  }))
+  if (allocation.reduce) {
+    const { debt, by } = allocation.reduce
     changes.push({
       before: debt,
       patch: {
@@ -198,7 +248,20 @@ export async function applySettlement(plan: SettlePlan, profileId: string | null
       },
     })
   }
+  return changes
+}
 
+/**
+ * Applied optimistically as a set, committed one row at a time. If a write
+ * fails part way, only the rows not yet committed are put back: the ones
+ * already written are real and realtime will confirm them, and undoing them
+ * locally would show a state the database no longer agrees with.
+ */
+async function commitChanges(
+  changes: Change[],
+  at: string,
+  failure: { none: string; some: string },
+): Promise<boolean> {
   fire('zipperDone')
   for (const c of changes) replaceRow(c.before.id, { ...c.before, ...c.patch, updated_at: at })
 
@@ -209,8 +272,8 @@ export async function applySettlement(plan: SettlePlan, profileId: string | null
     } catch (err) {
       for (const c of changes.slice(i)) replaceRow(c.before.id, c.before)
       fire('error')
-      toast.error(i === 0 ? "Couldn't settle that" : 'Settled part of it — check the lists')
-      console.error('[debts] settlement', err)
+      toast.error(i === 0 ? failure.none : failure.some)
+      console.error('[debts]', err)
       return false
     }
   }

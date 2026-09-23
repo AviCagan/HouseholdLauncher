@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { Icon } from '@/components/primitives/Icon'
 import { Section, EmptyState } from '@/components/shell/Screen'
@@ -11,7 +11,9 @@ import { markPaid, markUnpaid, removeDebt } from './actions'
 import { AddDebtBar } from './AddDebtBar'
 import { DebtEditSheet } from './DebtEditSheet'
 import { SettleSheet } from './SettleSheet'
+import { PaySheet, type PayTarget } from './PaySheet'
 import {
+  PAYMENT_MARK,
   SETTLED_MARK,
   openDebts,
   outstandingTotal,
@@ -38,6 +40,7 @@ export function OweApp() {
   const [direction, setDirection] = useState<DebtDirection>('owed_to_us')
   const [editing, setEditing] = useState<Debt | null>(null)
   const [settling, setSettling] = useState<SettlePlan | null>(null)
+  const [paying, setPaying] = useState<PayTarget | null>(null)
   const debts = useData((s) => s.debts)
   const profileId = useProfile((s) => s.profileId)
 
@@ -57,6 +60,7 @@ export function OweApp() {
   }
 
   const inbound = direction === 'owed_to_us'
+  const closePay = useCallback(() => setPaying(null), [])
 
   return (
     <div className="flex h-full flex-col">
@@ -78,6 +82,11 @@ export function OweApp() {
           tone={inbound ? 'var(--ok)' : 'var(--warn)'}
           settleable={canSettle}
           onSettle={openSettle}
+          payLabel={inbound ? 'Got paid' : 'Pay'}
+          onPay={(key) => {
+            fire('tap')
+            setPaying({ key, direction })
+          }}
         />
 
         {open.length === 0 && paid.length === 0 ? (
@@ -134,6 +143,7 @@ export function OweApp() {
       <AddDebtBar direction={direction} />
       <DebtEditSheet debt={editing} onClose={() => setEditing(null)} />
       <SettleSheet plan={settling} onClose={() => setSettling(null)} />
+      <PaySheet target={paying} onClose={closePay} />
     </div>
   )
 }
@@ -259,6 +269,8 @@ function SummaryPanel({
   tone,
   settleable,
   onSettle,
+  payLabel,
+  onPay,
 }: {
   people: ReturnType<typeof summarise>
   total: number
@@ -267,6 +279,9 @@ function SummaryPanel({
   /** Keys of people who are on both lists, and so can be settled. */
   settleable: Set<string>
   onSettle: (key: string) => void
+  payLabel: string
+  /** Record a payment against this person's whole balance. */
+  onPay: (key: string) => void
 }) {
   if (people.length === 0) return null
 
@@ -286,11 +301,31 @@ function SummaryPanel({
 
       <div className="scroll-x -mx-3 flex gap-2 px-3 pb-1">
         {people.map((person) => (
-          <div
-            key={person.key}
-            className="relative min-w-[124px] shrink-0 rounded-2xl px-3 py-2.5"
-            style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
-          >
+          // The settle badge sits beside the card's button rather than inside
+          // it, since a button can't contain another button.
+          <div key={person.key} className="relative shrink-0">
+            <button
+              onClick={() => onPay(person.key)}
+              aria-label={`${payLabel}: ${person.name}`}
+              className="block min-w-[124px] rounded-2xl px-3 py-2.5 text-left"
+              style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+            >
+              <span className="block truncate text-[13px] font-semibold">{person.name}</span>
+              <span className="block text-[18px] font-bold tabular-nums" style={{ color: tone }}>
+                {formatPrice(person.total)}
+              </span>
+              <span className="flex items-baseline justify-between gap-2 text-[11px]">
+                {/* Only shown when it's actually a roll-up — "1 entry" under
+                    every single-entry card is noise that makes the useful
+                    ones harder to spot. */}
+                <span style={{ color: 'var(--text-faint)' }}>
+                  {person.count > 1 ? `${person.count} entries` : ''}
+                </span>
+                <span className="font-semibold" style={{ color: 'var(--accent-text)' }}>
+                  {payLabel}
+                </span>
+              </span>
+            </button>
             {settleable.has(person.key) && (
               <button
                 onClick={() => onSettle(person.key)}
@@ -300,18 +335,6 @@ function SummaryPanel({
               >
                 ⚖️
               </button>
-            )}
-            <span className="block truncate text-[13px] font-semibold">{person.name}</span>
-            <span className="block text-[18px] font-bold tabular-nums" style={{ color: tone }}>
-              {formatPrice(person.total)}
-            </span>
-            {/* Only shown when it's actually a roll-up — "1 entry" under every
-                single-entry card is noise that makes the useful ones harder to
-                spot. */}
-            {person.count > 1 && (
-              <span className="block text-[11px]" style={{ color: 'var(--text-faint)' }}>
-                {person.count} entries
-              </span>
             )}
           </div>
         ))}
@@ -348,12 +371,13 @@ function DebtRow({
             {formatPrice(debt.amount_cents)}
           </span>
         </span>
-        {(debt.reason || debt.notes?.includes(SETTLED_MARK)) && (
+        {(debt.reason || marker(debt)) && (
           <span
             className="mt-0.5 block truncate text-[12.5px]"
             style={{ color: 'var(--text-dim)' }}
           >
-            {debt.notes?.includes(SETTLED_MARK) ? '⚖️ ' : ''}
+            {marker(debt) === 'paid' ? `💸 Partly paid${debt.reason ? ' · ' : ''}` : ''}
+            {marker(debt) === 'settled' ? '⚖️ ' : ''}
             {debt.reason}
           </span>
         )}
@@ -395,7 +419,8 @@ function PaidRow({
           </span>
         </span>
         <span className="mt-0.5 block truncate text-[11.5px]" style={{ color: 'var(--text-faint)' }}>
-          {debt.notes?.includes(SETTLED_MARK) ? '⚖️ Settled · ' : ''}
+          {marker(debt) === 'settled' ? '⚖️ Settled · ' : ''}
+          {marker(debt) === 'paid' ? '💸 Paid down · ' : ''}
           {debt.reason ? `${debt.reason} · ` : ''}
           {paidLabel(debt.paid_at)}
         </span>
@@ -419,6 +444,18 @@ function PaidRow({
       </button>
     </div>
   )
+}
+
+/**
+ * Which bookkeeping last touched an entry, read from its notes. The newest
+ * line wins, so an entry settled and later paid down shows the payment.
+ */
+function marker(debt: Debt): 'settled' | 'paid' | null {
+  const notes = debt.notes ?? ''
+  const settled = notes.lastIndexOf(SETTLED_MARK)
+  const paid = notes.lastIndexOf(PAYMENT_MARK)
+  if (settled < 0 && paid < 0) return null
+  return paid > settled ? 'paid' : 'settled'
 }
 
 /** "Paid 3 Feb, 2:15 pm" — the date and time settling was recorded. */

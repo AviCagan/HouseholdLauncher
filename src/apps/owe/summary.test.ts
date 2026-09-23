@@ -6,6 +6,7 @@ import {
   openDebts,
   outstandingTotal,
   paidDebts,
+  planPayment,
   planSettlement,
   settleCandidates,
   settledAgainst,
@@ -254,5 +255,104 @@ describe('settling balances', () => {
     expect(appendNote(null, 'x')).toBe('x')
     expect(appendNote('  ', 'x')).toBe('x')
     expect(appendNote('keep this', 'x')).toBe('keep this\nx')
+  })
+})
+
+describe('paying down', () => {
+  const nuri = (patch: Partial<Debt>) =>
+    debt({ counterparty: 'Nuri', counterparty_key: 'nuri', direction: 'we_owe', ...patch })
+
+  /** What the rows look like once a plan has been written, as the app would. */
+  function apply(rows: Debt[], plan: NonNullable<ReturnType<typeof planPayment>>): Debt[] {
+    const paid = new Set(plan.payOff.map((d) => d.id))
+    return rows.map((d) =>
+      paid.has(d.id)
+        ? { ...d, is_paid: true, paid_at: 'x' }
+        : plan.reduce?.debt.id === d.id
+          ? { ...d, amount_cents: d.amount_cents - plan.reduce.by }
+          : d,
+    )
+  }
+
+  it('clears the smallest entry, then trims the next one', () => {
+    // We owe Nuri 482 + 30 + 2 and send him 30: the 2 is paid off and the 30
+    // comes down by the remaining 28. The 482 isn't touched.
+    const rows = [
+      nuri({ id: 'big', amount_cents: 48200 }),
+      nuri({ id: 'mid', amount_cents: 3000 }),
+      nuri({ id: 'small', amount_cents: 200 }),
+    ]
+    const plan = planPayment(rows, 'nuri', 'we_owe', 3000)!
+    expect(plan.payOff.map((d) => d.id)).toEqual(['small'])
+    expect(plan.reduce).toEqual({ debt: rows[1], by: 2800 })
+    expect(plan.before).toBe(51400)
+    expect(plan.remaining).toBe(48400)
+    expect(plan.excess).toBe(0)
+  })
+
+  it('carries on with the same pattern on the next payment', () => {
+    const rows = [
+      nuri({ id: 'big', amount_cents: 48200 }),
+      nuri({ id: 'mid', amount_cents: 3000 }),
+      nuri({ id: 'small', amount_cents: 200 }),
+    ]
+    const afterFirst = apply(rows, planPayment(rows, 'nuri', 'we_owe', 3000)!)
+
+    // The 30 is now the 2 that's left of it, so a 50 payment finishes it and
+    // starts on the 482.
+    const second = planPayment(afterFirst, 'nuri', 'we_owe', 5000)!
+    expect(second.payOff.map((d) => d.id)).toEqual(['mid'])
+    expect(second.reduce?.debt.id).toBe('big')
+    expect(second.reduce?.by).toBe(4800)
+    expect(second.remaining).toBe(43400)
+  })
+
+  it('pays an entry off rather than trimming it to zero', () => {
+    // The database refuses a zero amount, so an exact fit has to be "paid".
+    const rows = [nuri({ id: 'a', amount_cents: 1000 }), nuri({ id: 'b', amount_cents: 2500 })]
+    const plan = planPayment(rows, 'nuri', 'we_owe', 1000)!
+    expect(plan.payOff.map((d) => d.id)).toEqual(['a'])
+    expect(plan.reduce).toBeNull()
+  })
+
+  it('pays everything off when the amount is the whole balance', () => {
+    const rows = [nuri({ amount_cents: 1000 }), nuri({ amount_cents: 2500 })]
+    const plan = planPayment(rows, 'nuri', 'we_owe', 3500)!
+    expect(plan.payOff).toHaveLength(2)
+    expect(plan.reduce).toBeNull()
+    expect(plan.remaining).toBe(0)
+  })
+
+  it('reports an overpayment instead of quietly swallowing it', () => {
+    const rows = [nuri({ amount_cents: 1000 })]
+    const plan = planPayment(rows, 'nuri', 'we_owe', 1500)!
+    expect(plan.amount).toBe(1000)
+    expect(plan.excess).toBe(500)
+  })
+
+  it('only touches that person, in that direction, and only open entries', () => {
+    const rows = [
+      nuri({ id: 'mine', amount_cents: 2000 }),
+      nuri({ id: 'theirs', direction: 'owed_to_us', amount_cents: 100 }),
+      nuri({ id: 'done', amount_cents: 50, is_paid: true, paid_at: 'x' }),
+      debt({ id: 'sam', counterparty: 'Sam', counterparty_key: 'sam', direction: 'we_owe', amount_cents: 100 }),
+    ]
+    const plan = planPayment(rows, 'nuri', 'we_owe', 500)!
+    expect(plan.payOff).toEqual([])
+    expect(plan.reduce?.debt.id).toBe('mine')
+    expect(plan.before).toBe(2000)
+  })
+
+  it('picks the older of two equal entries, so both phones agree', () => {
+    const rows = [nuri({ id: 'newer', amount_cents: 500 }), nuri({ id: 'older', amount_cents: 500 })]
+    rows[1].created_at = '2025-01-01T00:00:00.000Z'
+    expect(planPayment(rows, 'nuri', 'we_owe', 300)!.reduce?.debt.id).toBe('older')
+  })
+
+  it('has nothing to plan without an amount or a balance', () => {
+    const rows = [nuri({ amount_cents: 1000 })]
+    expect(planPayment(rows, 'nuri', 'we_owe', 0)).toBeNull()
+    expect(planPayment(rows, 'nuri', 'owed_to_us', 500)).toBeNull()
+    expect(planPayment(rows, 'sam', 'we_owe', 500)).toBeNull()
   })
 })

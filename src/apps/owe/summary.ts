@@ -202,23 +202,7 @@ export function planSettlement(debts: Debt[], key: string): SettlePlan | null {
   const wipe = smallerIsInbound ? inbound : outbound
   const amount = smallerIsInbound ? inTotal : outTotal
 
-  const ascending = [...(smallerIsInbound ? outbound : inbound)].sort(
-    (a, b) => a.amount_cents - b.amount_cents || a.created_at.localeCompare(b.created_at),
-  )
-
-  const payOff: Debt[] = []
-  let reduce: SettlePlan['reduce'] = null
-  let left = amount
-  for (const debt of ascending) {
-    if (left <= 0) break
-    if (debt.amount_cents <= left) {
-      payOff.push(debt)
-      left -= debt.amount_cents
-    } else {
-      reduce = { debt, by: left }
-      left = 0
-    }
-  }
+  const { payOff, reduce } = allocateSmallestFirst(smallerIsInbound ? outbound : inbound, amount)
 
   return {
     key,
@@ -230,6 +214,99 @@ export function planSettlement(debts: Debt[], key: string): SettlePlan | null {
     payOff,
     reduce,
     remaining: Math.max(inTotal, outTotal) - amount,
+  }
+}
+
+export interface Allocation {
+  /** Entries the amount covers in full — marked paid. */
+  payOff: Debt[]
+  /** The first entry it doesn't cover, trimmed by what was left. */
+  reduce: { debt: Debt; by: number } | null
+}
+
+/**
+ * Spend an amount across entries, smallest first.
+ *
+ * Shared by settling and by paying down, so both tell the same story: whole
+ * entries close while they fit, then at most one is trimmed. The trimmed
+ * entry is now smaller, so the next payment reaches it first — repeated
+ * payments finish off the small debts before they start on the big one.
+ *
+ * An entry is only trimmed when it is bigger than what's left, so it never
+ * reaches zero; an exact fit is paid instead. The database refuses a zero
+ * amount, so this is load-bearing rather than tidy.
+ *
+ * Ties go to the older entry, so both phones pick the same one.
+ */
+export function allocateSmallestFirst(rows: Debt[], amount: number): Allocation {
+  const ascending = [...rows].sort(
+    (a, b) => a.amount_cents - b.amount_cents || a.created_at.localeCompare(b.created_at),
+  )
+
+  const payOff: Debt[] = []
+  let reduce: Allocation['reduce'] = null
+  let left = amount
+  for (const debt of ascending) {
+    if (left <= 0) break
+    if (debt.amount_cents <= left) {
+      payOff.push(debt)
+      left -= debt.amount_cents
+    } else {
+      reduce = { debt, by: left }
+      left = 0
+    }
+  }
+  return { payOff, reduce }
+}
+
+// --- Paying down ---------------------------------------------------------------
+
+/** Written into the notes of every entry a payment touched. */
+export const PAYMENT_MARK = 'paid down'
+
+export interface PaymentPlan extends Allocation {
+  key: string
+  name: string
+  direction: DebtDirection
+  /** What gets recorded, in cents — never more than the balance. */
+  amount: number
+  /** How far the typed amount went over the balance. The sheet refuses it. */
+  excess: number
+  /** The person's balance in this direction, before and after. */
+  before: number
+  remaining: number
+}
+
+/**
+ * One payment against a person's balance in one direction.
+ *
+ * Null when there's nothing open or no amount yet. An amount over the
+ * balance is reported as `excess` rather than quietly capped: money that
+ * went nowhere in the books is a typo to point out, not something to absorb.
+ */
+export function planPayment(
+  debts: Debt[],
+  key: string,
+  direction: DebtDirection,
+  amountCents: number,
+): PaymentPlan | null {
+  const open = debts.filter(
+    (d) => d.direction === direction && !d.is_paid && normaliseName(d.counterparty) === key,
+  )
+  if (open.length === 0 || amountCents <= 0) return null
+
+  const before = open.reduce((t, d) => t + d.amount_cents, 0)
+  const amount = Math.min(amountCents, before)
+
+  return {
+    key,
+    name: pickDisplayName(open),
+    direction,
+    amount,
+    excess: amountCents - amount,
+    before,
+    remaining: before - amount,
+    ...allocateSmallestFirst(open, amount),
   }
 }
 
