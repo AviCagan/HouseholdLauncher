@@ -38,6 +38,11 @@ jobs:
       # ubuntu-latest ships the Android SDK, but pinning it makes the build
       # reproducible instead of dependent on the runner image of the day.
       - uses: android-actions/setup-android@v3
+        with:
+          # The action's default is "tools platform-tools", but cmdline-tools
+          # 16 dropped the legacy "tools" package, so asking for it fails the
+          # whole build before anything compiles.
+          packages: platform-tools
 
       - run: npm ci
 
