@@ -22,6 +22,10 @@ export type NotifyEvent =
   | 'meal_planned'
   // A&J Encyclopedia
   | 'entry_added'
+  // Watched
+  | 'show_added'
+  | 'season_finished'
+  | 'show_finished'
 
 export interface Push {
   title: string
@@ -63,6 +67,8 @@ export const APP_FOR: Record<string, string> = {
   dishes: 'meals',
   meals: 'meals',
   lexicon_entries: 'encyclopedia',
+  watch_shows: 'watched',
+  watch_seasons: 'watched',
 }
 
 export interface Row {
@@ -87,6 +93,15 @@ export interface Row {
   term?: string
   part_of_speech?: string
   definition?: string
+
+  // watch_shows, watch_seasons
+  stage?: string
+  shelf_owner?: string | null
+  watched_before?: boolean
+  show_id?: string
+  season?: number
+  show_title?: string | null
+  finished_at?: string | null
 
   // debts
   counterparty?: string
@@ -137,6 +152,8 @@ export function classify(body: WebhookBody): Classified | null {
   if (table === 'debts') return classifyDebt(type, record, old_record)
   if (table === 'dishes' || table === 'meals') return classifyMeal(table, type, record)
   if (table === 'lexicon_entries') return classifyEntry(type, record)
+  if (table === 'watch_shows') return classifyShow(type, record, old_record)
+  if (table === 'watch_seasons') return classifySeason(type, record, old_record)
 
   const tab = TAB_FOR[table]
   const noun = NOUN[table] ?? 'item'
@@ -405,6 +422,83 @@ function classifyEntry(type: WebhookBody['type'], record: Row): Classified | nul
       tab: 'entries',
       itemId: record.id,
       tag: `entry-${record.id}`,
+    },
+  }
+}
+
+/**
+ * Watched announces three things: a show going on a shelf or into the
+ * lineup, a season finished, and a show finished. The last two carry a deep
+ * link straight to the rating — whoever wasn't holding the phone is the one
+ * who still needs to score it.
+ *
+ * Shows added after the fact to be rated aren't news, and neither is a show
+ * moving between shelves or getting reordered: the trigger only fires on an
+ * insert or a change of stage, and only a change to "watched" says anything.
+ */
+function classifyShow(type: WebhookBody['type'], record: Row, old: Row | null): Classified | null {
+  const title = record.title?.trim() || 'A show'
+  if (type === 'INSERT') {
+    if (record.watched_before) return null
+    const onShelf = record.stage === 'shelf'
+    const where = onShelf
+      ? record.shelf_owner === null || record.shelf_owner === undefined
+        ? 'On the shared shelf'
+        : record.shelf_owner === record.created_by
+          ? 'On their shelf'
+          : 'On your shelf'
+      : record.stage === 'watching'
+        ? 'Started watching'
+        : 'Slotted into the lineup'
+    return {
+      event: 'show_added',
+      appId: 'watched',
+      actorId: record.created_by ?? null,
+      targetId: null,
+      push: {
+        title: `📺 ${title}`,
+        body: where,
+        tab: onShelf ? 'shelf' : 'onair',
+        itemId: record.id,
+        tag: `watch-add-${record.id}`,
+      },
+    }
+  }
+  if (type === 'UPDATE' && old && old.stage !== 'watched' && record.stage === 'watched' && !record.watched_before) {
+    return {
+      event: 'show_finished',
+      appId: 'watched',
+      actorId: record.updated_by ?? null,
+      targetId: null,
+      push: {
+        title: `🏁 ${title}`,
+        body: 'Finished — add your rating',
+        tab: 'rate:0',
+        itemId: record.id,
+        tag: `watch-done-${record.id}`,
+      },
+    }
+  }
+  return null
+}
+
+function classifySeason(type: WebhookBody['type'], record: Row, old: Row | null): Classified | null {
+  if (record.watched_before || !record.finished_at || !record.show_id || !record.season) return null
+  // Already finished before this write: an edit, not news.
+  if (type === 'UPDATE' && old?.finished_at) return null
+  if (type !== 'INSERT' && type !== 'UPDATE') return null
+  const title = record.show_title?.trim() || 'A show'
+  return {
+    event: 'season_finished',
+    appId: 'watched',
+    actorId: record.updated_by ?? record.created_by ?? null,
+    targetId: null,
+    push: {
+      title: `🏁 ${title} · Season ${record.season}`,
+      body: 'Season done — add your rating',
+      tab: `rate:${record.season}`,
+      itemId: record.show_id,
+      tag: `watch-season-${record.show_id}-${record.season}`,
     },
   }
 }

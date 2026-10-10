@@ -9,6 +9,7 @@ import { ThingsApp } from '@/apps/things/ThingsApp'
 import { OweApp } from '@/apps/owe/OweApp'
 import { MealsApp } from '@/apps/meals/MealsApp'
 import { EncyclopediaApp } from '@/apps/encyclopedia/EncyclopediaApp'
+import { WatchedApp } from '@/apps/watched/WatchedApp'
 
 /**
  * Renders whichever app is open, with the guards that every app shares.
@@ -74,6 +75,8 @@ export function AppHost({ appId }: { appId: string }) {
       {appId === 'meals' && <MealsApp />}
       {/* Likewise the Encyclopedia: its title page is the header. */}
       {appId === 'encyclopedia' && <EncyclopediaApp />}
+      {/* And Watched: it's a television, the cabinet is the frame. */}
+      {appId === 'watched' && <WatchedApp />}
       {appId === 'owe' && (
         <AppFrame name={app.name} color={app.color} onBack={goHome}>
           <OweApp />

@@ -556,3 +556,104 @@ export interface LexiconEntry {
   created_at: string
   updated_at: string
 }
+
+// ---------------------------------------------------------------------------
+// Watched
+// ---------------------------------------------------------------------------
+
+/**
+ * Where a show sits. One row per show for its whole life — shelf, lineup,
+ * playing, watched — so its ratings and history stay in one place.
+ */
+export type WatchStage = 'shelf' | 'lineup' | 'watching' | 'watched' | 'dropped'
+
+/** [season, number, runtime minutes | null, airdate "YYYY-MM-DD" | null] */
+export type EpisodeTuple = [number, number, number | null, string | null]
+
+/** One season as TVmaze announces it, including seasons with no episodes yet. */
+export interface SeasonInfo {
+  n: number
+  /** Episodes planned, when announced. Can exceed the episodes listed so far. */
+  eps: number | null
+  premiere: string | null
+  end: string | null
+}
+
+export interface WatchShow {
+  id: string
+  /** Null for a show typed in by hand. */
+  tvmaze_id: number | null
+  title: string
+  premiered: string | null
+  ended: string | null
+  /** TVmaze's words: Running, Ended, To Be Determined, In Development. */
+  status: string | null
+  network: string | null
+  genres: string[]
+  summary: string | null
+  poster_url: string | null
+  avg_runtime: number | null
+  episodes: EpisodeTuple[]
+  seasons: SeasonInfo[]
+  next_airdate: string | null
+  data_updated_at: string | null
+  stage: WatchStage
+  /** Whose shelf. Null is the shared one. */
+  shelf_owner: string | null
+  shelf_order: number
+  lineup_order: number
+  /** Watch it as it airs, alongside whatever else is on. */
+  live: boolean
+  plan_from: number | null
+  plan_to: number | null
+  current_season: number | null
+  /** Episodes done within current_season, as of progress_at. */
+  current_episode: number
+  /** When someone last said where they were. Null: estimate it. */
+  progress_at: string | null
+  started_at: string | null
+  finished_at: string | null
+  /** Added after the fact to be rated. Never counts toward the pace. */
+  watched_before: boolean
+  created_by: string | null
+  updated_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** When one season was started and finished — what the pace is measured from. */
+export interface WatchSeason {
+  id: string
+  show_id: string
+  season: number
+  /** The show's title when the row was made — for notifications. */
+  show_title: string | null
+  started_at: string | null
+  finished_at: string | null
+  watched_before: boolean
+  created_by: string | null
+  updated_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** One person's score for a season, or for the whole show when season is 0. */
+export interface WatchRating {
+  id: string
+  show_id: string
+  season: number
+  profile_id: string
+  /** The score doubled, so half points are whole: 17 is 8.5. */
+  score_x2: number
+  created_at: string
+  updated_at: string
+}
+
+export interface WatchSettings {
+  singleton: true
+  pace_mode: 'auto' | 'manual'
+  /** Minutes of TV a week. */
+  pace_minutes: number
+  updated_by: string | null
+  updated_at: string
+}

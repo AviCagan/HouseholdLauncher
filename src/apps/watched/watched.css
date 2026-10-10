@@ -1,0 +1,492 @@
+/*
+  Watched — the one app that is allowed to be a television.
+
+  The whole app is a set: a walnut cabinet, a curved glass screen with
+  scanlines and a little glow, chunky plastic channel buttons along the
+  bottom, and the red / white / yellow of the AV cables doing the job an
+  accent colour does anywhere else. Words that are the TV talking — channel
+  numbers, dates, estimates, scores — are in VT323, the on-screen-display
+  font; words that are the show talking stay in the system sans, because a
+  list of titles in a pixel font is unreadable after the third one.
+
+  The screen is always dark, light theme or not. It is a CRT; that is the
+  point. Scoped under `.tv` like `.meals` and `.lex`, so none of it leaks.
+
+  Motion — the power-on, the static between channels, the flicker — is all
+  CSS animation, so the launcher's reduce-motion switch (and the OS one)
+  turns every bit of it off through the global rule in styles/index.css.
+*/
+
+@layer theme, base, components, utilities;
+
+.tv {
+  --osd: 'VT323', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  --tv-red: #ec4a3c;
+  --tv-white: #f3efe4;
+  --tv-yellow: #f8c534;
+  --tv-osd: #61ff9a;
+  --tv-amber: #ffbf47;
+  --tv-cyan: #6fe7ff;
+
+  --tv-glass: #0a1118;
+  --tv-phosphor: #ebf4ff;
+  --tv-dim: #9fb0c2;
+  --tv-faint: #62717f;
+  --tv-line: rgb(150 200 255 / 0.13);
+  --tv-card: rgb(255 255 255 / 0.04);
+  --tv-card-2: rgb(255 255 255 / 0.07);
+
+  /* The launcher's own tokens, re-pointed so the shared Sheet, inputs and
+     icons pick up the set without being told about it. */
+  --bg: #0b1016;
+  --bg-elevated: #0e151c;
+  --surface: #121a23;
+  --surface-2: #17212b;
+  --surface-3: #1e2a36;
+  --border: rgb(150 200 255 / 0.14);
+  --border-strong: rgb(150 200 255 / 0.28);
+  --text: var(--tv-phosphor);
+  --text-dim: var(--tv-dim);
+  --text-faint: var(--tv-faint);
+  --accent: var(--tv-yellow);
+  --accent-soft: rgb(248 197 52 / 0.16);
+  --accent-text: var(--tv-yellow);
+  --shadow-lg: 0 -10px 40px rgb(0 0 0 / 0.6);
+
+  color: var(--tv-phosphor);
+  color-scheme: dark;
+  /* Walnut veneer: two grain layers at slightly different angles over a
+     warm base, and a sheen from above. All gradients, so it costs nothing
+     to load and scales to any screen. */
+  background-color: #3b2417;
+  background-image:
+    linear-gradient(180deg, rgb(255 230 200 / 0.07), rgb(0 0 0 / 0.28) 70%, rgb(0 0 0 / 0.45)),
+    repeating-linear-gradient(
+      93deg,
+      transparent 0 6px,
+      rgb(0 0 0 / 0.1) 6px 8px,
+      rgb(255 220 180 / 0.035) 8px 13px,
+      rgb(0 0 0 / 0.07) 13px 18px
+    ),
+    repeating-linear-gradient(88deg, #4c2e1b 0 23px, #573521 23px 44px, #45291a 44px 61px, #50301d 61px 79px);
+}
+
+.tv-osd {
+  font-family: var(--osd);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.tv-glow {
+  text-shadow: 0 0 7px rgb(150 210 255 / 0.35);
+}
+
+.tv-green {
+  color: var(--tv-osd);
+  text-shadow: 0 0 8px rgb(97 255 154 / 0.45);
+}
+
+.tv-amber {
+  color: var(--tv-amber);
+  text-shadow: 0 0 8px rgb(255 191 71 / 0.4);
+}
+
+.tv-yellow {
+  color: var(--tv-yellow);
+  text-shadow: 0 0 8px rgb(248 197 52 / 0.35);
+}
+
+.tv-red {
+  color: var(--tv-red);
+  text-shadow: 0 0 8px rgb(236 74 60 / 0.4);
+}
+
+/* --- the cabinet ----------------------------------------------------------- */
+
+.tv-top {
+  background: linear-gradient(180deg, rgb(0 0 0 / 0.15), transparent);
+}
+
+/* The engraved brand plate under the logo. */
+.tv-plate {
+  font-family: var(--osd);
+  letter-spacing: 0.18em;
+  color: #f3dfc0;
+  text-shadow:
+    0 1px 0 rgb(0 0 0 / 0.65),
+    0 -1px 0 rgb(255 240 220 / 0.12);
+}
+
+.tv-screen {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 28px / 24px;
+  background:
+    radial-gradient(120% 85% at 50% 35%, #15222f 0%, #0c141c 55%, #05080c 100%);
+  box-shadow:
+    0 0 0 3px #060607,
+    0 0 0 8px #1c1918,
+    0 0 0 9px #0a0909,
+    0 12px 30px rgb(0 0 0 / 0.55),
+    inset 0 0 45px rgb(0 0 0 / 0.9),
+    inset 0 0 140px rgb(0 0 0 / 0.55);
+}
+
+/* Glass: a soft reflection across the top-left, like the room's lamp. */
+.tv-screen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    radial-gradient(90% 60% at 18% 0%, rgb(255 255 255 / 0.075), transparent 60%),
+    radial-gradient(140% 100% at 50% 50%, transparent 62%, rgb(0 0 0 / 0.45) 100%);
+}
+
+/* Scanlines, with the faintest flicker. */
+.tv-screen::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 31;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgb(0 0 0 / 0.2) 0 1px, transparent 1px 3px);
+  animation: tv-flicker 7s steps(1) infinite;
+}
+
+@keyframes tv-flicker {
+  0%, 96%, 100% { opacity: 1; }
+  97% { opacity: 0.82; }
+  98% { opacity: 1; }
+  99% { opacity: 0.9; }
+}
+
+/* Switching the set on: a line of light that opens into the picture. */
+.tv-poweron {
+  animation: tv-poweron 520ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@keyframes tv-poweron {
+  0% { transform: scale(0.65, 0.004); filter: brightness(4); }
+  38% { transform: scale(1, 0.004); filter: brightness(3); }
+  70% { transform: scale(1, 1.02); filter: brightness(1.4); }
+  100% { transform: none; filter: none; }
+}
+
+/* Static, for changing channels. A turbulence texture jumping between
+   offsets reads as snow without a canvas or a single image file. */
+.tv-static {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  opacity: 0;
+  background-color: #8a8f96;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+  mix-blend-mode: screen;
+  animation:
+    tv-static-fade 300ms ease-out both,
+    tv-static-jitter 90ms steps(3) infinite;
+}
+
+@keyframes tv-static-fade {
+  0% { opacity: 0.85; }
+  60% { opacity: 0.35; }
+  100% { opacity: 0; }
+}
+
+@keyframes tv-static-jitter {
+  0% { background-position: 0 0; }
+  33% { background-position: -61px 37px; }
+  66% { background-position: 43px -71px; }
+  100% { background-position: -17px 59px; }
+}
+
+/* --- the control panel ------------------------------------------------------ */
+
+.tv-panel {
+  background: linear-gradient(180deg, #1f1d21 0%, #141316 60%, #0f0e10 100%);
+  border-top: 1px solid rgb(255 255 255 / 0.1);
+  box-shadow: inset 0 1px 0 rgb(0 0 0 / 0.6), 0 -6px 18px rgb(0 0 0 / 0.35);
+}
+
+/* Speaker grille dots, either side of the buttons. */
+.tv-grille {
+  background-image: radial-gradient(circle at center, rgb(0 0 0 / 0.75) 1.2px, transparent 1.6px);
+  background-size: 6px 6px;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.04);
+}
+
+.tv-led {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #3a0b08;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.5);
+}
+
+.tv-led[data-on='true'] {
+  background: #ff3b2f;
+  box-shadow: 0 0 6px #ff3b2f, 0 0 12px rgb(255 59 47 / 0.6);
+}
+
+/* --- buttons -------------------------------------------------------------------- */
+
+.tv-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border-radius: 12px;
+  color: #ece9e4;
+  background: linear-gradient(180deg, #2f2d33 0%, #1c1b1f 100%);
+  border: 1px solid #050505;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.13),
+    0 2px 0 #050505,
+    0 4px 8px rgb(0 0 0 / 0.35);
+  transition: transform 80ms ease, box-shadow 80ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tv-btn:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 2px 5px rgb(0 0 0 / 0.65),
+    0 0 0 #050505;
+}
+
+.tv-btn:disabled {
+  opacity: 0.45;
+}
+
+.tv-btn--yellow {
+  color: #261b00;
+  background: linear-gradient(180deg, #ffe17a 0%, #f5b919 100%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.55),
+    0 2px 0 #7a5800,
+    0 4px 10px rgb(248 197 52 / 0.25);
+}
+
+.tv-btn--red {
+  color: #fff;
+  background: linear-gradient(180deg, #ff7466 0%, #d6301f 100%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.35),
+    0 2px 0 #6e1309,
+    0 4px 10px rgb(236 74 60 / 0.25);
+}
+
+.tv-btn--cream {
+  color: #2a2318;
+  background: linear-gradient(180deg, #fffaf0 0%, #ddd5c2 100%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.8),
+    0 2px 0 #6b6252,
+    0 4px 10px rgb(0 0 0 / 0.3);
+}
+
+.tv-btn--ghost {
+  background: transparent;
+  border-color: var(--tv-line);
+  box-shadow: none;
+  color: var(--tv-dim);
+}
+
+/* A channel button on the panel. Lit when it's the channel you're on. */
+.tv-channel {
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 4px 6px;
+  border-radius: 10px;
+}
+
+.tv-channel[data-on='true'] {
+  transform: translateY(2px);
+  background: linear-gradient(180deg, #1a191c 0%, #232126 100%);
+  box-shadow:
+    inset 0 2px 6px rgb(0 0 0 / 0.75),
+    inset 0 -1px 0 rgb(255 255 255 / 0.06);
+}
+
+/* --- cards and pictures -------------------------------------------------------- */
+
+.tv-card {
+  background: var(--tv-card);
+  border: 1px solid var(--tv-line);
+  border-radius: 16px;
+}
+
+/* A little set around a poster: bezel, a curve of glass, a glint. */
+.tv-frame {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #050708;
+  box-shadow:
+    0 0 0 2px #050505,
+    0 0 0 4px #2a2522,
+    0 6px 14px rgb(0 0 0 / 0.5);
+}
+
+.tv-frame::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    linear-gradient(150deg, rgb(255 255 255 / 0.14) 0%, transparent 30%),
+    radial-gradient(130% 100% at 50% 50%, transparent 60%, rgb(0 0 0 / 0.5) 100%);
+}
+
+.tv-frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* SMPTE colour bars: no picture, no problem. */
+.tv-bars {
+  background: linear-gradient(
+    90deg,
+    #c0c0c0 0 14.28%,
+    #c0c000 14.28% 28.57%,
+    #00c0c0 28.57% 42.85%,
+    #00c000 42.85% 57.14%,
+    #c000c0 57.14% 71.42%,
+    #c00000 71.42% 85.71%,
+    #0000c0 85.71% 100%
+  );
+}
+
+.tv-bars-low {
+  background: linear-gradient(
+    90deg,
+    #0000c0 0 14.28%,
+    #131313 14.28% 28.57%,
+    #c000c0 28.57% 42.85%,
+    #131313 42.85% 57.14%,
+    #00c0c0 57.14% 71.42%,
+    #131313 71.42% 85.71%,
+    #c0c0c0 85.71% 100%
+  );
+}
+
+/* --- RCA jacks -------------------------------------------------------------------- */
+
+.tv-jack {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 35% 30%, #f4f4f4 0%, #a9adb3 35%, #5d6167 70%, #2c2e31 100%);
+  box-shadow: 0 2px 0 #050505, 0 3px 8px rgb(0 0 0 / 0.45);
+}
+
+.tv-jack::before {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border-radius: 999px;
+  background: radial-gradient(circle, #050505 0 38%, var(--jack) 40% 100%);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.5);
+}
+
+/* Plugged in: the cable's head sits in the jack. */
+.tv-jack[data-on='true']::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 40% 35%, color-mix(in oklab, var(--jack) 70%, white 30%), var(--jack) 55%, color-mix(in oklab, var(--jack) 70%, black 30%) 100%);
+  box-shadow: 0 0 12px color-mix(in oklab, var(--jack) 60%, transparent), inset 0 -2px 3px rgb(0 0 0 / 0.35);
+}
+
+/* --- the OSD rating bar ------------------------------------------------------------ */
+
+.tv-bar {
+  display: flex;
+  gap: 3px;
+  touch-action: none;
+}
+
+.tv-bar-seg {
+  position: relative;
+  flex: 1;
+  height: 18px;
+  border-radius: 2px;
+  background: rgb(255 255 255 / 0.06);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.04);
+  overflow: hidden;
+}
+
+.tv-bar-seg > i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--bar, var(--tv-osd));
+  box-shadow: 0 0 8px var(--bar, var(--tv-osd));
+}
+
+/* --- inputs ------------------------------------------------------------------------- */
+
+.tv-input {
+  width: 100%;
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: #060a0e;
+  border: 1px solid var(--tv-line);
+  color: var(--tv-phosphor);
+  outline: none;
+  box-shadow: inset 0 2px 8px rgb(0 0 0 / 0.6);
+}
+
+.tv-input:focus {
+  border-color: rgb(248 197 52 / 0.55);
+  box-shadow: inset 0 2px 8px rgb(0 0 0 / 0.6), 0 0 0 3px rgb(248 197 52 / 0.12);
+}
+
+.tv-input::placeholder {
+  color: var(--tv-faint);
+}
+
+.tv-caret::after {
+  content: '▮';
+  margin-left: 2px;
+  animation: tv-caret 1s steps(1) infinite;
+}
+
+@keyframes tv-caret {
+  50% { opacity: 0; }
+}
+
+/* --- the program guide --------------------------------------------------------------- */
+
+.tv-guide-grid {
+  background-image: linear-gradient(90deg, rgb(150 200 255 / 0.07) 1px, transparent 1px);
+}
+
+.tv-block {
+  position: absolute;
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid rgb(0 0 0 / 0.5);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18), 0 2px 6px rgb(0 0 0 / 0.4);
+}
+
+.tv-tba {
+  -webkit-mask-image: linear-gradient(90deg, #000 70%, transparent);
+  mask-image: linear-gradient(90deg, #000 70%, transparent);
+}

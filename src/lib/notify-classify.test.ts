@@ -194,3 +194,57 @@ describe('classify: encyclopedia', () => {
     expect(classify({ type: 'UPDATE', table: 'lexicon_entries', record, old_record: record })).toBeNull()
   })
 })
+
+describe('classify: watched', () => {
+  it('announces a show going on a shelf, saying whose', () => {
+    const shelf = (shelf_owner: string | null) =>
+      classify({
+        type: 'INSERT',
+        table: 'watch_shows',
+        record: { id: 's1', title: 'Severance', stage: 'shelf', shelf_owner, created_by: 'jackie' },
+        old_record: null,
+      })
+    expect(shelf('jackie')).toMatchObject({
+      event: 'show_added',
+      appId: 'watched',
+      actorId: 'jackie',
+      push: { title: '📺 Severance', body: 'On their shelf', tab: 'shelf', itemId: 's1' },
+    })
+    expect(shelf(null)?.push.body).toBe('On the shared shelf')
+    expect(shelf('avi')?.push.body).toBe('On your shelf')
+  })
+
+  it('says nothing about a show added after the fact to be rated', () => {
+    expect(
+      classify({
+        type: 'INSERT',
+        table: 'watch_shows',
+        record: { id: 's1', title: 'Lost', stage: 'watched', watched_before: true, created_by: 'avi' },
+        old_record: null,
+      }),
+    ).toBeNull()
+  })
+
+  it('asks for a rating when a show is finished, and only then', () => {
+    const before = { id: 's1', title: 'Severance', stage: 'watching', updated_by: 'avi' }
+    const c = classify({ type: 'UPDATE', table: 'watch_shows', record: { ...before, stage: 'watched' }, old_record: before })
+    expect(c).toMatchObject({ event: 'show_finished', actorId: 'avi', push: { tab: 'rate:0', itemId: 's1' } })
+    expect(classify({ type: 'UPDATE', table: 'watch_shows', record: { ...before, stage: 'lineup' }, old_record: before })).toBeNull()
+  })
+
+  it('asks for a rating when a season is finished, naming it', () => {
+    const start = { id: 'r1', show_id: 's1', season: 2, show_title: 'Severance', created_by: 'avi', finished_at: null }
+    expect(classify({ type: 'INSERT', table: 'watch_seasons', record: start, old_record: null })).toBeNull()
+    const done = { ...start, finished_at: '2026-10-12T20:00:00Z', updated_by: 'jackie' }
+    expect(classify({ type: 'UPDATE', table: 'watch_seasons', record: done, old_record: start })).toMatchObject({
+      event: 'season_finished',
+      appId: 'watched',
+      actorId: 'jackie',
+      push: { title: '🏁 Severance · Season 2', tab: 'rate:2', itemId: 's1' },
+    })
+    // Finished in one go from a phone that never saw it start.
+    expect(classify({ type: 'INSERT', table: 'watch_seasons', record: done, old_record: null })?.event).toBe('season_finished')
+    // Already finished: an edit.
+    expect(classify({ type: 'UPDATE', table: 'watch_seasons', record: done, old_record: done })).toBeNull()
+  })
+})

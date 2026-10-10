@@ -155,7 +155,7 @@ function AppTile({
           color: app.color,
         }}
       >
-        <Icon name={app.icon} size={22} />
+        {app.logo ? <app.logo size={30} /> : <Icon name={app.icon} size={22} />}
       </span>
 
       <span className="relative">

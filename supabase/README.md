@@ -57,6 +57,8 @@ in one go, and it's safe to re-run.
 > | `009_weekday_recurrence.sql` | Chores that repeat on specific days of the week |
 > | `015_launcher.sql` … `018_meal_people.sql` | The launcher, Owe & Owed, Meals |
 > | `019_encyclopedia.sql` | The A&J Encyclopedia |
+> | `020_nutrition_auto.sql` | Meals: nutrition worked out from the ingredients |
+> | `021_watched.sql` | Watched — shelves, the lineup, seasons and ratings |
 >
 > Without `007`, setting a chore to repeat *yearly* fails; without `009`,
 > picking specific weekdays fails; without `006`, changing a profile photo

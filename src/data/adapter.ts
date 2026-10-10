@@ -17,6 +17,10 @@ import type {
   ShoppingTrip,
   Store,
   Todo,
+  WatchRating,
+  WatchSeason,
+  WatchSettings,
+  WatchShow,
   WishlistItem,
 } from './types'
 
@@ -45,6 +49,11 @@ export const TABLES = [
   'meals',
   // A&J Encyclopedia.
   'lexicon_entries',
+  // Watched.
+  'watch_shows',
+  'watch_seasons',
+  'watch_ratings',
+  'watch_settings',
 ] as const
 
 export type TableName = (typeof TABLES)[number]
@@ -69,6 +78,10 @@ export interface TableMap {
   meal_templates: MealTemplate
   meals: Meal
   lexicon_entries: LexiconEntry
+  watch_shows: WatchShow
+  watch_seasons: WatchSeason
+  watch_ratings: WatchRating
+  watch_settings: WatchSettings
 }
 
 export type ChangeEvent<T extends TableName = TableName> =
@@ -150,7 +163,7 @@ export interface DataAdapter {
  * here so the store and every adapter agree.
  */
 export function rowKey(table: TableName, row: unknown): string {
-  if (table === 'household_settings') return 'singleton'
+  if (isSingleton(table)) return 'singleton'
   if (table === 'profile_settings') return (row as { profile_id: string }).profile_id
   // The three app_* tables are keyed on (profile_id, app_id), so neither half
   // identifies a row on its own — one member has a preference row per app, and
@@ -162,6 +175,12 @@ export function rowKey(table: TableName, row: unknown): string {
   }
   return (row as { id: string }).id
 }
+
+/** One-row tables, keyed on a `singleton boolean` column that is always true. */
+export const SINGLETON_TABLES = ['household_settings', 'watch_settings'] as const
+
+export const isSingleton = (table: TableName): boolean =>
+  (SINGLETON_TABLES as readonly string[]).includes(table)
 
 /** Tables whose primary key is (profile_id, app_id) rather than a single id. */
 export const APP_KEYED_TABLES = ['app_access', 'app_prefs', 'app_notify_prefs'] as const

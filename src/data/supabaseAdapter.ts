@@ -6,12 +6,33 @@ import type {
   TableMap,
   TableName,
 } from './adapter'
-import { TABLES, isAppKeyed, rowKey, splitAppKey } from './adapter'
+import { TABLES, isAppKeyed, isSingleton, rowKey, splitAppKey } from './adapter'
 import type { Chore } from './types'
 
 /**
- * Supabase-backed adapter: REST for writes, one realtime channel for reads.
+ * Supabase-backed adapter: REST for writes, realtime channels for reads.
  */
+
+/**
+ * Apps whose tables get a realtime channel of their own.
+ *
+ * Realtime sets up a channel's change subscriptions together, so a table the
+ * database doesn't have yet — an app whose SQL hasn't been run — can stop
+ * live updates for everything on the same channel. A newer app on its own
+ * channel means running one migration behind costs that app its live updates
+ * and nothing else; everything older shares the main channel.
+ */
+const OWN_CHANNEL: Record<string, readonly TableName[]> = {
+  watched: ['watch_shows', 'watch_seasons', 'watch_ratings', 'watch_settings'],
+}
+
+function realtimeChannels(): [name: string, tables: readonly TableName[]][] {
+  const separate = new Set(Object.values(OWN_CHANNEL).flat())
+  return [
+    ['household', TABLES.filter((t) => !separate.has(t))],
+    ...Object.entries(OWN_CHANNEL).map(([app, tables]) => [`household-${app}`, tables] as [string, readonly TableName[]]),
+  ]
+}
 
 /**
  * Narrow a query to exactly the row `id` addresses.
@@ -24,7 +45,7 @@ import type { Chore } from './types'
  * them without erroring.
  */
 function whereKey(query: LooseQuery, table: TableName, id: string): LooseQuery {
-  if (table === 'household_settings') return query.eq('singleton', true)
+  if (isSingleton(table)) return query.eq('singleton', true)
   if (table === 'profile_settings') return query.eq('profile_id', id)
   if (isAppKeyed(table)) {
     const [profileId, appId] = splitAppKey(id)
@@ -184,41 +205,49 @@ export function createSupabaseAdapter(sb: SupabaseClient): DataAdapter {
     },
 
     subscribe(onChange: ChangeHandler, onResync: () => void) {
-      const channel = sb.channel('household')
-
-      for (const table of TABLES) {
-        channel.on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table },
-          (payload) => {
-            if (payload.eventType === 'DELETE') {
-              // rowKey() rather than a column lookup: it is the one place that
-              // knows every table's key shape, including the composite ones,
-              // and the store addresses rows by exactly what it returns. This
-              // only works because REPLICA IDENTITY FULL puts the whole old
-              // row in the payload — with the default identity, `old` carries
-              // the primary key alone and composite tables would come through
-              // missing the half that isn't indexed.
-              const id = rowKey(table, payload.old)
-              if (id && !id.endsWith(':undefined')) {
-                onChange({ table, type: 'delete', id })
-              }
-              return
-            }
-            onChange({
-              table,
-              type: payload.eventType === 'INSERT' ? 'insert' : 'update',
-              row: payload.new as TableMap[typeof table],
-            })
-          },
-        )
+      // Supabase does not replay events missed while disconnected, so every
+      // (re)subscribe triggers a full refetch. That is the only thing that
+      // actually guarantees the two phones converge. Channels that come back
+      // together after a reconnect share one refetch rather than one each.
+      let resyncTimer: ReturnType<typeof setTimeout> | undefined
+      const resync = () => {
+        clearTimeout(resyncTimer)
+        resyncTimer = setTimeout(onResync, 50)
       }
 
-      channel.subscribe((status) => {
-        // Supabase does not replay events missed while disconnected, so every
-        // (re)subscribe triggers a full refetch. That is the only thing that
-        // actually guarantees the two phones converge.
-        if (status === 'SUBSCRIBED') onResync()
+      const channels = realtimeChannels().map(([name, tables]) => {
+        const channel = sb.channel(name)
+        for (const table of tables) {
+          channel.on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table },
+            (payload) => {
+              if (payload.eventType === 'DELETE') {
+                // rowKey() rather than a column lookup: it is the one place that
+                // knows every table's key shape, including the composite ones,
+                // and the store addresses rows by exactly what it returns. This
+                // only works because REPLICA IDENTITY FULL puts the whole old
+                // row in the payload — with the default identity, `old` carries
+                // the primary key alone and composite tables would come through
+                // missing the half that isn't indexed.
+                const id = rowKey(table, payload.old)
+                if (id && !id.endsWith(':undefined')) {
+                  onChange({ table, type: 'delete', id })
+                }
+                return
+              }
+              onChange({
+                table,
+                type: payload.eventType === 'INSERT' ? 'insert' : 'update',
+                row: payload.new as TableMap[typeof table],
+              })
+            },
+          )
+        }
+        channel.subscribe((status) => {
+          if (status === 'SUBSCRIBED') resync()
+        })
+        return channel
       })
 
       const onVisible = () => {
@@ -227,8 +256,9 @@ export function createSupabaseAdapter(sb: SupabaseClient): DataAdapter {
       document.addEventListener('visibilitychange', onVisible)
 
       return () => {
+        clearTimeout(resyncTimer)
         document.removeEventListener('visibilitychange', onVisible)
-        void sb.removeChannel(channel)
+        for (const channel of channels) void sb.removeChannel(channel)
       }
     },
   } satisfies DataAdapter as DataAdapter

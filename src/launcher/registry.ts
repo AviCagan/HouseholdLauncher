@@ -1,4 +1,6 @@
+import type { ComponentType } from 'react'
 import type { IconName } from '@/components/primitives/Icon'
+import { WatchedLogo } from '@/apps/watched/Logo'
 
 /**
  * Every app the launcher knows about.
@@ -20,6 +22,12 @@ export interface AppDef {
   /** One line under the name on the home tile and in settings. */
   blurb: string
   icon: IconName
+  /**
+   * Drawn on the home tile instead of `icon`, for an app with a mark of its
+   * own. `icon` still names it everywhere a one-colour glyph is needed — the
+   * notification centre, settings lists.
+   */
+  logo?: ComponentType<{ size?: number }>
   /** Tile colour. Also tints that app's rows in the notification centre. */
   color: string
   /**
@@ -77,6 +85,19 @@ export const APPS: AppDef[] = [
     platforms: ['android', 'web'],
     // Not for everyone by default: a private vocabulary is exactly the kind
     // of personal history the comment on `defaultForEveryone` is about.
+  },
+  {
+    id: 'watched',
+    // A working title — the name is display-only, so it can change any time.
+    // The id is the permanent key (see above) and stays 'watched'.
+    name: 'Watched',
+    blurb: 'Our shelves, the lineup, and how we rated it',
+    icon: 'tv',
+    logo: WatchedLogo,
+    color: '#f8c534',
+    platforms: ['android', 'web'],
+    // Not for everyone by default: what two people watch, and what they
+    // thought of it, is theirs.
   },
   {
     id: 'bluetooth',
