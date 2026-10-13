@@ -1,5 +1,6 @@
 import type { WatchRating, WatchSeason, WatchShow } from '@/data/types'
 import { allEpisodes } from './model'
+import { toScore, average } from './ratings'
 import { seasonScores, showScores } from './ratings'
 
 /**
@@ -59,9 +60,29 @@ export function seasonRuns(shows: WatchShow[], log: WatchSeason[], ratings: Watc
     const eps = allEpisodes(show).filter((e) => e.season === row.season)
     const minutes = eps.reduce((t, e) => t + e.minutes, 0)
     if (minutes <= 0) continue
-    out.push(run(show, row.season, start, end, eps.length, minutes, seasonScores(ratings, show.id, row.season).together))
+    // Finished faster than it runs: the dates aren't real (tapped Start and
+    // Finished back to back), so there's no timing to learn from.
+    if (!plausible(start, end, minutes)) continue
+    // A season nobody scored on its own takes the show's score — for a
+    // one-season show that's the same rating, given once.
+    const score = seasonScores(ratings, show.id, row.season).together ?? wholeScore(ratings, show.id)
+    out.push(run(show, row.season, start, end, eps.length, minutes, score))
   }
   return out.sort((a, b) => b.end - a.end)
+}
+
+/**
+ * Could this much TV have been watched between these times? Anything quicker
+ * than its own running time (with a little slack for skipped credits) was
+ * recorded after the fact, not timed.
+ */
+export function plausible(start: number, end: number, minutes: number): boolean {
+  return end - start >= minutes * 60_000 * 0.8
+}
+
+/** What they gave the whole show (season 0), averaged between them. */
+function wholeScore(ratings: WatchRating[], showId: string): number | null {
+  return average(ratings.filter((r) => r.show_id === showId && r.season === 0).map((r) => toScore(r.score_x2)))
 }
 
 /** A whole show, first season started to last finished — once every season of it is done. */

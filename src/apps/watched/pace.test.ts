@@ -146,6 +146,12 @@ describe('measurePace: finished seasons', () => {
     expect(got.episodes).toBe(4)
   })
 
+  it("ignores a season ticked off faster than it runs — nobody knows when it was watched", () => {
+    const s = show({ episodes: season(1, 5, '2020-01-01', 70) })
+    const log = [seasonRow({ show_id: s.id, season: 1, started_at: ago(0.01), finished_at: ago(0) })]
+    expect(measurePace(log, [s], [], NOW)).toBeNull()
+  })
+
   it('never counts shows added after the fact', () => {
     const backfilled = show({ watched_before: true, episodes: season(1, 10, '2020-01-01', 30) })
     const flagged = show({ episodes: season(1, 10, '2020-01-01', 30) })

@@ -185,6 +185,18 @@ export function seasonsOut(show: WatchShow, today: string): number[] {
   return seasonNumbers(show).filter((n) => out.has(n))
 }
 
+/**
+ * One season and nothing else announced — a limited series, or a show that
+ * hasn't been renewed. Its season and the show are the same thing, so it is
+ * rated once and never labelled "S1".
+ */
+export function isSingleSeason(show: WatchShow): boolean {
+  return seasonNumbers(show).length === 1
+}
+
+/** "S2", or nothing for a one-season show. */
+export const seasonTag = (show: WatchShow, season: number): string => (isSingleSeason(show) ? '' : `S${season}`)
+
 /** The last season with anything out — what "watched it all" means for a running show. */
 export function lastSeasonOut(show: WatchShow, today: string): number | null {
   const out = seasonsOut(show, today)

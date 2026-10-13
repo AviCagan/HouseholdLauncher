@@ -5,7 +5,7 @@ import { useWatched } from './useWatched'
 import { usePeople, useWatchUI, type Person } from './store'
 import { Face, NoSignal, Poster, SectionHead } from './ui'
 import { formatScore, rankSeasons, rankShows, type RankBy, type Scores } from './ratings'
-import { yearsLabel } from './model'
+import { isSingleSeason, yearsLabel } from './model'
 import { Patterns } from './Patterns'
 
 /**
@@ -107,7 +107,7 @@ export function WatchedTab() {
                   rank={r.rank}
                   scores={r.scores}
                   people={people}
-                  note={`SEASON ${r.season}`}
+                  note={isSingleSeason(r.show) ? 'ITS ONLY SEASON' : `SEASON ${r.season}`}
                   onOpen={() => open({ kind: 'show', showId: r.show.id })}
                   onRate={() => open({ kind: 'rate', showId: r.show.id, seasons: [r.season], includeShow: false })}
                 />

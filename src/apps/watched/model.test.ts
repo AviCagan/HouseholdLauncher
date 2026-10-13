@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_RUNTIME, addDaysIso, allEpisodes, daysBetweenIso, formatHours, formatMinutes, formatSpan, hasUnairedEpisodes, lastPlannedSeason, remainingEpisodes, seasonFullyAired, seasonStats, showTotals, yearsLabel, seasonsOut, lastSeasonOut } from './model'
+import { DEFAULT_RUNTIME, addDaysIso, allEpisodes, daysBetweenIso, formatHours, formatMinutes, formatSpan, hasUnairedEpisodes, lastPlannedSeason, remainingEpisodes, seasonFullyAired, seasonStats, showTotals, yearsLabel, seasonsOut, lastSeasonOut, isSingleSeason, seasonTag } from './model'
 import { season, seasonsInfo, show } from './testkit'
 
 describe('allEpisodes', () => {
@@ -145,5 +145,16 @@ describe('seasons that are out', () => {
   it('counts a season once its first episode is out', () => {
     expect(seasonsOut(bornAgain(), '2026-03-24')).toEqual([1, 2])
     expect(seasonsOut(bornAgain(), '2026-03-23')).toEqual([1])
+  })
+})
+
+describe('one-season shows', () => {
+  it('knows a show with one season and nothing else announced', () => {
+    const limited = show({ episodes: season(1, 8, '2020-01-01', 50), seasons: seasonsInfo({ n: 1, eps: 8 }) })
+    const renewed = show({ episodes: season(1, 8, '2020-01-01', 50), seasons: seasonsInfo({ n: 1, eps: 8 }, { n: 2 }) })
+    expect(isSingleSeason(limited)).toBe(true)
+    expect(seasonTag(limited, 1)).toBe('')
+    expect(isSingleSeason(renewed)).toBe(false)
+    expect(seasonTag(renewed, 1)).toBe('S1')
   })
 })

@@ -1,5 +1,6 @@
 import type { WatchSeason, WatchSettings, WatchShow, WatchView } from '@/data/types'
 import { allEpisodes } from './model'
+import { plausible } from './insights'
 
 /**
  * How much TV the household gets through in a week, in minutes.
@@ -130,7 +131,8 @@ export function measurePace(
       .filter((e) => upTo === undefined || e.number <= upTo)
       .filter((e) => !logged?.has(e.number))
     const minutes = rest.reduce((t, e) => t + e.minutes, 0)
-    if (minutes > 0) items.push({ start, end, episodes: rest.length, minutes })
+    // Ticked off faster than it runs: when it was really watched is unknown.
+    if (minutes > 0 && plausible(start, end, minutes)) items.push({ start, end, episodes: rest.length, minutes })
   }
 
   // Finished seasons, for whatever wasn't ticked off episode by episode.

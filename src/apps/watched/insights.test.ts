@@ -32,12 +32,29 @@ describe('seasonRuns', () => {
     const s = show({ episodes: season(1, 4, '2020-01-01', 30) })
     const before = show({ watched_before: true, episodes: season(1, 4, '2020-01-01', 30) })
     const log = [
-      seasonRow({ show_id: s.id, season: 1, started_at: iso('2026-09-01'), finished_at: iso('2026-09-01') }),
+      // Two hours of TV, 6pm to 10pm the same evening.
+      seasonRow({ show_id: s.id, season: 1, started_at: '2026-09-01T18:00:00.000Z', finished_at: '2026-09-01T22:00:00.000Z' }),
       seasonRow({ show_id: before.id, season: 1, started_at: iso('2026-09-01'), finished_at: iso('2026-09-05') }),
     ]
     const runs = seasonRuns([s, before], log, [])
     expect(runs).toHaveLength(1)
     expect(runs[0].days).toBe(1)
+  })
+
+  it('skips a season finished faster than it runs — Start and Finished tapped back to back', () => {
+    const s = show({ episodes: season(1, 5, '2020-01-01', 70) })
+    const log = [seasonRow({ show_id: s.id, season: 1, started_at: '2026-09-01T20:00:00.000Z', finished_at: '2026-09-01T20:01:00.000Z' })]
+    expect(seasonRuns([s], log, [score(s.id, 1, 'avi', 9)])).toHaveLength(0)
+  })
+
+  it("uses the show's score for a season nobody scored on its own — a one-season show rated once", () => {
+    const limited = show({ status: 'Ended', episodes: season(1, 8, '2020-01-01', 50) })
+    const log = [seasonRow({ show_id: limited.id, season: 1, started_at: iso('2026-09-01'), finished_at: iso('2026-09-05') })]
+    const [r] = seasonRuns([limited], log, [score(limited.id, 0, 'avi', 9), score(limited.id, 0, 'jackie', 8)])
+    expect(r.score).toBe(8.5)
+    // A season's own score still wins when there is one.
+    const [own] = seasonRuns([limited], log, [score(limited.id, 0, 'avi', 9), score(limited.id, 1, 'avi', 6)])
+    expect(own.score).toBe(6)
   })
 
   it('adds up a finished show from its first start to its last finish', () => {

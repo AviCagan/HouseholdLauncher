@@ -5,7 +5,7 @@ import { useWatchUI } from './store'
 import { NoSignal, Poster, SectionHead, Stat } from './ui'
 import { MIN_RUNS, type WatchRun } from './insights'
 import { formatScore } from './ratings'
-import { formatHours, formatSpan, perWeek } from './model'
+import { formatHours, formatSpan, perWeek, seasonTag } from './model'
 
 /**
  * Watched → Patterns: does how much they like a show change how fast they
@@ -86,7 +86,7 @@ export function Patterns() {
               <Poster url={run.show.poster_url} title={run.show.title} className="h-[54px] w-[36px] shrink-0" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[14px] font-semibold">
-                  {run.show.title} <span style={{ color: 'var(--tv-faint)' }}>S{run.season}</span>
+                  {run.show.title} <span style={{ color: 'var(--tv-faint)' }}>{seasonTag(run.show, run.season)}</span>
                 </span>
                 <span className="block text-[12px]" style={{ color: 'var(--tv-dim)' }}>
                   {formatSpan(run.days)} · {formatHours(run.minutes)} · {perWeek(run.hoursPerWeek)}
@@ -184,7 +184,7 @@ function Scatter({ points }: { points: WatchRun[] }) {
                 }}
                 onMouseEnter={() => setPicked(p)}
               >
-                <title>{`${p.show.title} S${p.season}: ${formatScore(p.score)} · ${perWeek(p.hoursPerWeek)}`}</title>
+                <title>{`${p.show.title} ${seasonTag(p.show, p.season)}: ${formatScore(p.score)} · ${perWeek(p.hoursPerWeek)}`}</title>
               </circle>
             </g>
           )
@@ -194,7 +194,7 @@ function Scatter({ points }: { points: WatchRun[] }) {
         {picked ? (
           <>
             <span style={{ color: 'var(--tv-phosphor)' }}>
-              {picked.show.title} S{picked.season}
+              {picked.show.title} {seasonTag(picked.show, picked.season)}
             </span>{' '}
             · ★ {formatScore(picked.score)} · {formatSpan(picked.days)} · {perWeek(picked.hoursPerWeek)}
           </>

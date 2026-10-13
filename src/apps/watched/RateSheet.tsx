@@ -8,7 +8,7 @@ import { markWatched, rate, setPlan, waitForSeason, type FinishOutcome } from '.
 import { useMe, usePeople, useWatchUI } from './store'
 import { Face, OsdBar, Poster } from './ui'
 import { average, formatScore, seasonScores, showScores } from './ratings'
-import { formatDay, formatHours, formatSpan, isoDay, perWeek, seasonsOut } from './model'
+import { formatDay, formatHours, formatSpan, isoDay, isSingleSeason, perWeek, seasonsOut } from './model'
 import { useWatched } from './useWatched'
 import { showRun, type WatchRun } from './insights'
 
@@ -92,7 +92,7 @@ export function RateSheet({
           <Poster url={show.poster_url} title={show.title} className="h-[72px] w-[48px] shrink-0" />
           <div className="min-w-0">
             <p className="tv-glow truncate text-[17px] font-bold">{show.title}</p>
-            <OutcomeLine outcome={outcome} />
+            <OutcomeLine outcome={outcome} single={isSingleSeason(show)} />
           </div>
         </div>
 
@@ -124,12 +124,20 @@ export function RateSheet({
 
         {!backfill && <TookCard show={show} seasons={seasons} includeShow={includeShow} />}
 
-        {seasonList.map((n) => (
-          <RateBlock key={n} show={show} season={n} label={`SEASON ${n}`} />
-        ))}
-        {(includeShow || backfill) && <RateBlock show={show} season={0} label="THE WHOLE SHOW" />}
+        {isSingleSeason(show) ? (
+          // One season: one score, kept on the show and on its season alike,
+          // so it ranks with shows and with seasons.
+          <RateBlock show={show} season={0} alsoSeason={1} label="THE SHOW" />
+        ) : (
+          <>
+            {seasonList.map((n) => (
+              <RateBlock key={n} show={show} season={n} label={`SEASON ${n}`} />
+            ))}
+            {(includeShow || backfill) && <RateBlock show={show} season={0} label="THE WHOLE SHOW" />}
+          </>
+        )}
 
-        {backfill && backfillSeasons.length > 0 && (
+        {backfill && backfillSeasons.length > 0 && !isSingleSeason(show) && (
           <button
             onClick={() => {
               fire('tap')
@@ -183,13 +191,13 @@ export function RateSheet({
   )
 }
 
-function OutcomeLine({ outcome }: { outcome?: FinishOutcome }) {
+function OutcomeLine({ outcome, single }: { outcome?: FinishOutcome; single: boolean }) {
   if (!outcome) return null
   if (outcome.kind === 'continued') {
     return <p className="tv-osd tv-green text-[17px]">▶ ON TO SEASON {outcome.season}</p>
   }
   if (outcome.kind === 'finished') {
-    return <p className="tv-osd tv-amber text-[17px]">🏁 SERIES DONE — SCORE THE SHOW TOO</p>
+    return <p className="tv-osd tv-amber text-[17px]">{single ? '🏁 THE WHOLE THING — SCORE IT' : '🏁 SERIES DONE — SCORE THE SHOW TOO'}</p>
   }
   return <p className="tv-osd tv-cyan text-[17px]">📡 ALL CAUGHT UP</p>
 }
@@ -198,7 +206,22 @@ function OutcomeLine({ outcome }: { outcome?: FinishOutcome }) {
  * One thing to score, with a bar per person. Changes are written a moment
  * after the finger stops, not on every half point a drag passes through.
  */
-function RateBlock({ show, season, label }: { show: WatchShow; season: number; label: string }) {
+function RateBlock({
+  show,
+  season,
+  label,
+  alsoSeason,
+}: {
+  show: WatchShow
+  season: number
+  label: string
+  /** Write the same score to this season too (a one-season show). */
+  alsoSeason?: number
+}) {
+  const save = (person: string, value: number | null) => {
+    rate(show.id, season, person, value)
+    if (alsoSeason !== undefined) rate(show.id, alsoSeason, person, value)
+  }
   const ratings = useData((s) => s.watch_ratings)
   const people = usePeople()
   const me = useMe()
@@ -213,10 +236,11 @@ function RateBlock({ show, season, label }: { show: WatchShow; season: number; l
       // Leaving the sheet mid-drag still saves the last value.
       for (const [person, p] of map) {
         clearTimeout(p.timer)
-        rate(show.id, season, person, p.value)
+        save(person, p.value)
       }
       map.clear()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [show.id, season])
 
   function change(person: string, value: number | null) {
@@ -225,7 +249,7 @@ function RateBlock({ show, season, label }: { show: WatchShow; season: number; l
     if (existing) clearTimeout(existing.timer)
     const timer = setTimeout(() => {
       pending.current.delete(person)
-      rate(show.id, season, person, value)
+      save(person, value)
     }, 450)
     pending.current.set(person, { value, timer })
   }
@@ -293,11 +317,18 @@ function TookCard({ show, seasons, includeShow }: { show: WatchShow; seasons: nu
   const rows: { label: string; run: WatchRun }[] = []
   for (const n of seasons) {
     const r = runs.find((x) => x.show.id === show.id && x.season === n)
-    if (r) rows.push({ label: `SEASON ${n}`, run: r })
+    if (r) rows.push({ label: isSingleSeason(show) ? 'THE SHOW' : `SEASON ${n}`, run: r })
   }
   const whole = includeShow ? showRun(show, log, ratings) : null
   if (whole && (rows.length === 0 || whole.days > rows[0].run.days + 0.5)) rows.push({ label: 'THE WHOLE SHOW', run: whole })
-  if (rows.length === 0) return null
+  if (rows.length === 0) {
+    // Finished right after it was started: no real dates to time it by.
+    return (
+      <p className="text-[12.5px] leading-snug" style={{ color: 'var(--tv-faint)' }}>
+        ⏱ No timing for this one — it was started and finished in one go. Next time, hold 🏁 Finished to enter when you really watched it.
+      </p>
+    )
+  }
 
   // Their usual, from everything else they've finished.
   const others = runs.filter((x) => x.show.id !== show.id).map((x) => x.hoursPerWeek).sort((a, b) => a - b)
