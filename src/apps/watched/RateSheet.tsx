@@ -8,7 +8,9 @@ import { markWatched, rate, setPlan, waitForSeason, type FinishOutcome } from '.
 import { useMe, usePeople, useWatchUI } from './store'
 import { Face, OsdBar, Poster } from './ui'
 import { average, formatScore, seasonScores, showScores } from './ratings'
-import { formatDay, isoDay, seasonsOut } from './model'
+import { formatDay, formatHours, formatSpan, isoDay, perWeek, seasonsOut } from './model'
+import { useWatched } from './useWatched'
+import { showRun, type WatchRun } from './insights'
 
 /**
  * Scoring: after a season, after a show, or for something watched long ago.
@@ -119,6 +121,8 @@ export function RateSheet({
             </div>
           </div>
         )}
+
+        {!backfill && <TookCard show={show} seasons={seasons} includeShow={includeShow} />}
 
         {seasonList.map((n) => (
           <RateBlock key={n} show={show} season={n} label={`SEASON ${n}`} />
@@ -276,5 +280,56 @@ function RateBlock({ show, season, label }: { show: WatchShow; season: number; l
         )
       })}
     </motion.div>
+  )
+}
+
+
+/**
+ * How long it took: the season (or show) just finished, in days, hours of
+ * TV, and the speed — next to their usual, since a number alone means little.
+ */
+function TookCard({ show, seasons, includeShow }: { show: WatchShow; seasons: number[]; includeShow: boolean }) {
+  const { runs, log, ratings } = useWatched()
+  const rows: { label: string; run: WatchRun }[] = []
+  for (const n of seasons) {
+    const r = runs.find((x) => x.show.id === show.id && x.season === n)
+    if (r) rows.push({ label: `SEASON ${n}`, run: r })
+  }
+  const whole = includeShow ? showRun(show, log, ratings) : null
+  if (whole && (rows.length === 0 || whole.days > rows[0].run.days + 0.5)) rows.push({ label: 'THE WHOLE SHOW', run: whole })
+  if (rows.length === 0) return null
+
+  // Their usual, from everything else they've finished.
+  const others = runs.filter((x) => x.show.id !== show.id).map((x) => x.hoursPerWeek).sort((a, b) => a - b)
+  const usual = others.length >= 3 ? others[Math.floor(others.length / 2)] : null
+  const speed = rows[0].run.hoursPerWeek
+
+  return (
+    <div className="tv-card flex flex-col gap-2 px-3 py-2.5">
+      <p className="tv-osd tv-amber text-[17px]">⏱ HOW LONG IT TOOK</p>
+      {rows.map(({ label, run }) => (
+        <div key={label} className="flex items-baseline justify-between gap-3">
+          <span className="tv-osd text-[15px]" style={{ color: 'var(--tv-faint)' }}>
+            {label}
+          </span>
+          <span className="text-right">
+            <span className="tv-osd tv-green block text-[21px] leading-none">{formatSpan(run.days).toUpperCase()}</span>
+            <span className="block text-[12px]" style={{ color: 'var(--tv-dim)' }}>
+              {run.episodes} episodes · {formatHours(run.minutes)} · {perWeek(run.hoursPerWeek)}
+            </span>
+          </span>
+        </div>
+      ))}
+      {usual !== null && (
+        <p className="text-[12.5px]" style={{ color: 'var(--tv-dim)' }}>
+          {speed > usual * 1.15
+            ? `Faster than usual — you normally watch about ${perWeek(usual)}.`
+            : speed < usual / 1.15
+              ? `Slower than usual — you normally watch about ${perWeek(usual)}.`
+              : `About your usual ${perWeek(usual)}.`}{' '}
+          See how speed and scores line up under Watched → Patterns.
+        </p>
+      )}
+    </div>
   )
 }

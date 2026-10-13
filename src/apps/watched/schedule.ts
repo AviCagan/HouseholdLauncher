@@ -57,7 +57,10 @@ export interface Projection {
 
 interface Slot {
   show: WatchShow
+  /** What's left, in the minutes it'll actually take them (see `speed`). */
   eps: Ep[]
+  /** The same episodes' real running time. */
+  realMinutes: number
   /** Local-midnight timestamp each episode becomes watchable; null for never-yet. */
   avail: (number | null)[]
   idx: number
@@ -194,6 +197,12 @@ export function projectLineup(
   minutesPerWeek: number,
   now: Date,
   horizonDays: number = HORIZON_DAYS,
+  /**
+   * How much faster (above 1) or slower each show goes than the pace — from
+   * how they've rated it so far (see insights.ts). A show at 1.3 gets through
+   * its episodes as if they were 1.3 times shorter.
+   */
+  speed: Map<string, number> = new Map(),
 ): Map<string, Projection> {
   const base = dayStart(isoDay(now))
   const perDay = Math.max(0, minutesPerWeek) / 7
@@ -208,10 +217,13 @@ export function projectLineup(
   const slots: Slot[] = active.map((show) => {
     const position =
       show.stage === 'watching' ? estimatePosition(show, log, minutesPerWeek / binging, now) : null
-    const eps = remainingEpisodes(show, position ? { season: position.season, done: position.done } : null)
+    const real = remainingEpisodes(show, position ? { season: position.season, done: position.done } : null)
+    const f = speed.get(show.id) ?? 1
+    const eps = f === 1 ? real : real.map((e) => ({ ...e, minutes: e.minutes / f }))
     return {
       show,
       eps,
+      realMinutes: real.reduce((t, e) => t + e.minutes, 0),
       avail: eps.map((e) => (e.airdate ? dayStart(e.airdate).getTime() : null)),
       idx: 0,
       into: 0,
@@ -291,7 +303,7 @@ export function projectLineup(
       waitingUntil: waitingNow.get(show.id) ?? null,
       tba: awaiting || slot.avail.some((a) => a === null),
       beyond: slot.idx < slot.eps.length && !slot.avail.slice(slot.idx).some((a) => a === null),
-      minutesLeft: slot.eps.reduce((t, e) => t + e.minutes, 0),
+      minutesLeft: slot.realMinutes,
       episodesLeft: slot.eps.length,
     })
   }

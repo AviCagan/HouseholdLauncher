@@ -6,6 +6,7 @@ import { usePeople, useWatchUI, type Person } from './store'
 import { Face, NoSignal, Poster, SectionHead } from './ui'
 import { formatScore, rankSeasons, rankShows, type RankBy, type Scores } from './ratings'
 import { yearsLabel } from './model'
+import { Patterns } from './Patterns'
 
 /**
  * Channel 3: Watched. Everything you've finished, ranked — by the two of you
@@ -15,7 +16,7 @@ export function WatchedTab() {
   const { shows, ratings } = useWatched()
   const people = usePeople()
   const open = useWatchUI((s) => s.open)
-  const [unit, setUnit] = useState<'shows' | 'seasons'>('shows')
+  const [unit, setUnit] = useState<'shows' | 'seasons' | 'patterns'>('shows')
   const [by, setBy] = useState<RankBy>('together')
   const [showDropped, setShowDropped] = useState(false)
 
@@ -35,76 +36,86 @@ export function WatchedTab() {
           options={[
             { id: 'shows', label: 'SHOWS' },
             { id: 'seasons', label: 'SEASONS' },
+            { id: 'patterns', label: 'PATTERNS' },
           ]}
           value={unit}
-          onChange={(v) => setUnit(v as 'shows' | 'seasons')}
+          onChange={(v) => setUnit(v as 'shows' | 'seasons' | 'patterns')}
         />
       </div>
-      <div className="scroll-x -mx-3 mt-2 flex gap-2 px-3">
-        <ByChip on={by === 'together'} onClick={() => setBy('together')}>
-          ★ TOGETHER
-        </ByChip>
-        {people.map((p) => (
-          <ByChip key={p.id} on={by === p.id} onClick={() => setBy(p.id)} color={p.color}>
-            {p.emoji} {p.name.toUpperCase()}
-          </ByChip>
-        ))}
-      </div>
-
-      <SectionHead
-        right={
-          <button onClick={addPast} className="tv-osd text-[15px]" style={{ color: 'var(--tv-yellow)' }}>
-            + ADD PAST SHOW
-          </button>
-        }
-      >
-        {unit === 'shows' ? '★ THE RATINGS' : '★ BEST SEASONS'}
-      </SectionHead>
-
-      {unit === 'shows' ? (
-        rankedShows.length === 0 ? (
-          <NoSignal
-            title="No ratings yet"
-            hint="Finish something, or add the shows you've already watched to rate them."
-            action={
-              <button onClick={addPast} className="tv-btn tv-btn--yellow tv-osd px-4 py-2.5 text-[17px]">
-                + ADD SOMETHING WE'VE WATCHED
-              </button>
-            }
-          />
-        ) : (
-          <div className="flex flex-col gap-2">
-            {rankedShows.map((r) => (
-              <RankRow
-                key={r.show.id}
-                show={r.show}
-                rank={r.rank}
-                scores={r.scores}
-                people={people}
-                note={yearsLabel(r.show)}
-                onOpen={() => open({ kind: 'show', showId: r.show.id })}
-                onRate={() => open({ kind: 'rate', showId: r.show.id, seasons: [], includeShow: true })}
-              />
+      {unit === 'patterns' ? (
+        <div className="mt-3">
+          <Patterns />
+        </div>
+      ) : (
+        <>
+          <div className="scroll-x -mx-3 mt-2 flex gap-2 px-3">
+            <ByChip on={by === 'together'} onClick={() => setBy('together')}>
+              ★ TOGETHER
+            </ByChip>
+            {people.map((p) => (
+              <ByChip key={p.id} on={by === p.id} onClick={() => setBy(p.id)} color={p.color}>
+                {p.emoji} {p.name.toUpperCase()}
+              </ByChip>
             ))}
           </div>
-        )
-      ) : rankedSeasons.length === 0 ? (
-        <NoSignal title="No season scores" hint="Seasons get a score when you finish them." />
-      ) : (
-        <div className="flex flex-col gap-2">
-          {rankedSeasons.map((r) => (
-            <RankRow
-              key={`${r.show.id}:${r.season}`}
-              show={r.show}
-              rank={r.rank}
-              scores={r.scores}
-              people={people}
-              note={`SEASON ${r.season}`}
-              onOpen={() => open({ kind: 'show', showId: r.show.id })}
-              onRate={() => open({ kind: 'rate', showId: r.show.id, seasons: [r.season], includeShow: false })}
-            />
-          ))}
-        </div>
+
+          <SectionHead
+            right={
+              <button onClick={addPast} className="tv-osd text-[15px]" style={{ color: 'var(--tv-yellow)' }}>
+                + ADD PAST SHOW
+              </button>
+            }
+          >
+            {unit === 'shows' ? '★ THE RATINGS' : '★ BEST SEASONS'}
+          </SectionHead>
+
+          {unit === 'shows' ? (
+            rankedShows.length === 0 ? (
+              <NoSignal
+                title="No ratings yet"
+                hint="Finish something, or add the shows you've already watched to rate them."
+                action={
+                  <button onClick={addPast} className="tv-btn tv-btn--yellow tv-osd px-4 py-2.5 text-[17px]">
+                    + ADD SOMETHING WE'VE WATCHED
+                  </button>
+                }
+              />
+            ) : (
+              <div className="flex flex-col gap-2">
+                {rankedShows.map((r) => (
+                  <RankRow
+                    key={r.show.id}
+                    show={r.show}
+                    rank={r.rank}
+                    scores={r.scores}
+                    people={people}
+                    note={yearsLabel(r.show)}
+                    onOpen={() => open({ kind: 'show', showId: r.show.id })}
+                    onRate={() => open({ kind: 'rate', showId: r.show.id, seasons: [], includeShow: true })}
+                  />
+                ))}
+              </div>
+            )
+          ) : rankedSeasons.length === 0 ? (
+            <NoSignal title="No season scores" hint="Seasons get a score when you finish them." />
+          ) : (
+            <div className="flex flex-col gap-2">
+              {rankedSeasons.map((r) => (
+                <RankRow
+                  key={`${r.show.id}:${r.season}`}
+                  show={r.show}
+                  rank={r.rank}
+                  scores={r.scores}
+                  people={people}
+                  note={`SEASON ${r.season}`}
+                  onOpen={() => open({ kind: 'show', showId: r.show.id })}
+                  onRate={() => open({ kind: 'rate', showId: r.show.id, seasons: [r.season], includeShow: false })}
+                />
+              ))}
+            </div>
+          )}
+
+        </>
       )}
 
       {dropped.length > 0 && (

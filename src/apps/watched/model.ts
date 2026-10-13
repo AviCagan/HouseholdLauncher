@@ -314,6 +314,9 @@ export function formatSpan(days: number): string {
   return `${Math.round((d / 365.25) * 10) / 10} years`
 }
 
+/** "5.6h a week" — hours, because that's how a person thinks about TV time. */
+export const perWeek = (hours: number): string => `${hours < 10 ? Math.round(hours * 10) / 10 : Math.round(hours)}h a week`
+
 /** "4h 10m a week". */
 export const paceLabel = (minutesPerWeek: number): string => `${formatMinutes(minutesPerWeek)} a week`
 

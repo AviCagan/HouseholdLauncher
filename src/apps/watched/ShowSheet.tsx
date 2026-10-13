@@ -64,7 +64,7 @@ export function ShowSheet({ showId }: { showId: string }) {
 }
 
 function ShowBody({ show }: { show: WatchShow }) {
-  const { log, ratings, projections, pace, now, lineup } = useWatched()
+  const { log, ratings, projections, pace, now, lineup, runs, speed } = useWatched()
   const people = usePeople()
   const me = useMe()
   const open = useWatchUI((s) => s.open)
@@ -202,6 +202,11 @@ function ShowBody({ show }: { show: WatchShow }) {
               <span className="text-[15px]" style={{ color: 'var(--tv-dim)' }}>
                 {projection.episodesLeft} EPISODES · {formatHours(projection.minutesLeft).toUpperCase()} TO GO
               </span>
+              {speed.has(show.id) && (
+                <span className="text-[14px]" style={{ color: 'var(--tv-cyan)' }}>
+                  RATED ★{formatScore(whole.together)} SO FAR → TIMED AT {Math.round(speed.get(show.id)! * 10) / 10}× YOUR PACE
+                </span>
+              )}
             </div>
           ) : (
             <p className="tv-osd tv-green mt-1 text-[19px]">
@@ -239,6 +244,7 @@ function ShowBody({ show }: { show: WatchShow }) {
           {stats.map((st) => {
             const row = log.find((r) => r.show_id === show.id && r.season === st.n)
             const sc = seasonScores(ratings, show.id, st.n)
+            const took = runs.find((r) => r.show.id === show.id && r.season === st.n)
             const isNow = show.stage === 'watching' && show.current_season === st.n
             const done =
               !!row?.finished_at ||
@@ -248,7 +254,9 @@ function ShowBody({ show }: { show: WatchShow }) {
               ? { text: '▶ NOW', color: 'var(--tv-red)' }
               : done
                 ? {
-                    text: row?.finished_at ? `✓ ${formatDay(new Date(row.finished_at), now).toUpperCase()}` : '✓ WATCHED',
+                    text: row?.finished_at
+                      ? `✓ ${formatDay(new Date(row.finished_at), now).toUpperCase()}${took ? ` · TOOK ${formatSpan(took.days).toUpperCase()}` : ''}`
+                      : '✓ WATCHED',
                     color: 'var(--tv-osd)',
                   }
                 : airsLater
