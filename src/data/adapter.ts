@@ -20,6 +20,7 @@ import type {
   WatchRating,
   WatchSeason,
   WatchSettings,
+  WatchView,
   WatchShow,
   WishlistItem,
 } from './types'
@@ -54,6 +55,7 @@ export const TABLES = [
   'watch_seasons',
   'watch_ratings',
   'watch_settings',
+  'watch_views',
 ] as const
 
 export type TableName = (typeof TABLES)[number]
@@ -82,6 +84,7 @@ export interface TableMap {
   watch_seasons: WatchSeason
   watch_ratings: WatchRating
   watch_settings: WatchSettings
+  watch_views: WatchView
 }
 
 export type ChangeEvent<T extends TableName = TableName> =

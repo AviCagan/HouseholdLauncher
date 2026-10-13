@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useData } from '@/store/useData'
 import type { DataAdapter } from '@/data/adapter'
 import type { WatchShow } from '@/data/types'
-import { addShow, between, finishSeason, rate, type ShowData } from './actions'
-import { ratingRowId, seasonRowId } from './ids'
+import { addShow, between, eveningOf, finishSeason, logEpisodes, rate, unwatchedEpisode, watchedEpisode, type ShowData } from './actions'
+import { ratingRowId, seasonRowId, viewRowId } from './ids'
 import { addDaysIso, isoDay } from './model'
 import { season, seasonsInfo, show } from './testkit'
 
@@ -71,7 +71,7 @@ function data(patch: Partial<ShowData> = {}): ShowData {
 }
 
 beforeEach(() => {
-  useData.setState({ watch_shows: [], watch_seasons: [], watch_ratings: [], watch_settings: [] })
+  useData.setState({ watch_shows: [], watch_seasons: [], watch_ratings: [], watch_settings: [], watch_views: [], missingTables: [] })
   vi.spyOn(console, 'error').mockImplementation(() => {})
 })
 
@@ -245,5 +245,107 @@ describe('between', () => {
     expect(between(10, 20)).toBe(15)
     expect(between(undefined, 20)).toBe(-980)
     expect(between(10, undefined)).toBe(1010)
+  })
+})
+
+describe('the episode log', () => {
+  const playing = () =>
+    show({ id: 'sev', stage: 'watching', current_season: 1, current_episode: 2, episodes: season(1, 9, '2022-02-18', 50) })
+
+  it('logs each episode ticked with the time, and moves the place in the season', async () => {
+    const { adapter, calls } = recorder()
+    const s = playing()
+    useData.setState({ adapter, watch_shows: [s] })
+    watchedEpisode(s, 3, 'avi')
+    await flush()
+    expect(useData.getState().watch_shows[0].current_episode).toBe(3)
+    const [v] = useData.getState().watch_views
+    expect(v).toMatchObject({ id: viewRowId('sev', 1, 3), season: 1, episode: 3, minutes: 50, created_by: 'avi' })
+    expect(Date.now() - Date.parse(v.watched_at)).toBeLessThan(5000)
+    expect(calls.map((c) => `${c.op}:${c.table}`)).toEqual(['update:watch_shows', 'insert:watch_views'])
+  })
+
+  it('takes an episode back out of the log when it is un-ticked', async () => {
+    const { adapter, calls } = recorder()
+    const s = playing()
+    useData.setState({ adapter, watch_shows: [s] })
+    watchedEpisode(s, 3, 'avi')
+    await flush()
+    unwatchedEpisode(useData.getState().watch_shows[0], 3, 'avi')
+    await flush()
+    expect(useData.getState().watch_shows[0].current_episode).toBe(2)
+    expect(useData.getState().watch_views).toHaveLength(0)
+    expect(calls.at(-1)).toMatchObject({ op: 'remove', table: 'watch_views', id: viewRowId('sev', 1, 3) })
+  })
+
+  it('spreads a batch over the days given', async () => {
+    const { adapter } = recorder()
+    const s = playing()
+    useData.setState({ adapter, watch_shows: [s] })
+    logEpisodes(s, 3, 4, '2026-10-03', '2026-10-05', 'avi')
+    await flush()
+    const views = [...useData.getState().watch_views].sort((a, b) => a.episode - b.episode)
+    expect(views.map((v) => v.episode)).toEqual([3, 4, 5, 6])
+    expect(views[0].watched_at).toBe(eveningOf('2026-10-03', 20))
+    expect(views[3].watched_at).toBe(eveningOf('2026-10-05'))
+    const times = views.map((v) => Date.parse(v.watched_at))
+    expect(times[1] - times[0]).toBeCloseTo(times[2] - times[1], -3)
+    expect(useData.getState().watch_shows[0].current_episode).toBe(6)
+  })
+
+  it('never logs past the end of the season', async () => {
+    const { adapter } = recorder()
+    const s = playing()
+    useData.setState({ adapter, watch_shows: [s] })
+    logEpisodes(s, 8, 5, today, today, 'avi')
+    await flush()
+    expect(useData.getState().watch_views.map((v) => v.episode).sort()).toEqual([8, 9])
+    expect(useData.getState().watch_shows[0].current_episode).toBe(9)
+  })
+
+  it('works as before, without the log, when its table is not set up yet', async () => {
+    const { adapter, calls } = recorder()
+    const s = playing()
+    useData.setState({ adapter, watch_shows: [s], missingTables: ['watch_views'] })
+    watchedEpisode(s, 3, 'avi')
+    await flush()
+    expect(useData.getState().watch_shows[0].current_episode).toBe(3)
+    expect(calls.map((c) => c.table)).toEqual(['watch_shows'])
+  })
+})
+
+describe('finishing with dates', () => {
+  it('records the season over the dates given', async () => {
+    const { adapter } = recorder()
+    const s = show({ id: 'sev', stage: 'watching', current_season: 1, status: 'Ended', episodes: season(1, 9, '2022-02-18', 50) })
+    useData.setState({ adapter, watch_shows: [s] })
+    const startedAt = eveningOf('2026-09-20', 20)
+    const finishedAt = eveningOf('2026-09-27')
+    expect(finishSeason(s, 'avi', { startedAt, finishedAt })).toEqual({ kind: 'finished' })
+    await flush()
+    const row = useData.getState().watch_seasons[0]
+    expect([row.started_at, row.finished_at]).toEqual([startedAt, finishedAt])
+    expect(useData.getState().watch_shows[0]).toMatchObject({ stage: 'watched', finished_at: finishedAt })
+  })
+
+  it('starts the next season now, not on the past finish date', async () => {
+    const { adapter } = recorder()
+    const s = show({ id: 'sev', stage: 'watching', current_season: 1, episodes: [...season(1, 9, '2022-02-18', 50), ...season(2, 10, '2025-01-17', 50)] })
+    useData.setState({ adapter, watch_shows: [s] })
+    expect(finishSeason(s, 'avi', { finishedAt: eveningOf('2026-09-27') })).toEqual({ kind: 'continued', season: 2 })
+    await flush()
+    await flush()
+    const next = useData.getState().watch_seasons.find((r) => r.season === 2)!
+    expect(Date.now() - Date.parse(next.started_at!)).toBeLessThan(5000)
+  })
+
+  it('never records a start after the finish', async () => {
+    const { adapter } = recorder()
+    const s = show({ id: 'sev', stage: 'watching', current_season: 1, status: 'Ended', episodes: season(1, 9, '2022-02-18', 50) })
+    useData.setState({ adapter, watch_shows: [s] })
+    finishSeason(s, 'avi', { startedAt: eveningOf('2026-09-29'), finishedAt: eveningOf('2026-09-27') })
+    await flush()
+    const row = useData.getState().watch_seasons[0]
+    expect(row.started_at).toBe(row.finished_at)
   })
 })

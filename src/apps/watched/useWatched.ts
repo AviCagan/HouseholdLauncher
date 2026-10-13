@@ -17,6 +17,7 @@ export function useWatched() {
   const log = useData((s) => s.watch_seasons)
   const ratings = useData((s) => s.watch_ratings)
   const settings = useData((s) => s.watch_settings)[0]
+  const views = useData((s) => s.watch_views)
   const [now, setNow] = useState(() => new Date())
 
   useEffect(() => {
@@ -31,7 +32,8 @@ export function useWatched() {
     }
   }, [])
 
-  const sample = useMemo(() => measurePace(log, shows, now), [log, shows, now])
+  // Every episode logged moves this, so the dates follow how they watch now.
+  const sample = useMemo(() => measurePace(log, shows, views, now), [log, shows, views, now])
   const pace = useMemo(() => effectivePace(settings, sample), [settings, sample])
   const projections = useMemo(
     () => projectLineup(shows, log, pace.minutesPerWeek, now),
@@ -47,7 +49,7 @@ export function useWatched() {
     [shows],
   )
 
-  return { shows, log, ratings, settings, sample, pace, projections, lineup, playing, now }
+  return { shows, log, views, ratings, settings, sample, pace, projections, lineup, playing, now }
 }
 
 export const byId = (shows: WatchShow[], id: string): WatchShow | undefined => shows.find((s) => s.id === id)

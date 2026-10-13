@@ -637,6 +637,20 @@ export interface WatchSeason {
   updated_at: string
 }
 
+/** One episode watched, and when — what the pace learns from. */
+export interface WatchView {
+  id: string
+  show_id: string
+  season: number
+  episode: number
+  watched_at: string
+  /** The episode's length when logged. */
+  minutes: number | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
 /** One person's score for a season, or for the whole show when season is 0. */
 export interface WatchRating {
   id: string

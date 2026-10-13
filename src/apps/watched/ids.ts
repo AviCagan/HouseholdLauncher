@@ -46,5 +46,8 @@ export function stableId(...parts: (string | number)[]): string {
 
 export const seasonRowId = (showId: string, season: number): string => stableId('season', showId, season)
 
+export const viewRowId = (showId: string, season: number, episode: number): string =>
+  stableId('view', showId, season, episode)
+
 export const ratingRowId = (showId: string, season: number, profileId: string): string =>
   stableId('rating', showId, season, profileId)

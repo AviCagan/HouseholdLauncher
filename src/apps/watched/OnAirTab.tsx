@@ -5,7 +5,17 @@ import type { WatchShow } from '@/data/types'
 import { useWatched } from './useWatched'
 import { useMe, useWatchUI } from './store'
 import { Chip, NoSignal, Poster, ReorderRow, SectionHead } from './ui'
-import { between, finishSeason, firstSeason, setLineupOrder, setProgress, slotIntoLineup, startWatching } from './actions'
+import {
+  between,
+  finishSeason,
+  firstSeason,
+  setLineupOrder,
+  slotIntoLineup,
+  startWatching,
+  unwatchedEpisode,
+  watchedEpisode,
+} from './actions'
+import { useHold } from './hold'
 import {
   allEpisodes,
   formatDay,
@@ -153,6 +163,12 @@ function NowCard({ show, projection, now }: { show: WatchShow; projection: Proje
     const outcome = finishSeason(show, me)
     open({ kind: 'rate', showId: show.id, seasons: [season], includeShow: outcome.kind === 'finished', outcome })
   }
+  // Tap for now; hold to say when — the dates are what the pace learns from.
+  const finishHold = useHold(finish, () => open({ kind: 'finish', showId: show.id }))
+  const plusHold = useHold(
+    () => watchedEpisode(show, done + 1, me),
+    () => open({ kind: 'log', showId: show.id, from: done + 1 }),
+  )
 
   return (
     <motion.div layout className="tv-card overflow-hidden p-3">
@@ -202,7 +218,7 @@ function NowCard({ show, projection, now }: { show: WatchShow; projection: Proje
       <div className="mt-3 flex items-stretch gap-2">
         <div className="tv-card flex items-center">
           <button
-            onClick={() => setProgress(show, done - 1, me)}
+            onClick={() => unwatchedEpisode(show, done, me)}
             disabled={done <= 0}
             aria-label="One episode fewer"
             className="tv-osd grid h-11 w-10 place-items-center text-[24px] disabled:opacity-30"
@@ -213,18 +229,21 @@ function NowCard({ show, projection, now }: { show: WatchShow; projection: Proje
             EP
           </span>
           <button
-            onClick={() => setProgress(show, done + 1, me)}
+            {...plusHold}
             disabled={done >= len}
-            aria-label="Watched another episode"
-            className="tv-osd grid h-11 w-10 place-items-center text-[24px] disabled:opacity-30"
+            aria-label="Watched another episode (hold to log past ones)"
+            className="tv-hold tv-osd grid h-11 w-10 place-items-center text-[24px] disabled:opacity-30"
           >
             +
           </button>
         </div>
-        <button onClick={finish} className="tv-btn tv-btn--yellow tv-osd flex-1 px-3 text-[18px]">
+        <button {...finishHold} className="tv-hold tv-btn tv-btn--yellow tv-osd flex-1 px-3 text-[18px]">
           {final ? '🏁 FINISHED THE SHOW' : `🏁 FINISHED SEASON ${season}`}
         </button>
       </div>
+      <p className="tv-osd mt-1.5 text-center text-[13px]" style={{ color: 'var(--tv-faint)' }}>
+        HOLD + TO LOG PAST EPISODES · HOLD 🏁 TO PICK DATES
+      </p>
     </motion.div>
   )
 }

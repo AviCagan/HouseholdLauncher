@@ -14,7 +14,7 @@ import { WatchedTab } from './WatchedTab'
 import { SearchSheet } from './SearchSheet'
 import { ShowSheet } from './ShowSheet'
 import { RateSheet } from './RateSheet'
-import { ManualSheet, PaceSheet, PosterSheet, SlotSheet } from './sheets'
+import { FinishSheet, LogSheet, ManualSheet, PaceSheet, PosterSheet, SlotSheet } from './sheets'
 import { needsRefresh, refreshShow } from './actions'
 
 /**
@@ -197,6 +197,8 @@ export function WatchedApp() {
       {top?.kind === 'slot' && <SlotSheet key={stack.length} showId={top.showId} />}
       {top?.kind === 'posters' && <PosterSheet key={stack.length} showId={top.showId} />}
       {top?.kind === 'manual' && <ManualSheet key={stack.length} preset={top.preset} />}
+      {top?.kind === 'finish' && <FinishSheet key={`${stack.length}:${top.showId}`} showId={top.showId} />}
+      {top?.kind === 'log' && <LogSheet key={`${stack.length}:${top.showId}`} showId={top.showId} from={top.from} />}
     </div>
   )
 }

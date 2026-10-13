@@ -24,6 +24,8 @@ import type { Chore } from './types'
  */
 const OWN_CHANNEL: Record<string, readonly TableName[]> = {
   watched: ['watch_shows', 'watch_seasons', 'watch_ratings', 'watch_settings'],
+  // A later migration (022) than the rest of Watched, so its own channel too.
+  'watched-views': ['watch_views'],
 }
 
 function realtimeChannels(): [name: string, tables: readonly TableName[]][] {

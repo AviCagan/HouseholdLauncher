@@ -38,6 +38,7 @@ import {
   yearsLabel,
 } from './model'
 import { timeToWatch } from './schedule'
+import { useHold } from './hold'
 import { formatScore, seasonScores, showScores } from './ratings'
 
 /**
@@ -150,6 +151,7 @@ function ShowBody({ show }: { show: WatchShow }) {
         hasDatedFuture={hasDatedFuture}
         laterSeasons={laterSeasons}
         onFinish={finish}
+        onFinishDates={() => replace({ kind: 'finish', showId: show.id })}
         onRate={() =>
           replace({
             kind: 'rate',
@@ -395,6 +397,7 @@ function Actions({
   hasDatedFuture,
   laterSeasons,
   onFinish,
+  onFinishDates,
   onRate,
   onSlot,
   onGoOnAir,
@@ -405,12 +408,15 @@ function Actions({
   hasDatedFuture: boolean
   laterSeasons: boolean
   onFinish: () => void
+  /** Held: finish with the real dates. */
+  onFinishDates: () => void
   onRate: () => void
   onSlot: () => void
   onGoOnAir: () => void
 }) {
   const me = useMe()
   const btn = 'tv-btn tv-osd px-3 py-2.5 text-[17px]'
+  const finishHold = useHold(onFinish, onFinishDates)
   const nextSeason = remainingEpisodes(show)[0]?.season ?? show.plan_from
   // Nothing out yet: nothing to start. It waits in the lineup and comes on
   // when the first episode airs.
@@ -453,7 +459,10 @@ function Actions({
   if (show.stage === 'watching') {
     return (
       <div className="grid grid-cols-2 gap-2">
-        <button onClick={onFinish} className={`${btn} tv-btn--yellow col-span-2`}>🏁 FINISHED SEASON {show.current_season}</button>
+        <button {...finishHold} className={`${btn} tv-hold tv-btn--yellow col-span-2 flex-col gap-0`}>
+          <span>🏁 FINISHED SEASON {show.current_season}</span>
+          <span className="text-[12px] opacity-70">HOLD TO PICK DATES</span>
+        </button>
         <button onClick={() => pauseShow(show, me)} className={btn}>⏸ PAUSE</button>
         <button onClick={() => { markWatched(show, me); onRate() }} className={btn}>✓ CALL IT WATCHED</button>
         <button onClick={() => dropShow(show, me)} className={`${btn} col-span-2`} style={{ color: 'var(--tv-red)' }}>✕ DROP IT</button>

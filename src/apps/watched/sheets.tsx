@@ -7,9 +7,9 @@ import type { EpisodeTuple, WatchShow } from '@/data/types'
 import { useWatched } from './useWatched'
 import { OURS_JACK, useMe, usePeople, useWatchUI } from './store'
 import { Poster } from './ui'
-import { addShow, between, setPoster, slotIntoLineup, updatePace, type Destination } from './actions'
+import { addShow, between, eveningOf, finishSeason, logEpisodes, setPoster, slotIntoLineup, updatePace, type Destination } from './actions'
 import { fetchPosters, type PosterOption } from './tvmaze'
-import { allEpisodes, formatHours, formatMinutes, formatSpan, isoDay } from './model'
+import { allEpisodes, formatHours, formatMinutes, formatSpan, isoDay, lastPlannedSeason, seasonLength } from './model'
 import { clampPace, episodesPerWeek } from './pace'
 
 // --- pace ---------------------------------------------------------------------------
@@ -75,12 +75,12 @@ export function PaceSheet() {
         {mode === 'auto' ? (
           <p className="text-[13.5px] leading-relaxed" style={{ color: 'var(--tv-dim)' }}>
             {sample
-              ? `Measured from your last ${sample.seasons} season${sample.seasons === 1 ? '' : 's'}: ${sample.episodes} episodes, ${formatHours(sample.minutes)}, over ${formatSpan(sample.days)} — breaks included, so the dates fit real life.${
+              ? `Learned from ${sample.episodes} episode${sample.episodes === 1 ? '' : 's'} (${formatHours(sample.minutes)}) since ${new Date(sample.from).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}. Every episode you tick moves it, recent weeks count most, and quiet days count too, so the dates fit real life.${
                   pace.confidence < 1
-                    ? ` That's only ${formatSpan(sample.spanDays)} of history, so it's blended with the starter pace for now — it's all yours after about three weeks.`
+                    ? ` That's only ${formatSpan(sample.spanDays)} of history, so it's blended with ${formatMinutes(settings?.pace_minutes ?? 240)} a week for now — it's all yours after about two weeks.`
                     : ''
                 }`
-              : `No finished seasons yet, so the estimates use ${formatMinutes(pace.minutesPerWeek)} a week until you finish one. It gets more accurate every time you tap “Finished season”.`}
+              : `Nothing watched yet, so the estimates use ${formatMinutes(pace.minutesPerWeek)} a week. Tap + after each episode (or hold it to log ones you watched earlier) and this learns how you really watch.`}
           </p>
         ) : (
           <div className="flex flex-col gap-2">
@@ -482,3 +482,183 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 }
 
 export type { WatchShow }
+
+// --- finishing with dates ----------------------------------------------------------
+
+/**
+ * Hold "Finished season": say when it really started and finished. This is
+ * what lets a season watched last week, and only ticked off tonight, teach
+ * the pace the truth instead of "all ten episodes in a minute".
+ */
+export function FinishSheet({ showId }: { showId: string }) {
+  const close = useWatchUI((s) => s.close)
+  const replace = useWatchUI((s) => s.replace)
+  const { shows, log, now } = useWatched()
+  const me = useMe()
+  const show = shows.find((s) => s.id === showId)
+  const season = show?.current_season ?? null
+  const row = show && season ? log.find((r) => r.show_id === show.id && r.season === season) : undefined
+  const recorded = row?.started_at ?? show?.started_at ?? null
+  const today = isoDay(now)
+  const [started, setStarted] = useState(() => (recorded ? isoDay(new Date(recorded)) : today))
+  const [finished, setFinished] = useState(today)
+
+  if (!show || !season) return null
+  const final = season === lastPlannedSeason(show) && (show.status === 'Ended' || show.tvmaze_id === null)
+  const valid = started <= finished && finished <= today
+
+  function finish(when: { startedAt?: string; finishedAt?: string }) {
+    const outcome = finishSeason(show!, me, when)
+    replace({ kind: 'rate', showId: show!.id, seasons: [season!], includeShow: outcome.kind === 'finished', outcome })
+  }
+
+  return (
+    <Sheet open onClose={close} title={<span className="tv-osd tv-yellow text-[22px]">WHEN DID YOU FINISH?</span>}>
+      <div className="flex flex-col gap-4 pb-6">
+        <div className="flex items-center gap-3">
+          <Poster url={show.poster_url} title={show.title} className="h-[72px] w-[48px] shrink-0" />
+          <span className="min-w-0">
+            <span className="tv-glow block truncate text-[17px] font-bold">{show.title}</span>
+            <span className="tv-osd tv-amber block text-[17px]">{final ? 'THE WHOLE SHOW' : `SEASON ${season}`}</span>
+          </span>
+        </div>
+
+        <button onClick={() => finish({})} className="tv-btn tv-btn--yellow tv-osd py-3 text-[19px]">
+          🏁 FINISHED JUST NOW
+        </button>
+
+        <div className="tv-card flex flex-col gap-3 p-3">
+          <p className="tv-osd text-[16px]" style={{ color: 'var(--tv-dim)' }}>
+            OR SAY WHEN
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="STARTED">
+              <input type="date" value={started} max={finished} onChange={(e) => e.target.value && setStarted(e.target.value)} className="tv-input text-[15px]" />
+            </Field>
+            <Field label="FINISHED">
+              <input type="date" value={finished} max={today} onChange={(e) => e.target.value && setFinished(e.target.value)} className="tv-input text-[15px]" />
+            </Field>
+          </div>
+          <p className="text-[12.5px] leading-snug" style={{ color: 'var(--tv-faint)' }}>
+            Your pace learns from these dates, so a season you watched last week and only told the app about today still counts properly.
+          </p>
+          <button
+            disabled={!valid}
+            onClick={() =>
+              finish({
+                // Keep the exact time the season was started if the day didn't change.
+                startedAt: recorded && isoDay(new Date(recorded)) === started ? recorded : eveningOf(started, 20),
+                finishedAt: finished === today ? undefined : eveningOf(finished),
+              })
+            }
+            className="tv-btn tv-osd py-2.5 text-[18px]"
+          >
+            🏁 FINISHED ON THESE DATES
+          </button>
+        </div>
+      </div>
+    </Sheet>
+  )
+}
+
+// --- logging past episodes ---------------------------------------------------------
+
+/**
+ * Hold + : "we watched four episodes between Saturday and Monday". Moves the
+ * place in the season and logs the episodes across those days for the pace.
+ */
+export function LogSheet({ showId, from }: { showId: string; from: number }) {
+  const close = useWatchUI((s) => s.close)
+  const { shows, now } = useWatched()
+  const me = useMe()
+  const show = shows.find((s) => s.id === showId)
+  const season = show?.current_season ?? null
+  const today = isoDay(now)
+  const len = show && season ? seasonLength(show, season) : 0
+  const left = Math.max(0, len - (from - 1))
+  const [count, setCount] = useState(() => Math.min(1, left))
+  const [fromDay, setFromDay] = useState(today)
+  const [toDay, setToDay] = useState(today)
+
+  if (!show || !season) return null
+  const last = from + count - 1
+  const minutes = allEpisodes(show)
+    .filter((e) => e.season === season && e.number >= from && e.number <= last)
+    .reduce((t, e) => t + e.minutes, 0)
+  const valid = count > 0 && fromDay <= toDay && toDay <= today
+
+  return (
+    <Sheet open onClose={close} title={<span className="tv-osd tv-yellow text-[22px]">LOG EPISODES</span>}>
+      <div className="flex flex-col gap-4 pb-6">
+        <div className="flex items-center gap-3">
+          <Poster url={show.poster_url} title={show.title} className="h-[72px] w-[48px] shrink-0" />
+          <span className="min-w-0">
+            <span className="tv-glow block truncate text-[17px] font-bold">{show.title}</span>
+            <span className="tv-osd tv-amber block text-[17px]">SEASON {season}</span>
+          </span>
+        </div>
+
+        {left === 0 ? (
+          <p className="tv-osd text-center text-[18px]" style={{ color: 'var(--tv-dim)' }}>
+            THAT'S THE WHOLE SEASON — HOLD 🏁 TO FINISH IT WITH DATES
+          </p>
+        ) : (
+          <>
+            <div className="tv-card flex items-center justify-between gap-3 px-3 py-2">
+              <span>
+                <span className="tv-osd block text-[16px]" style={{ color: 'var(--tv-faint)' }}>
+                  HOW MANY
+                </span>
+                <span className="tv-osd tv-green block text-[17px]">
+                  {count === 1 ? `EPISODE ${from}` : `EPISODES ${from}–${last}`} · {formatMinutes(minutes).toUpperCase()}
+                </span>
+              </span>
+              <span className="flex items-center rounded-lg" style={{ boxShadow: 'inset 0 0 0 1px var(--tv-line)' }}>
+                <button
+                  disabled={count <= 1}
+                  onClick={() => setCount((c) => c - 1)}
+                  aria-label="One fewer"
+                  className="tv-osd grid h-10 w-10 place-items-center text-[24px] disabled:opacity-30"
+                >
+                  −
+                </button>
+                <span className="tv-osd tv-yellow w-8 text-center text-[24px]">{count}</span>
+                <button
+                  disabled={count >= left}
+                  onClick={() => setCount((c) => c + 1)}
+                  aria-label="One more"
+                  className="tv-osd grid h-10 w-10 place-items-center text-[24px] disabled:opacity-30"
+                >
+                  +
+                </button>
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="FROM">
+                <input type="date" value={fromDay} max={toDay} onChange={(e) => e.target.value && setFromDay(e.target.value)} className="tv-input text-[15px]" />
+              </Field>
+              <Field label="TO">
+                <input type="date" value={toDay} max={today} onChange={(e) => e.target.value && setToDay(e.target.value)} className="tv-input text-[15px]" />
+              </Field>
+            </div>
+            <p className="text-[12.5px] leading-snug" style={{ color: 'var(--tv-faint)' }}>
+              They're spread evenly over those days. That's what your pace learns from, so the dates on everything else follow how you really watch.
+            </p>
+            <button
+              disabled={!valid}
+              onClick={() => {
+                logEpisodes(show, from, count, fromDay, toDay, me)
+                toast.success(count === 1 ? 'Episode logged' : `${count} episodes logged`)
+                close()
+              }}
+              className="tv-btn tv-btn--yellow tv-osd py-3 text-[19px]"
+            >
+              LOG {count === 1 ? 'IT' : `${count} EPISODES`}
+            </button>
+          </>
+        )}
+      </div>
+    </Sheet>
+  )
+}

@@ -2,9 +2,9 @@ import { toast } from 'sonner'
 import { useData } from '@/store/useData'
 import { newId, nowIso } from '@/data/adapter'
 import { fire } from '@/lib/haptics'
-import type { WatchRating, WatchSeason, WatchSettings, WatchShow } from '@/data/types'
+import type { WatchRating, WatchSeason, WatchSettings, WatchShow, WatchView } from '@/data/types'
 import { fetchShowDetail, type ShowDetail } from './tvmaze'
-import { ratingRowId, seasonRowId } from './ids'
+import { ratingRowId, seasonRowId, viewRowId } from './ids'
 import { allEpisodes, isoDay, lastPlannedSeason, seasonLength } from './model'
 import { toX2 } from './ratings'
 
@@ -17,14 +17,16 @@ import { toX2 } from './ratings'
  * so both phones writing the same one is an update, never a duplicate.
  */
 
-type WatchTable = 'watch_shows' | 'watch_seasons' | 'watch_ratings' | 'watch_settings'
+type WatchTable = 'watch_shows' | 'watch_seasons' | 'watch_ratings' | 'watch_settings' | 'watch_views'
 type RowOf<T extends WatchTable> = T extends 'watch_shows'
   ? WatchShow
   : T extends 'watch_seasons'
     ? WatchSeason
     : T extends 'watch_ratings'
       ? WatchRating
-      : WatchSettings
+      : T extends 'watch_views'
+        ? WatchView
+        : WatchSettings
 
 const keyOf = (table: WatchTable, row: unknown): string =>
   table === 'watch_settings' ? 'singleton' : (row as { id: string }).id
@@ -78,7 +80,7 @@ async function updateRow<T extends WatchTable>(
  * Insert or update a row either phone might create. If the other phone got
  * there first, the insert fails on the unique key and becomes an update.
  */
-async function upsertRow<T extends 'watch_seasons' | 'watch_ratings' | 'watch_settings'>(
+async function upsertRow<T extends 'watch_seasons' | 'watch_ratings' | 'watch_settings' | 'watch_views'>(
   table: T,
   row: RowOf<T>,
   patch: Partial<RowOf<T>>,
@@ -357,17 +359,115 @@ export function pauseShow(show: WatchShow, profileId: string | null): void {
   void updateRow('watch_shows', show, { stage: 'lineup', updated_by: profileId })
 }
 
-/** "We're on episode 6" — the one correction the estimate can't make itself. */
-export function setProgress(show: WatchShow, done: number, profileId: string | null): void {
-  if (!show.current_season) return
-  const len = seasonLength(show, show.current_season)
-  const clamped = Math.max(0, Math.min(len, Math.round(done)))
+// --- the episode log ------------------------------------------------------------
+
+/**
+ * Is the episode log there? It arrived in a later migration (022) than the
+ * rest of Watched; without it the app works exactly as before, learning only
+ * from finished seasons.
+ */
+const viewsReady = () => !useData.getState().missingTables.includes('watch_views')
+
+/** Record episodes as watched at the given moments — what the pace learns from. */
+function logViews(show: WatchShow, season: number, episodes: { episode: number; at: string }[], profileId: string | null): void {
+  if (!viewsReady()) return
+  const lengths = new Map(allEpisodes(show).filter((e) => e.season === season).map((e) => [e.number, e.minutes]))
+  for (const { episode, at } of episodes) {
+    const now = nowIso()
+    const minutes = lengths.get(episode) ?? show.avg_runtime ?? null
+    void upsertRow(
+      'watch_views',
+      {
+        id: viewRowId(show.id, season, episode),
+        show_id: show.id,
+        season,
+        episode,
+        watched_at: at,
+        minutes,
+        created_by: profileId,
+        created_at: now,
+        updated_at: now,
+      },
+      { watched_at: at, minutes },
+      "Couldn't log that episode",
+    )
+  }
+}
+
+function unlogView(show: WatchShow, season: number, episode: number): void {
+  if (!viewsReady()) return
+  const id = viewRowId(show.id, season, episode)
+  const before = rows('watch_views').find((v) => v.id === id)
+  if (!before) return
+  drop('watch_views', id)
+  void adapter()
+    .remove('watch_views', id)
+    .catch((err) => {
+      put('watch_views', before)
+      failed("Couldn't undo that episode", err)
+    })
+}
+
+/**
+ * "We just watched episode 5." Moves the place in the season and logs the
+ * episode with the time, so the pace hears about it now rather than at the
+ * end of the season.
+ */
+export function watchedEpisode(show: WatchShow, episode: number, profileId: string | null): void {
+  const season = show.current_season
+  if (!season) return
+  const ep = Math.max(1, Math.min(seasonLength(show, season), Math.round(episode)))
   fire('snap')
-  void updateRow('watch_shows', show, {
-    current_episode: clamped,
-    progress_at: nowIso(),
-    updated_by: profileId,
-  })
+  void updateRow('watch_shows', show, { current_episode: ep, progress_at: nowIso(), updated_by: profileId })
+  logViews(show, season, [{ episode: ep, at: nowIso() }], profileId)
+}
+
+/** "Not that one yet" — back an episode, and take it out of the log. */
+export function unwatchedEpisode(show: WatchShow, episode: number, profileId: string | null): void {
+  const season = show.current_season
+  if (!season) return
+  const ep = Math.max(1, Math.round(episode))
+  fire('snap')
+  void updateRow('watch_shows', show, { current_episode: ep - 1, progress_at: nowIso(), updated_by: profileId })
+  unlogView(show, season, ep)
+}
+
+/** Evening of a local day, as an ISO string — when a past day's watching is assumed to happen. */
+export function eveningOf(day: string, hour = 21): string {
+  const [y, m, d] = day.split('-').map(Number)
+  return new Date(y, m - 1, d, hour).toISOString()
+}
+
+/**
+ * "We watched four episodes between Saturday and Monday." Logs the next
+ * `count` episodes of the season spread evenly over those days and moves the
+ * place in the season past them. A range ending today ends now.
+ */
+export function logEpisodes(
+  show: WatchShow,
+  from: number,
+  count: number,
+  fromDay: string,
+  toDay: string,
+  profileId: string | null,
+): void {
+  const season = show.current_season
+  if (!season || count <= 0) return
+  const len = seasonLength(show, season)
+  const first = Math.max(1, from)
+  const last = Math.min(len, first + count - 1)
+  if (last < first) return
+  const [a, b] = fromDay <= toDay ? [fromDay, toDay] : [toDay, fromDay]
+  const start = Date.parse(eveningOf(a, 20))
+  const end = b === today() ? Date.now() : Date.parse(eveningOf(b))
+  const n = last - first + 1
+  const episodes = Array.from({ length: n }, (_, i) => ({
+    episode: first + i,
+    at: new Date(n === 1 ? end : start + ((Math.max(start, end) - start) * i) / (n - 1)).toISOString(),
+  }))
+  fire('success')
+  void updateRow('watch_shows', show, { current_episode: last, progress_at: nowIso(), updated_by: profileId })
+  logViews(show, season, episodes, profileId)
 }
 
 export type FinishOutcome =
@@ -383,13 +483,21 @@ export type FinishOutcome =
  * the next season hasn't aired (or hasn't been announced) — in which case the
  * caller asks whether to wait for it in the lineup or call it done for now.
  */
-export function finishSeason(show: WatchShow, profileId: string | null): FinishOutcome {
+export function finishSeason(
+  show: WatchShow,
+  profileId: string | null,
+  /** When it really happened, if not just now: what the pace learns from. */
+  when: { startedAt?: string; finishedAt?: string } = {},
+): FinishOutcome {
   const season = show.current_season
   if (!season) return { kind: 'finished' }
-  const now = nowIso()
+  const now = when.finishedAt ?? nowIso()
   const id = seasonRowId(show.id, season)
   const existing = rows('watch_seasons').find((r) => r.id === id)
-  const startedAt = existing?.started_at ?? show.started_at ?? now
+  const recorded = existing?.started_at ?? show.started_at ?? now
+  // A start after the finish is a clock or a typo; never a negative season.
+  const startMs = Date.parse(when.startedAt ?? recorded)
+  const startedAt = Number.isFinite(startMs) && startMs < Date.parse(now) ? new Date(startMs).toISOString() : now
   void upsertRow(
     'watch_seasons',
     {
@@ -415,14 +523,17 @@ export function finishSeason(show: WatchShow, profileId: string | null): FinishO
     const firstEp = allEpisodes(show).find((e) => e.season === next)
     if (firstEp?.airdate && firstEp.airdate <= t) {
       fire('success')
+      // The next season starts now, when they said so — not on a past
+      // finish date, which would have it guessing they're episodes in.
+      const startedNext = nowIso()
       void (async () => {
         const ok = await updateRow('watch_shows', show, {
           current_season: next,
           current_episode: 0,
-          progress_at: now,
+          progress_at: startedNext,
           updated_by: profileId,
         })
-        if (ok) await startSeasonRow(show, next, now, profileId)
+        if (ok) await startSeasonRow(show, next, startedNext, profileId)
       })()
       return { kind: 'continued', season: next }
     }
@@ -434,7 +545,7 @@ export function finishSeason(show: WatchShow, profileId: string | null): FinishO
   // by hand, so there is nothing more to know), or the plan stopped here.
   const planEnds = show.plan_to !== null && season >= show.plan_to
   if (show.status === 'Ended' || show.tvmaze_id === null || planEnds) {
-    markWatched({ ...show, current_season: season }, profileId)
+    markWatched({ ...show, current_season: season }, profileId, when.finishedAt)
     return { kind: 'finished' }
   }
   // Still running: maybe a season announced with nothing listed, maybe not.
@@ -464,11 +575,11 @@ export function waitForSeason(show: WatchShow, next: number | null, profileId: s
 }
 
 /** Done with it — finished, or caught up and calling it done for now. */
-export function markWatched(show: WatchShow, profileId: string | null): void {
+export function markWatched(show: WatchShow, profileId: string | null, at?: string): void {
   fire('success')
   void updateRow('watch_shows', show, {
     stage: 'watched',
-    finished_at: nowIso(),
+    finished_at: at ?? nowIso(),
     plan_to: show.current_season ?? lastPlannedSeason(show) ?? show.plan_to,
     updated_by: profileId,
   })

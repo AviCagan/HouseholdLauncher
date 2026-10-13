@@ -1,4 +1,4 @@
-import type { EpisodeTuple, SeasonInfo, WatchSeason, WatchShow } from '@/data/types'
+import type { EpisodeTuple, SeasonInfo, WatchSeason, WatchShow, WatchView } from '@/data/types'
 import { addDaysIso } from './model'
 
 /** Test fixtures for Watched. Not imported by the app. */
@@ -76,6 +76,17 @@ export function seasonRow(patch: Partial<WatchSeason> & { show_id: string; seaso
     watched_before: false,
     created_by: null,
     updated_by: null,
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z',
+    ...patch,
+  }
+}
+
+export function view(patch: Partial<WatchView> & { show_id: string; season: number; episode: number; watched_at: string }): WatchView {
+  return {
+    id: `${patch.show_id}:${patch.season}:${patch.episode}`,
+    minutes: null,
+    created_by: null,
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-01-01T00:00:00.000Z',
     ...patch,

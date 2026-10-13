@@ -31,6 +31,10 @@ export type WatchSheet =
   | { kind: 'slot'; showId: string }
   | { kind: 'posters'; showId: string }
   | { kind: 'manual'; preset: Destination | null }
+  /** Finish the season (or show) with the real dates, for the pace. */
+  | { kind: 'finish'; showId: string }
+  /** Log episodes watched earlier, with when. */
+  | { kind: 'log'; showId: string; from: number }
 
 interface WatchUI {
   tab: WatchTab

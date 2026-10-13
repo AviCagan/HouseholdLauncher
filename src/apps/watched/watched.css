@@ -490,3 +490,18 @@
   -webkit-mask-image: linear-gradient(90deg, #000 70%, transparent);
   mask-image: linear-gradient(90deg, #000 70%, transparent);
 }
+
+/* Dates: the native picker, in the set's dark. */
+.tv-input[type='date'] {
+  color-scheme: dark;
+  min-height: 48px;
+  font-family: inherit;
+}
+
+/* A hold-able button shouldn't select its label or pop the text menu. */
+.tv-hold {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}

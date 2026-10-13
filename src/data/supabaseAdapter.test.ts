@@ -46,6 +46,7 @@ function fakeClient() {
 }
 
 const WATCH = ['watch_shows', 'watch_seasons', 'watch_ratings', 'watch_settings']
+const VIEWS = ['watch_views']
 
 describe('supabase adapter: realtime', () => {
   beforeEach(() => {
@@ -63,10 +64,12 @@ describe('supabase adapter: realtime', () => {
     const stop = createSupabaseAdapter(sb).subscribe(() => {}, () => {})
     const main = channels.find((c) => c.name === 'household')!
     const watched = channels.find((c) => c.name === 'household-watched')!
+    const views = channels.find((c) => c.name === 'household-watched-views')!
+    expect(views.tables).toEqual(VIEWS)
     expect(watched.tables.sort()).toEqual([...WATCH].sort())
-    expect(main.tables.some((t) => WATCH.includes(t))).toBe(false)
+    expect(main.tables.some((t) => WATCH.includes(t) || VIEWS.includes(t))).toBe(false)
     // Every table is listened to exactly once.
-    expect([...main.tables, ...watched.tables].sort()).toEqual([...TABLES].sort())
+    expect([...main.tables, ...watched.tables, ...views.tables].sort()).toEqual([...TABLES].sort())
     stop()
   })
 

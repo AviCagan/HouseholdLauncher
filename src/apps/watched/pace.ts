@@ -1,4 +1,4 @@
-import type { WatchSeason, WatchSettings, WatchShow } from '@/data/types'
+import type { WatchSeason, WatchSettings, WatchShow, WatchView } from '@/data/types'
 import { allEpisodes } from './model'
 
 /**
@@ -16,33 +16,44 @@ export const MIN_PACE = 15
 export const MAX_PACE = 10080
 
 const DAY = 86_400_000
-/** Only the last year counts: last year's habits say more than 2019's. */
+/** Nothing older than a year counts at all. */
 const LOOKBACK_DAYS = 365
-/** And only the most recent few seasons, so a change of habit shows up. */
-const MAX_SEASONS = 8
 /**
- * A season binged in a weekend is a real pace for that weekend and a wild
- * one for the next two years. Spreading any sample over at least a week
- * keeps one binge from promising them April 2029 by Thursday.
+ * How fast the record forgets, in days. Every episode counts, but one from
+ * three weeks ago counts about a third as much as tonight's, so the pace
+ * follows how they watch now — a busy month pulls it down, a holiday binge
+ * pushes it up, and either fades once it's over.
  */
-const MIN_SPAN_DAYS = 7
+const MEMORY_DAYS = 21
+/**
+ * Four episodes in one evening is a real evening, not a weekly habit. The
+ * time they're spread over is never counted as less than this.
+ */
+const MIN_SPAN_DAYS = 2
+/**
+ * A stretch with nothing watched counts against the pace — a quiet week is a
+ * slower week — but only up to this long. After that it's a trip or a break,
+ * and the next episode picks up from how they were watching before.
+ */
+const IDLE_CAP_DAYS = 10
 /**
  * How much history it takes to trust the record completely. Until then the
- * measured pace is blended with the dial in proportion — a season finished
- * an hour after it was started says almost nothing about next year, and
- * shouldn't move every date in the app on its own.
+ * measured pace is blended with the dial in proportion, so the first couple
+ * of evenings nudge the dates rather than swing them.
  */
-const CONFIDENT_DAYS = 21
+const CONFIDENT_DAYS = 14
 
 export interface PaceSample {
-  seasons: number
+  /** Episodes the measurement counted. */
   episodes: number
+  /** Their minutes, unweighted. */
   minutes: number
-  /** The span the minutes are spread over: at least a week. */
-  days: number
-  /** The span actually covered, unpadded — how much history there is. */
+  /** What the record says, before any blending with the dial. */
+  minutesPerWeek: number
+  /** The history covered: first episode counted to the end of the window. */
   spanDays: number
   from: string
+  /** The last time anything was watched. */
   to: string
 }
 
@@ -57,80 +68,117 @@ export interface Pace {
 export const clampPace = (minutes: number): number =>
   Math.min(MAX_PACE, Math.max(MIN_PACE, Math.round(minutes)))
 
-function minutesOf(show: WatchShow, season: number, firstN?: number): { episodes: number; minutes: number } {
-  let eps = allEpisodes(show).filter((e) => e.season === season)
-  if (firstN !== undefined) eps = eps.slice(0, firstN)
-  return { episodes: eps.length, minutes: eps.reduce((t, e) => t + e.minutes, 0) }
-}
-
-interface Span {
+/** Minutes watched, either at a moment (an episode) or spread over a stretch (a season). */
+interface Watched {
   start: number
   end: number
   episodes: number
   minutes: number
 }
 
+function seasonEpisodes(show: WatchShow, season: number) {
+  return allEpisodes(show).filter((e) => e.season === season)
+}
+
 /**
  * What the record says the pace is, or null when there is no record yet.
  *
- * Built from seasons with a real start and finish — never from shows added
- * after the fact, which have neither — plus the season playing now when
- * someone has said how far into it they are. The span runs from the earliest
- * start to the latest finish in the sample, so breaks between shows count:
- * this is the pace of their actual life, which is what a date two years out
- * has to be measured in. Seasons watched side by side count once each in the
- * minutes and once in the span, which is exactly right for two at a time.
+ * The record is every episode logged with a time — each tap of +, or a batch
+ * logged with dates — plus, for any part of a season that was finished
+ * without ticking episodes, that season's minutes spread from when it was
+ * started to when it was finished. Shows added after the fact have no dates
+ * and never count.
+ *
+ * The pace is minutes watched divided by the time they took, breaks
+ * included, with recent watching weighted most (see MEMORY_DAYS). Shows
+ * watched side by side add up, which is right: two at once is more TV.
  */
-export function measurePace(log: WatchSeason[], shows: WatchShow[], now: Date): PaceSample | null {
+export function measurePace(
+  log: WatchSeason[],
+  shows: WatchShow[],
+  views: WatchView[],
+  now: Date,
+): PaceSample | null {
   const byId = new Map(shows.map((s) => [s.id, s]))
-  const spans: Span[] = []
+  const counts = (show: WatchShow | undefined): show is WatchShow => !!show && !show.watched_before
+  const items: Watched[] = []
 
+  // Episodes logged one at a time.
+  const viewed = new Map<string, Set<number>>()
+  for (const v of views) {
+    const show = byId.get(v.show_id)
+    if (!counts(show)) continue
+    const at = Date.parse(v.watched_at)
+    if (!Number.isFinite(at)) continue
+    const minutes = v.minutes ?? seasonEpisodes(show, v.season).find((e) => e.number === v.episode)?.minutes ?? show.avg_runtime ?? 0
+    if (minutes <= 0) continue
+    items.push({ start: at, end: at, episodes: 1, minutes })
+    const key = `${v.show_id}:${v.season}`
+    if (!viewed.has(key)) viewed.set(key, new Set())
+    viewed.get(key)!.add(v.episode)
+  }
+
+  /** A stretch of a season with no episodes logged: its minutes spread over the stretch. */
+  function stretch(show: WatchShow, season: number, startIso: string, endIso: string, upTo?: number) {
+    const end = Date.parse(endIso)
+    let start = Date.parse(startIso)
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return
+    // Two phones' clocks can disagree by a minute; never a negative stretch.
+    start = Math.min(start, end)
+    const logged = viewed.get(`${show.id}:${season}`)
+    const rest = seasonEpisodes(show, season)
+      .filter((e) => upTo === undefined || e.number <= upTo)
+      .filter((e) => !logged?.has(e.number))
+    const minutes = rest.reduce((t, e) => t + e.minutes, 0)
+    if (minutes > 0) items.push({ start, end, episodes: rest.length, minutes })
+  }
+
+  // Finished seasons, for whatever wasn't ticked off episode by episode.
   for (const row of log) {
     if (!row.started_at || !row.finished_at || row.watched_before) continue
     const show = byId.get(row.show_id)
-    if (!show || show.watched_before) continue
-    const end = Date.parse(row.finished_at)
-    let start = Date.parse(row.started_at)
-    if (!Number.isFinite(start) || !Number.isFinite(end)) continue
-    // Two phones' clocks can disagree by a minute; never a negative season.
-    start = Math.min(start, end)
-    const { episodes, minutes } = minutesOf(show, row.season)
-    if (minutes > 0) spans.push({ start, end, episodes, minutes })
+    if (counts(show)) stretch(show, row.season, row.started_at, row.finished_at)
   }
 
   // The season on now, up to wherever someone last said they were.
   for (const show of shows) {
-    if (show.stage !== 'watching' || !show.current_season || !show.progress_at) continue
-    if (show.current_episode <= 0) continue
+    if (show.stage !== 'watching' || !show.current_season || !show.progress_at || show.current_episode <= 0) continue
+    if (!counts(show)) continue
     const row = log.find((r) => r.show_id === show.id && r.season === show.current_season)
+    if (row?.finished_at) continue
     const startIso = row?.started_at ?? show.started_at
-    if (!startIso) continue
-    const end = Date.parse(show.progress_at)
-    const start = Math.min(Date.parse(startIso), end)
-    if (!Number.isFinite(start) || !Number.isFinite(end)) continue
-    const { episodes, minutes } = minutesOf(show, show.current_season, show.current_episode)
-    if (minutes > 0) spans.push({ start, end, episodes, minutes })
+    if (startIso) stretch(show, show.current_season, startIso, show.progress_at, show.current_episode)
   }
 
-  if (spans.length === 0) return null
-
-  spans.sort((a, b) => b.end - a.end)
   const cutoff = now.getTime() - LOOKBACK_DAYS * DAY
-  const recent = spans.filter((s) => s.end >= cutoff)
-  const pick = (recent.length > 0 ? recent : spans).slice(0, MAX_SEASONS)
+  const recent = items.filter((w) => w.end >= cutoff)
+  if (recent.length === 0) return null
 
-  const minutes = pick.reduce((t, s) => t + s.minutes, 0)
-  const episodes = pick.reduce((t, s) => t + s.episodes, 0)
-  const from = Math.min(...pick.map((s) => s.start))
-  const to = Math.max(...pick.map((s) => s.end))
+  const first = Math.min(...recent.map((w) => w.start))
+  const last = Math.max(...recent.map((w) => w.end))
+  // The screen's clock only ticks every few minutes; an episode logged since
+  // is still tonight's, not the future's, and has to count straight away.
+  const end = Math.min(Math.max(now.getTime(), last), last + IDLE_CAP_DAYS * DAY)
+  const tau = MEMORY_DAYS * DAY
+  const weight = (t: number) => Math.exp(-Math.max(0, end - t) / tau)
+
+  // Weighted minutes: an episode at its moment, a stretch averaged over itself.
+  let weighted = 0
+  for (const w of recent) {
+    const avg = w.end - w.start < 60_000 ? weight(w.end) : (tau * (weight(w.end) - weight(w.start))) / (w.end - w.start)
+    weighted += w.minutes * avg
+  }
+  // Weighted time: the whole history, but never less than MIN_SPAN_DAYS.
+  const from = Math.min(first, end - MIN_SPAN_DAYS * DAY)
+  const weightedDays = (tau * (1 - weight(from))) / DAY
+
   return {
-    seasons: pick.length,
-    episodes,
-    minutes,
-    days: Math.max(MIN_SPAN_DAYS, (to - from) / DAY),
-    spanDays: (to - from) / DAY,
-    from: new Date(from).toISOString(),
-    to: new Date(to).toISOString(),
+    episodes: recent.reduce((t, w) => t + w.episodes, 0),
+    minutes: recent.reduce((t, w) => t + w.minutes, 0),
+    minutesPerWeek: (weighted / weightedDays) * 7,
+    spanDays: Math.max(0, (end - first) / DAY),
+    from: new Date(first).toISOString(),
+    to: new Date(last).toISOString(),
   }
 }
 
@@ -140,16 +188,15 @@ export function measurePace(log: WatchSeason[], shows: WatchShow[], now: Date): 
  * Manual means manual. Auto starts on the dial and moves toward the record
  * as the record grows — weighted by how many days of history it covers — so
  * a brand-new household gets dates on day one, and they quietly become
- * their own over the first few weeks without one quick season swinging them.
+ * their own over the first couple of weeks without one evening swinging them.
  */
 export function effectivePace(settings: WatchSettings | undefined, sample: PaceSample | null): Pace {
   const dialled = clampPace(settings?.pace_minutes ?? DEFAULT_PACE)
   if (settings?.pace_mode === 'manual') return { minutesPerWeek: dialled, source: 'manual', sample, confidence: 0 }
   if (sample) {
-    const measured = (sample.minutes / sample.days) * 7
     const confidence = Math.min(1, Math.max(0, sample.spanDays / CONFIDENT_DAYS))
     return {
-      minutesPerWeek: clampPace(measured * confidence + dialled * (1 - confidence)),
+      minutesPerWeek: clampPace(sample.minutesPerWeek * confidence + dialled * (1 - confidence)),
       source: 'measured',
       sample,
       confidence,
