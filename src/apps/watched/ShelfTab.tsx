@@ -6,7 +6,7 @@ import { useWatched } from './useWatched'
 import { OURS_JACK, shelfName, useMe, usePeople, useWatchUI, type Person } from './store'
 import { NoSignal, Poster, ReorderRow } from './ui'
 import { between, setShelfOrder } from './actions'
-import { formatHours, formatSpan, remainingEpisodes, yearsLabel } from './model'
+import { formatHours, formatSpan, isoDay, remainingEpisodes, yearsLabel } from './model'
 import { timeToWatch } from './schedule'
 
 /**
@@ -142,8 +142,12 @@ function ShelfList({ shows, paceMinutes, now }: { shows: WatchShow[]; paceMinute
         const show = byId.get(id)
         if (!show) return null
         const t = timeToWatch(show, paceMinutes, now)
-        const eps = remainingEpisodes(show)
+        // What's out to watch; seasons only announced are mentioned, not counted.
+        const today = isoDay(now)
+        const all = remainingEpisodes(show)
+        const eps = all.filter((e) => e.airdate !== null && e.airdate <= today)
         const seasons = new Set(eps.map((e) => e.season)).size
+        const coming = new Set(all.map((e) => e.season)).size - new Set(eps.map((e) => e.season)).size
         const avg = eps.length ? Math.round(eps.reduce((s, e) => s + e.minutes, 0) / eps.length) : (show.avg_runtime ?? 0)
         return (
           <ReorderRow key={id} id={id} onDrop={() => commit(id)}>
@@ -162,6 +166,7 @@ function ShelfList({ shows, paceMinutes, now }: { shows: WatchShow[]; paceMinute
                 </span>
                 <span className="tv-osd block text-[14px]" style={{ color: 'var(--tv-faint)' }}>
                   {seasons} {seasons === 1 ? 'SEASON' : 'SEASONS'} · {eps.length} EPS · {avg}M
+                  {coming > 0 ? ` · +${coming} COMING` : ''}
                 </span>
                 <span className="tv-osd tv-green block text-[15px]">
                   ≈ {formatSpan(t.days).toUpperCase()}

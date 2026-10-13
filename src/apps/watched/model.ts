@@ -171,8 +171,31 @@ export function seasonStats(show: WatchShow, today: string): SeasonStat[] {
   })
 }
 
+/**
+ * Seasons with at least one episode out by `today`. A season TVmaze lists as
+ * announced — "Season 3, 8 episodes", no dates — isn't out, and counting it
+ * would say a show has three seasons when you can watch two.
+ */
+export function seasonsOut(show: WatchShow, today: string): number[] {
+  const out = new Set(
+    allEpisodes(show)
+      .filter((e) => e.airdate !== null && e.airdate <= today)
+      .map((e) => e.season),
+  )
+  return seasonNumbers(show).filter((n) => out.has(n))
+}
+
+/** The last season with anything out — what "watched it all" means for a running show. */
+export function lastSeasonOut(show: WatchShow, today: string): number | null {
+  const out = seasonsOut(show, today)
+  return out.length ? out[out.length - 1] : null
+}
+
 export interface ShowTotals {
+  /** Seasons out, not counting ones only announced. */
   seasons: number
+  /** Announced seasons with nothing out yet. */
+  comingSeasons: number
   episodes: number
   minutes: number
   avgRuntime: number
@@ -187,8 +210,10 @@ export function showTotals(show: WatchShow, today: string): ShowTotals {
   const episodes = stats.reduce((t, s) => t + s.episodes, 0)
   const minutes = stats.reduce((t, s) => t + s.minutes, 0)
   const aired = allEpisodes(show).filter((e) => e.airdate !== null && e.airdate <= today)
+  const out = seasonsOut(show, today).length
   return {
-    seasons: seasonNumbers(show).length,
+    seasons: out,
+    comingSeasons: seasonNumbers(show).length - out,
     episodes,
     minutes,
     avgRuntime: episodes ? Math.round(minutes / episodes) : (show.avg_runtime ?? DEFAULT_RUNTIME),

@@ -8,7 +8,7 @@ import { markWatched, rate, setPlan, waitForSeason, type FinishOutcome } from '.
 import { useMe, usePeople, useWatchUI } from './store'
 import { Face, OsdBar, Poster } from './ui'
 import { average, formatScore, seasonScores, showScores } from './ratings'
-import { formatDay, seasonNumbers } from './model'
+import { formatDay, isoDay, seasonsOut } from './model'
 
 /**
  * Scoring: after a season, after a show, or for something watched long ago.
@@ -79,7 +79,7 @@ export function RateSheet({
           : 'RATINGS'
 
   const through = show.plan_to
-  const all = seasonNumbers(show)
+  const all = seasonsOut(show, isoDay(new Date()))
   const backfillSeasons = all.filter((n) => through === null || n <= through)
   const seasonList = backfill ? (seasonsToo ? backfillSeasons : []) : seasons
 

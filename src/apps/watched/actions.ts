@@ -5,7 +5,7 @@ import { fire } from '@/lib/haptics'
 import type { WatchRating, WatchSeason, WatchSettings, WatchShow, WatchView } from '@/data/types'
 import { fetchShowDetail, type ShowDetail } from './tvmaze'
 import { ratingRowId, seasonRowId, viewRowId } from './ids'
-import { allEpisodes, isoDay, lastPlannedSeason, seasonLength } from './model'
+import { allEpisodes, isoDay, lastPlannedSeason, lastSeasonOut, seasonLength } from './model'
 import { toX2 } from './ratings'
 
 /**
@@ -580,7 +580,7 @@ export function markWatched(show: WatchShow, profileId: string | null, at?: stri
   void updateRow('watch_shows', show, {
     stage: 'watched',
     finished_at: at ?? nowIso(),
-    plan_to: show.current_season ?? lastPlannedSeason(show) ?? show.plan_to,
+    plan_to: show.current_season ?? lastSeasonOut(show, today()) ?? lastPlannedSeason(show) ?? show.plan_to,
     updated_by: profileId,
   })
 }
@@ -626,7 +626,7 @@ export function dropShow(show: WatchShow, profileId: string | null): void {
  * the last one they watched.
  */
 export function queueNextSeason(show: WatchShow, profileId: string | null): void {
-  const watchedThrough = show.plan_to ?? lastPlannedSeason(show) ?? 0
+  const watchedThrough = show.plan_to ?? lastSeasonOut(show, today()) ?? 0
   const planned: WatchShow = { ...show, plan_from: watchedThrough + 1, plan_to: null, current_season: null }
   fire('success')
   void updateRow('watch_shows', show, {

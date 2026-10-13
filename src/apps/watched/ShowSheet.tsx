@@ -30,7 +30,7 @@ import {
   formatWhen,
   hasEpisodeOut,
   isoDay,
-  lastPlannedSeason,
+  lastSeasonOut,
   remainingEpisodes,
   seasonNumbers,
   seasonStats,
@@ -82,7 +82,7 @@ function ShowBody({ show }: { show: WatchShow }) {
   const whole = showScores(ratings, show.id)
   const hasDatedFuture = allEpisodes(show).some((e) => e.airdate !== null && e.airdate > today)
   const seasonsAll = seasonNumbers(show)
-  const watchedThrough = show.plan_to ?? lastPlannedSeason(show)
+  const watchedThrough = show.plan_to ?? lastSeasonOut(show, today)
   const laterSeasons = show.stage === 'watched' && seasonsAll.some((n) => n > (watchedThrough ?? 0))
 
   function finish() {
@@ -221,12 +221,16 @@ function ShowBody({ show }: { show: WatchShow }) {
       )}
 
       <div className="grid grid-cols-3 gap-2">
-        <Stat label="SEASONS" value={totals.seasons} />
-        <Stat label="EPISODES" value={totals.episodes} />
+        <Stat
+          label="SEASONS"
+          value={totals.seasons}
+          sub={totals.comingSeasons > 0 ? `+${totals.comingSeasons} coming` : undefined}
+        />
+        <Stat label="EPISODES" value={totals.airedEpisodes} sub={totals.episodes > totals.airedEpisodes ? `+${totals.episodes - totals.airedEpisodes} to air` : undefined} />
         <Stat label="AVG EP" value={`${totals.avgRuntime}M`} />
         <Stat label="EPS/SEASON" value={totals.avgEpisodesPerSeason} />
         <Stat label="RUNTIME" value={formatHours(totals.minutes).replace(' hrs', 'H').replace(' min', 'M').toUpperCase()} />
-        <Stat label="AIRED" value={`${totals.airedEpisodes}`} />
+        <Stat label="STATUS" value={show.status === 'Ended' ? 'ENDED' : show.status === 'Running' ? 'AIRING' : '—'} />
       </div>
 
       {stats.length > 0 && (
@@ -385,7 +389,7 @@ function watchedSeasons(show: WatchShow, log: { show_id: string; season: number;
   const finished = log.filter((r) => r.show_id === show.id && r.finished_at).map((r) => r.season)
   if (finished.length) return [...new Set(finished)].sort((a, b) => a - b)
   if (show.stage === 'watched') {
-    const through = show.plan_to ?? lastPlannedSeason(show) ?? 0
+    const through = show.plan_to ?? lastSeasonOut(show, isoDay(new Date())) ?? 0
     return seasonNumbers(show).filter((n) => n <= through)
   }
   return []

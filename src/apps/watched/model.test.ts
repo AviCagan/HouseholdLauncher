@@ -1,20 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  DEFAULT_RUNTIME,
-  addDaysIso,
-  allEpisodes,
-  daysBetweenIso,
-  formatHours,
-  formatMinutes,
-  formatSpan,
-  hasUnairedEpisodes,
-  lastPlannedSeason,
-  remainingEpisodes,
-  seasonFullyAired,
-  seasonStats,
-  showTotals,
-  yearsLabel,
-} from './model'
+import { DEFAULT_RUNTIME, addDaysIso, allEpisodes, daysBetweenIso, formatHours, formatMinutes, formatSpan, hasUnairedEpisodes, lastPlannedSeason, remainingEpisodes, seasonFullyAired, seasonStats, showTotals, yearsLabel, seasonsOut, lastSeasonOut } from './model'
 import { season, seasonsInfo, show } from './testkit'
 
 describe('allEpisodes', () => {
@@ -82,7 +67,8 @@ describe('seasonStats / showTotals', () => {
 
   it('adds up the show', () => {
     const t = showTotals(s, '2026-10-12')
-    expect(t).toMatchObject({ seasons: 3, episodes: 7, minutes: 300, airedEpisodes: 5, airedMinutes: 210 })
+    // Season 3 is only announced: coming, not out.
+    expect(t).toMatchObject({ seasons: 2, comingSeasons: 1, episodes: 7, minutes: 300, airedEpisodes: 5, airedMinutes: 210 })
     expect(t.avgEpisodesPerSeason).toBe(3.5)
   })
 
@@ -132,5 +118,32 @@ describe('formatting', () => {
     expect(yearsLabel({ premiered: '2022-02-18', ended: null, status: 'Running' })).toBe('2022–')
     expect(yearsLabel({ premiered: '2020-01-01', ended: '2020-06-01', status: 'Ended' })).toBe('2020')
     expect(yearsLabel({ premiered: null, ended: null, status: null })).toBe('')
+  })
+})
+
+describe('seasons that are out', () => {
+  // Daredevil: Born Again as TVmaze has it: two seasons out, a third
+  // announced with eight episodes and no dates.
+  const bornAgain = () =>
+    show({
+      status: 'Running',
+      tvmaze_id: 1,
+      episodes: [...season(1, 9, '2025-03-04', 50, 7), ...season(2, 8, '2026-03-24', 50, 7)],
+      seasons: seasonsInfo({ n: 1, eps: 9 }, { n: 2, eps: 8 }, { n: 3, eps: 8 }),
+    })
+
+  it("doesn't count an announced season as out", () => {
+    const s = bornAgain()
+    expect(seasonsOut(s, '2026-10-13')).toEqual([1, 2])
+    expect(lastSeasonOut(s, '2026-10-13')).toBe(2)
+    const totals = showTotals(s, '2026-10-13')
+    expect(totals.seasons).toBe(2)
+    expect(totals.comingSeasons).toBe(1)
+    expect(totals.airedEpisodes).toBe(17)
+  })
+
+  it('counts a season once its first episode is out', () => {
+    expect(seasonsOut(bornAgain(), '2026-03-24')).toEqual([1, 2])
+    expect(seasonsOut(bornAgain(), '2026-03-23')).toEqual([1])
   })
 })
