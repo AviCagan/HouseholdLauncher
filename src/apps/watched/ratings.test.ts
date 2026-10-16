@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { average, formatScore, rankSeasons, rankShows, seasonScores, showScores, toX2 } from './ratings'
+import { average, formatScore, rankSeasons, rankShows, seasonScores, showScores, toX2, waitingSeasons, waitingShows } from './ratings'
 import { show } from './testkit'
 import type { WatchRating } from '@/data/types'
 
@@ -80,6 +80,44 @@ describe('rankings', () => {
       ['Alpha', 8, 1],
       ['Charlie', 7.8, 3],
       ['Delta', null, null],
+    ])
+  })
+
+  const BOTH = [AVI, JACKIE]
+
+  it('ranks together only what both of them scored', () => {
+    const lone = show({ title: 'Foxtrot', stage: 'watched', finished_at: '2026-05-01' })
+    const all = [...ratings, rating(lone.id, 0, AVI, 10)]
+    const ranked = rankShows([a, b, c, unrated, lone], all, 'together', BOTH)
+    // Foxtrot's lone 10 would top the list; it isn't ranked at all. Nor is
+    // Delta, which nobody has scored.
+    expect(ranked.map((r) => [r.show.title, r.rank])).toEqual([
+      ['Bravo', 1],
+      ['Alpha', 1],
+      ['Charlie', 3],
+    ])
+    expect(waitingShows([a, b, c, unrated, lone], all, BOTH).map((w) => [w.show.title, w.missing])).toEqual([
+      ['Foxtrot', [JACKIE]],
+      ['Delta', [AVI, JACKIE]],
+    ])
+  })
+
+  it('still lists everything when ranked by one person', () => {
+    const lone = show({ title: 'Foxtrot', stage: 'watched', finished_at: '2026-05-01' })
+    const all = [...ratings, rating(lone.id, 0, AVI, 10)]
+    expect(rankShows([a, b, c, lone], all, AVI, BOTH)[0].show.title).toBe('Foxtrot')
+    expect(rankShows([a, b, c, lone], all, JACKIE, BOTH).map((r) => r.show.title)).toContain('Foxtrot')
+  })
+
+  it('ranks together only seasons both of them scored', () => {
+    const both = [...ratings, rating(c.id, 1, AVI, 8)]
+    // Charlie S1 is now scored by both; S2 and Echo S1 by one each.
+    expect(rankSeasons([a, b, c, playing], both, 'together', BOTH).map((r) => [r.show.title, r.season, r.key])).toEqual([
+      ['Charlie', 1, 8.5],
+    ])
+    expect(waitingSeasons([a, b, c, playing], both, BOTH).map((w) => [w.show.title, w.season, w.missing])).toEqual([
+      ['Charlie', 2, [AVI]],
+      ['Echo', 1, [JACKIE]],
     ])
   })
 

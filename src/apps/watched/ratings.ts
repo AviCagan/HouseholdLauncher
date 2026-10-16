@@ -80,6 +80,22 @@ const keyOf = (scores: Scores, by: RankBy): number | null =>
   by === 'together' ? scores.together : (scores.byPerson.get(by) ?? null)
 
 /**
+ * Has everyone scored it? The together ranking only counts what both of
+ * them rated: one person's 9 isn't "our" 9, and ranking it as one would put
+ * a show only one of them has weighed in on above shows they agree on.
+ */
+export const ratedByAll = (scores: Scores, everyone: string[]): boolean =>
+  everyone.every((id) => scores.byPerson.has(id))
+
+/** Who still owes a score. */
+export const missingFrom = (scores: Scores, everyone: string[]): string[] =>
+  everyone.filter((id) => !scores.byPerson.has(id))
+
+/** In the together ranking, with two or more people, only what all of them rated counts. */
+const counts = (scores: Scores, by: RankBy, everyone: string[]): boolean =>
+  by !== 'together' || everyone.length < 2 || ratedByAll(scores, everyone)
+
+/**
  * Competition ranking — 1, 2, 2, 4 — so a tie reads as a tie rather than
  * one of them being silently ranked above the other.
  */
@@ -103,20 +119,27 @@ export interface RankedShow {
   rank: number | null
 }
 
-/**
- * Everything watched, best first. Unrated shows come last, newest finished
- * first, so the list doubles as "what still needs a score".
- */
-export function rankShows(shows: WatchShow[], ratings: WatchRating[], by: RankBy): RankedShow[] {
+/** The shows the Watched channel ranks: finished, or rated as a whole while the next season waits. */
+function rankable(shows: WatchShow[], ratings: WatchRating[]): WatchShow[] {
   // A show rated as a whole stays ranked while its next season is queued;
   // one with only season scores so far waits until it's finished.
   const ratedWhole = new Set(ratings.filter((r) => r.season === 0).map((r) => r.show_id))
-  const rows = shows
-    .filter((s) => s.stage === 'watched' || ratedWhole.has(s.id))
+  return shows.filter((s) => s.stage === 'watched' || ratedWhole.has(s.id))
+}
+
+/**
+ * Everything watched, best first. Ranked by one person, what they haven't
+ * scored comes last, so the list doubles as "what still needs your score".
+ * Ranked together, only shows everyone scored are in it at all (see
+ * `waitingShows` for the rest).
+ */
+export function rankShows(shows: WatchShow[], ratings: WatchRating[], by: RankBy, everyone: string[] = []): RankedShow[] {
+  const rows = rankable(shows, ratings)
     .map((show) => {
       const scores = showScores(ratings, show.id)
       return { show, scores, key: keyOf(scores, by) }
     })
+    .filter((r) => counts(r.scores, by, everyone))
     .sort(
       (a, b) =>
         (b.key ?? -1) - (a.key ?? -1) ||
@@ -134,8 +157,7 @@ export interface RankedSeason {
   rank: number | null
 }
 
-/** Every rated season of every show, best first — "S3 of The Office" against everything. */
-export function rankSeasons(shows: WatchShow[], ratings: WatchRating[], by: RankBy): RankedSeason[] {
+function ratedSeasons(shows: WatchShow[], ratings: WatchRating[]): { show: WatchShow; season: number }[] {
   const byId = new Map(shows.map((s) => [s.id, s]))
   const pairs = new Map<string, { show: WatchShow; season: number }>()
   for (const r of ratings) {
@@ -144,12 +166,17 @@ export function rankSeasons(shows: WatchShow[], ratings: WatchRating[], by: Rank
     if (!show) continue
     pairs.set(`${r.show_id}:${r.season}`, { show, season: r.season })
   }
-  const rows = [...pairs.values()]
+  return [...pairs.values()]
+}
+
+/** Every rated season of every show, best first — "S3 of The Office" against everything. */
+export function rankSeasons(shows: WatchShow[], ratings: WatchRating[], by: RankBy, everyone: string[] = []): RankedSeason[] {
+  const rows = ratedSeasons(shows, ratings)
     .map(({ show, season }) => {
       const scores = seasonScores(ratings, show.id, season)
       return { show, season, scores, key: keyOf(scores, by) }
     })
-    .filter((r) => r.key !== null)
+    .filter((r) => r.key !== null && counts(r.scores, by, everyone))
     .sort(
       (a, b) =>
         (b.key ?? -1) - (a.key ?? -1) ||
@@ -157,4 +184,40 @@ export function rankSeasons(shows: WatchShow[], ratings: WatchRating[], by: Rank
         a.season - b.season,
     )
   return withRanks(rows)
+}
+
+export interface Waiting {
+  show: WatchShow
+  /** 0 for the whole show. */
+  season: number
+  scores: Scores
+  /** Who hasn't scored it yet. */
+  missing: string[]
+}
+
+/**
+ * What's left out of the together ranking because not everyone has scored
+ * it — one person rated it, or nobody has yet. Most recently finished first.
+ */
+export function waitingShows(shows: WatchShow[], ratings: WatchRating[], everyone: string[]): Waiting[] {
+  if (everyone.length < 2) return []
+  return rankable(shows, ratings)
+    .map((show) => {
+      const scores = showScores(ratings, show.id)
+      return { show, season: 0, scores, missing: missingFrom(scores, everyone) }
+    })
+    .filter((w) => w.missing.length > 0)
+    .sort((a, b) => (b.show.finished_at ?? '').localeCompare(a.show.finished_at ?? '') || a.show.title.localeCompare(b.show.title))
+}
+
+/** Seasons one of them has scored and the other hasn't. */
+export function waitingSeasons(shows: WatchShow[], ratings: WatchRating[], everyone: string[]): Waiting[] {
+  if (everyone.length < 2) return []
+  return ratedSeasons(shows, ratings)
+    .map(({ show, season }) => {
+      const scores = seasonScores(ratings, show.id, season)
+      return { show, season, scores, missing: missingFrom(scores, everyone) }
+    })
+    .filter((w) => w.missing.length > 0)
+    .sort((a, b) => a.show.title.localeCompare(b.show.title) || a.season - b.season)
 }

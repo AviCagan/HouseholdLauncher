@@ -4,7 +4,7 @@ import type { WatchShow } from '@/data/types'
 import { useWatched } from './useWatched'
 import { usePeople, useWatchUI, type Person } from './store'
 import { Face, NoSignal, Poster, SectionHead } from './ui'
-import { formatScore, rankSeasons, rankShows, type RankBy, type Scores } from './ratings'
+import { formatScore, rankSeasons, rankShows, waitingSeasons, waitingShows, type RankBy, type Scores, type Waiting } from './ratings'
 import { isSingleSeason, yearsLabel } from './model'
 import { Patterns } from './Patterns'
 
@@ -20,8 +20,16 @@ export function WatchedTab() {
   const [by, setBy] = useState<RankBy>('together')
   const [showDropped, setShowDropped] = useState(false)
 
-  const rankedShows = useMemo(() => rankShows(shows, ratings, by), [shows, ratings, by])
-  const rankedSeasons = useMemo(() => rankSeasons(shows, ratings, by), [shows, ratings, by])
+  const everyone = useMemo(() => people.map((p) => p.id), [people])
+  const rankedShows = useMemo(() => rankShows(shows, ratings, by, everyone), [shows, ratings, by, everyone])
+  const rankedSeasons = useMemo(() => rankSeasons(shows, ratings, by, everyone), [shows, ratings, by, everyone])
+  // Left out of the together ranking until both have scored them.
+  const waiting = useMemo(
+    () =>
+      by !== 'together' ? [] : unit === 'shows' ? waitingShows(shows, ratings, everyone) : waitingSeasons(shows, ratings, everyone),
+    [by, unit, shows, ratings, everyone],
+  )
+  const bothNone = by === 'together' && waiting.length > 0
   const dropped = shows.filter((s) => s.stage === 'dropped')
 
   const addPast = () => {
@@ -72,8 +80,12 @@ export function WatchedTab() {
           {unit === 'shows' ? (
             rankedShows.length === 0 ? (
               <NoSignal
-                title="No ratings yet"
-                hint="Finish something, or add the shows you've already watched to rate them."
+                title={bothNone ? 'Nothing you both rated' : 'No ratings yet'}
+                hint={
+                  bothNone
+                    ? 'Shows land here once you both score them. The ones waiting are below.'
+                    : "Finish something, or add the shows you've already watched to rate them."
+                }
                 action={
                   <button onClick={addPast} className="tv-btn tv-btn--yellow tv-osd px-4 py-2.5 text-[17px]">
                     + ADD SOMETHING WE'VE WATCHED
@@ -97,7 +109,10 @@ export function WatchedTab() {
               </div>
             )
           ) : rankedSeasons.length === 0 ? (
-            <NoSignal title="No season scores" hint="Seasons get a score when you finish them." />
+            <NoSignal
+              title={bothNone ? 'No seasons you both rated' : 'No season scores'}
+              hint={bothNone ? 'The ones waiting on a score are below.' : 'Seasons get a score when you finish them.'}
+            />
           ) : (
             <div className="flex flex-col gap-2">
               {rankedSeasons.map((r) => (
@@ -115,6 +130,35 @@ export function WatchedTab() {
             </div>
           )}
 
+          {waiting.length > 0 && (
+            <>
+              <SectionHead>⏳ WAITING ON A SCORE</SectionHead>
+              <p className="-mt-1 px-1 pb-2 text-[12.5px]" style={{ color: 'var(--tv-faint)' }}>
+                Not in the together ranking until you've both rated them.
+              </p>
+              <div className="flex flex-col gap-2">
+                {waiting.map((w) => (
+                  <RankRow
+                    key={`${w.show.id}:${w.season}`}
+                    show={w.show}
+                    rank={null}
+                    scores={w.scores}
+                    people={people}
+                    note={waitingNote(w, people)}
+                    waitingOn
+                    onOpen={() => open({ kind: 'show', showId: w.show.id })}
+                    onRate={() =>
+                      open(
+                        w.season === 0
+                          ? { kind: 'rate', showId: w.show.id, seasons: [], includeShow: true }
+                          : { kind: 'rate', showId: w.show.id, seasons: [w.season], includeShow: false },
+                      )
+                    }
+                  />
+                ))}
+              </div>
+            </>
+          )}
         </>
       )}
 
@@ -153,12 +197,20 @@ export function WatchedTab() {
   )
 }
 
+/** "NEEDS JACKIE'S SCORE", "SEASON 2 · NEEDS BOTH SCORES". */
+function waitingNote(w: Waiting, people: Person[]): string {
+  const names = w.missing.map((id) => people.find((p) => p.id === id)?.name.toUpperCase() ?? '?')
+  const who = names.length === people.length ? 'NEEDS BOTH SCORES' : `NEEDS ${names.join(' & ')}'S SCORE`
+  return w.season === 0 || isSingleSeason(w.show) ? who : `SEASON ${w.season} · ${who}`
+}
+
 function RankRow({
   show,
   rank,
   scores,
   people,
   note,
+  waitingOn = false,
   onOpen,
   onRate,
 }: {
@@ -167,6 +219,8 @@ function RankRow({
   scores: Scores
   people: Person[]
   note: string
+  /** Not everyone has scored it: no together number, just the button. */
+  waitingOn?: boolean
   onOpen: () => void
   onRate: () => void
 }) {
@@ -203,7 +257,7 @@ function RankRow({
           </span>
         </span>
       </button>
-      {scores.together === null ? (
+      {scores.together === null || waitingOn ? (
         <button
           onClick={() => {
             fire('tap')
