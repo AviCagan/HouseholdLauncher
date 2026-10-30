@@ -330,6 +330,17 @@ the built-in Calendar app instead, which is the shorter route there.
 
 ---
 
+## Another app shares this project
+
+Since 2026-10-30 this Supabase project also holds the cloud saves of **Beaker Buddies**, a separate
+study game (https://github.com/AviCagan/LetThemCook): one table and three functions, all named
+`bb_*`, plus two `beaker_buddies_*` entries in the migration history. They are deliberately not in
+`setup.sql` or the numbered files here, and nothing in the household app uses them. Leave them in
+place, and expect two advisor warnings about them (anon can call a `SECURITY DEFINER` function, and
+RLS is on with no policy); both are intended. Details are in [`../CLAUDE.md`](../CLAUDE.md).
+
+---
+
 ## Costs
 
 Free. Supabase's free tier covers this easily, Firebase push is free at any
