@@ -120,8 +120,8 @@ describe('speed in the estimates', () => {
     expect(speed.has(unrated.id)).toBe(false)
 
     const now = at('2026-10-12')
-    const plain = projectLineup([loved], [], 300, now).get(loved.id)!
-    const fast = projectLineup([loved], [], 300, now, undefined, speed).get(loved.id)!
+    const plain = projectLineup([loved], 300, now).get(loved.id)!
+    const fast = projectLineup([loved], 300, now, undefined, speed).get(loved.id)!
     expect(fast.finish!.getTime()).toBeLessThan(plain.finish!.getTime())
     // The time left is still the real running time.
     expect(fast.minutesLeft).toBe(300)

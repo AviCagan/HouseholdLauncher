@@ -42,8 +42,8 @@ export function useWatched() {
   const pattern = useMemo(() => ratingPace(runs), [runs])
   const speed = useMemo(() => speedFactors(shows, ratings, pattern), [shows, ratings, pattern])
   const projections = useMemo(
-    () => projectLineup(shows, log, pace.minutesPerWeek, now, HORIZON_DAYS, speed),
-    [shows, log, pace.minutesPerWeek, now, speed],
+    () => projectLineup(shows, pace.minutesPerWeek, now, HORIZON_DAYS, speed),
+    [shows, pace.minutesPerWeek, now, speed],
   )
 
   const lineup = useMemo(

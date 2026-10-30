@@ -8,7 +8,10 @@ import { OURS_JACK, shelfName, useMe, usePeople, useWatchUI } from './store'
 import { Chip, Face, Poster, Stat } from './ui'
 import {
   dropShow,
-  finishSeason,
+  finishWithUndo,
+  offerUndo,
+  reopenShow,
+  snapshot,
   markWatched,
   markWatchedBefore,
   moveToShelf,
@@ -88,8 +91,8 @@ function ShowBody({ show }: { show: WatchShow }) {
   function finish() {
     if (!show.current_season) return
     const season = show.current_season
-    const outcome = finishSeason(show, me)
-    replace({ kind: 'rate', showId: show.id, seasons: [season], includeShow: outcome.kind === 'finished', outcome })
+    const { outcome, undo } = finishWithUndo(show, me)
+    replace({ kind: 'rate', showId: show.id, seasons: [season], includeShow: outcome.kind === 'finished', outcome, undo })
   }
 
   const stageLine =
@@ -240,7 +243,19 @@ function ShowBody({ show }: { show: WatchShow }) {
 
       {stats.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <p className="tv-osd tv-amber px-1 text-[17px]">SEASONS</p>
+          <div className="flex items-center justify-between px-1">
+            <span className="tv-osd tv-amber text-[17px]">SEASONS</span>
+            <button
+              onClick={() => {
+                fire('tap')
+                replace({ kind: 'dates', showId: show.id })
+              }}
+              className="tv-osd text-[14px]"
+              style={{ color: 'var(--tv-dim)' }}
+            >
+              ⏱ ADD / FIX DATES
+            </button>
+          </div>
           {stats.map((st) => {
             const row = log.find((r) => r.show_id === show.id && r.season === st.n)
             const sc = seasonScores(ratings, show.id, st.n)
@@ -476,7 +491,7 @@ function Actions({
           <span className="text-[12px] opacity-70">HOLD TO PICK DATES</span>
         </button>
         <button onClick={() => pauseShow(show, me)} className={btn}>⏸ PAUSE</button>
-        <button onClick={() => { markWatched(show, me); onRate() }} className={btn}>✓ CALL IT WATCHED</button>
+        <button onClick={() => { offerUndo(`${show.title} marked watched`, snapshot(show), me); markWatched(show, me); onRate() }} className={btn}>✓ CALL IT WATCHED</button>
         <button onClick={() => dropShow(show, me)} className={`${btn} col-span-2`} style={{ color: 'var(--tv-red)' }}>✕ DROP IT</button>
       </div>
     )
@@ -488,6 +503,11 @@ function Actions({
         {laterSeasons && (
           <button onClick={() => { queueNextSeason(show, me); onGoOnAir() }} className={btn}>
             + NEXT SEASON{hasDatedFuture ? ' (AIRING)' : ''}
+          </button>
+        )}
+        {!show.watched_before && (
+          <button onClick={() => { reopenShow(show, me); onGoOnAir() }} className={`${btn} col-span-2`}>
+            ↩ NOT FINISHED — PUT IT BACK ON
           </button>
         )}
       </div>

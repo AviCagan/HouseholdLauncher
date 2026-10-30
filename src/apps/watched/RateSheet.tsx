@@ -4,7 +4,7 @@ import { Sheet } from '@/components/primitives/Sheet'
 import { fire } from '@/lib/haptics'
 import { useData } from '@/store/useData'
 import type { WatchShow } from '@/data/types'
-import { markWatched, rate, setPlan, waitForSeason, type FinishOutcome } from './actions'
+import { markWatched, rate, restore, setPlan, waitForSeason, type FinishOutcome, type WatchSnapshot } from './actions'
 import { useMe, usePeople, useWatchUI } from './store'
 import { Face, OsdBar, Poster } from './ui'
 import { average, formatScore, seasonScores, showScores } from './ratings'
@@ -25,12 +25,14 @@ export function RateSheet({
   includeShow,
   outcome,
   backfill = false,
+  undo,
 }: {
   showId: string
   seasons: number[]
   includeShow: boolean
   outcome?: FinishOutcome
   backfill?: boolean
+  undo?: WatchSnapshot
 }) {
   const close = useWatchUI((s) => s.close)
   const setTab = useWatchUI((s) => s.setTab)
@@ -186,6 +188,20 @@ export function RateSheet({
         <button onClick={done} className="tv-btn tv-btn--cream tv-osd mt-1 py-3 text-[19px]">
           DONE
         </button>
+        {undo && (
+          <button
+            onClick={() => {
+              // Back exactly as it was; skip the caught-up question.
+              decided.current = true
+              restore(undo, me)
+              close()
+            }}
+            className="tv-osd self-center py-1 text-[16px]"
+            style={{ color: 'var(--tv-red)' }}
+          >
+            ↶ UNDO — WE DIDN'T FINISH {outcome?.kind === 'finished' ? 'IT' : 'THIS SEASON'}
+          </button>
+        )}
       </div>
     </Sheet>
   )

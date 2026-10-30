@@ -7,7 +7,7 @@ import type { EpisodeTuple, WatchShow } from '@/data/types'
 import { useWatched } from './useWatched'
 import { OURS_JACK, useMe, usePeople, useWatchUI } from './store'
 import { Poster } from './ui'
-import { addShow, between, eveningOf, finishSeason, logEpisodes, setPoster, slotIntoLineup, updatePace, type Destination } from './actions'
+import { addShow, between, eveningOf, finishWithUndo, logEpisodes, setSeasonDates, setSeasonStart, setPoster, slotIntoLineup, updatePace, type Destination } from './actions'
 import { fetchPosters, type PosterOption } from './tvmaze'
 import { allEpisodes, formatHours, formatMinutes, formatSpan, isoDay, lastPlannedSeason, seasonLength } from './model'
 import { clampPace, episodesPerWeek } from './pace'
@@ -508,8 +508,8 @@ export function FinishSheet({ showId }: { showId: string }) {
   const valid = started <= finished && finished <= today
 
   function finish(when: { startedAt?: string; finishedAt?: string }) {
-    const outcome = finishSeason(show!, me, when)
-    replace({ kind: 'rate', showId: show!.id, seasons: [season!], includeShow: outcome.kind === 'finished', outcome })
+    const { outcome, undo } = finishWithUndo(show!, me, when)
+    replace({ kind: 'rate', showId: show!.id, seasons: [season!], includeShow: outcome.kind === 'finished', outcome, undo })
   }
 
   return (
@@ -658,6 +658,106 @@ export function LogSheet({ showId, from }: { showId: string; from: number }) {
             </button>
           </>
         )}
+      </div>
+    </Sheet>
+  )
+}
+
+// --- season dates ------------------------------------------------------------------
+
+/**
+ * "We watched season 1 between these dates." For a season finished before
+ * the app knew about it, or one whose record was lost — a show removed and
+ * added again starts with no history. The pace and the patterns learn from
+ * these dates as if the season had been timed.
+ */
+export function DatesSheet({ showId }: { showId: string }) {
+  const close = useWatchUI((s) => s.close)
+  const { shows, log, now } = useWatched()
+  const me = useMe()
+  const show = shows.find((s) => s.id === showId)
+  const today = isoDay(now)
+  const seasons = show ? [...new Set(allEpisodes(show).filter((e) => e.airdate !== null && e.airdate <= today).map((e) => e.season))].sort((a, b) => a - b) : []
+  // Start on the first season with no dates yet.
+  const [season, setSeason] = useState<number>(
+    () => seasons.find((n) => !log.some((r) => r.show_id === showId && r.season === n && r.started_at && r.finished_at)) ?? seasons[0] ?? 1,
+  )
+  const row = log.find((r) => r.show_id === showId && r.season === season)
+  const [started, setStarted] = useState<string>(() => (row?.started_at ? isoDay(new Date(row.started_at)) : today))
+  const [finished, setFinished] = useState<string>(() => (row?.finished_at ? isoDay(new Date(row.finished_at)) : today))
+
+  if (!show) return null
+  // The season on now hasn't finished: it only gets a start date.
+  const playing = show.stage === 'watching' && show.current_season === season
+  const valid = playing ? started <= today : started <= finished && finished <= today
+
+  function pick(n: number) {
+    fire('snap')
+    setSeason(n)
+    const r = log.find((x) => x.show_id === showId && x.season === n)
+    setStarted(r?.started_at ? isoDay(new Date(r.started_at)) : today)
+    setFinished(r?.finished_at ? isoDay(new Date(r.finished_at)) : today)
+  }
+
+  return (
+    <Sheet open onClose={close} title={<span className="tv-osd tv-yellow text-[22px]">SEASON DATES</span>}>
+      <div className="flex flex-col gap-4 pb-6">
+        <div className="flex items-center gap-3">
+          <Poster url={show.poster_url} title={show.title} className="h-[72px] w-[48px] shrink-0" />
+          <span className="tv-glow min-w-0 truncate text-[17px] font-bold">{show.title}</span>
+        </div>
+
+        {seasons.length > 1 && (
+          <div className="scroll-x -mx-5 flex gap-1.5 px-5">
+            {seasons.map((n) => {
+              const dated = log.some((r) => r.show_id === showId && r.season === n && r.started_at && r.finished_at)
+              return (
+                <button
+                  key={n}
+                  onClick={() => pick(n)}
+                  className={`tv-osd shrink-0 rounded-lg px-3 py-1.5 text-[17px] ${season === n ? 'tv-btn tv-btn--cream' : ''}`}
+                  style={{ boxShadow: season === n ? undefined : 'inset 0 0 0 1px var(--tv-line)' }}
+                >
+                  S{n}
+                  {dated ? ' ✓' : ''}
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="STARTED">
+            <input type="date" value={started} max={playing ? today : finished} onChange={(e) => e.target.value && setStarted(e.target.value)} className="tv-input text-[15px]" />
+          </Field>
+          {playing ? (
+            <Field label="FINISHED">
+              <span className="tv-osd grid min-h-[48px] place-items-center text-[16px]" style={{ color: 'var(--tv-red)' }}>
+                ▶ WATCHING NOW
+              </span>
+            </Field>
+          ) : (
+            <Field label="FINISHED">
+              <input type="date" value={finished} max={today} onChange={(e) => e.target.value && setFinished(e.target.value)} className="tv-input text-[15px]" />
+            </Field>
+          )}
+        </div>
+        <p className="text-[12.5px] leading-snug" style={{ color: 'var(--tv-faint)' }}>
+          Roughly is fine. These go into your pace and into how long each season took, so a show you removed and added
+          again, or one you watched before using the app, still counts.
+        </p>
+        <button
+          disabled={!valid}
+          onClick={() => {
+            if (playing) setSeasonStart(show, season, eveningOf(started, 20), me)
+            else setSeasonDates(show, season, eveningOf(started, 20), finished === today ? new Date().toISOString() : eveningOf(finished), me)
+            toast.success(playing ? `Season ${season} start saved` : `Season ${season} dates saved`)
+            close()
+          }}
+          className="tv-btn tv-btn--yellow tv-osd py-3 text-[19px]"
+        >
+          SAVE SEASON {season}
+        </button>
       </div>
     </Sheet>
   )

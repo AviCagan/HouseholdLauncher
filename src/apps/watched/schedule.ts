@@ -1,4 +1,4 @@
-import type { WatchSeason, WatchShow } from '@/data/types'
+import type { WatchShow } from '@/data/types'
 import { allEpisodes, dayStart, isoDay, remainingEpisodes, type Ep } from './model'
 
 /**
@@ -79,52 +79,15 @@ function dayAt(base: Date, n: number): number {
 }
 
 /**
- * Where they are in the season they're on, right now.
- *
- * Starts from the last thing anyone said — an episode count and when — or
- * from the season's start, and adds what the pace says they've watched
- * since. Two limits keep it honest: it never counts an episode that hasn't
- * aired, and it never finishes the season, because finishing is the one
- * thing they always tell us. A season that "should" be over is reported as
- * down to its last episode.
+ * Where they are in the season they're on: exactly the episode they last
+ * ticked to. Never guessed — the counter moves when they tap + or −, and the
+ * pace only decides how long the rest will take.
  */
-export function estimatePosition(
-  show: WatchShow,
-  log: WatchSeason[],
-  minutesPerWeek: number,
-  now: Date,
-): Position | null {
+export function reportedPosition(show: WatchShow): Position | null {
   const season = show.current_season
   if (!season) return null
-  const eps = allEpisodes(show).filter((e) => e.season === season)
-  const today = isoDay(now)
-  const len = eps.length
-  const explicit = show.progress_at !== null
-  const anchorDone = Math.min(show.current_episode, Math.max(0, len - 1))
-  if (len === 0) return { season, done: 0, estimated: false }
-
-  const row = log.find((r) => r.show_id === show.id && r.season === season)
-  const anchorIso = show.progress_at ?? row?.started_at ?? show.started_at
-  const anchor = anchorIso ? Date.parse(anchorIso) : now.getTime()
-  const aired = eps.filter((e) => e.airdate !== null && e.airdate <= today).length
-  const cap = Math.max(anchorDone, len - 1)
-
-  let done = anchorDone
-  if (show.live) {
-    // Watching as it airs: assume they're caught up with what's out.
-    done = Math.max(anchorDone, Math.min(aired, cap))
-  } else {
-    let budget = (Math.max(0, now.getTime() - anchor) / DAY) * (minutesPerWeek / 7)
-    for (let i = anchorDone; i < len; i++) {
-      const ep = eps[i]
-      if (ep.airdate === null || ep.airdate > today) break
-      if (budget + EPS < ep.minutes) break
-      budget -= ep.minutes
-      done++
-    }
-    done = Math.min(done, cap)
-  }
-  return { season, done, estimated: !explicit || done > anchorDone }
+  const len = allEpisodes(show).filter((e) => e.season === season).length
+  return { season, done: Math.max(0, Math.min(show.current_episode, len)), estimated: false }
 }
 
 /** What one slot could watch today, capped at `limit` — no need to count further. */
@@ -193,7 +156,6 @@ function waterfill(budget: number, group: Slot[], today: number, perDay: number)
  */
 export function projectLineup(
   shows: WatchShow[],
-  log: WatchSeason[],
   minutesPerWeek: number,
   now: Date,
   horizonDays: number = HORIZON_DAYS,
@@ -210,13 +172,8 @@ export function projectLineup(
     .filter((s) => s.stage === 'watching' || s.stage === 'lineup')
     .sort((a, b) => a.lineup_order - b.lineup_order)
 
-  // Started binge shows split the time between them, so the catch-up
-  // estimate for each gets its share rather than the whole week.
-  const binging = Math.max(1, active.filter((s) => s.stage === 'watching' && !s.live).length)
-
   const slots: Slot[] = active.map((show) => {
-    const position =
-      show.stage === 'watching' ? estimatePosition(show, log, minutesPerWeek / binging, now) : null
+    const position = show.stage === 'watching' ? reportedPosition(show) : null
     const real = remainingEpisodes(show, position ? { season: position.season, done: position.done } : null)
     const f = speed.get(show.id) ?? 1
     const eps = f === 1 ? real : real.map((e) => ({ ...e, minutes: e.minutes / f }))

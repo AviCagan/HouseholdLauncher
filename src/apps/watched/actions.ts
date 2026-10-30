@@ -674,20 +674,187 @@ export function removeShow(show: WatchShow): void {
   fire('delete')
   const seasons = rows('watch_seasons').filter((r) => r.show_id === show.id)
   const ratings = rows('watch_ratings').filter((r) => r.show_id === show.id)
+  const views = rows('watch_views').filter((r) => r.show_id === show.id)
   drop('watch_shows', show.id)
   // The database cascades; the local copy has to follow or they linger here.
   for (const r of seasons) drop('watch_seasons', r.id)
   for (const r of ratings) drop('watch_ratings', r.id)
+  for (const r of views) drop('watch_views', r.id)
+  const putBack = () => {
+    put('watch_shows', show)
+    for (const r of seasons) put('watch_seasons', r)
+    for (const r of ratings) put('watch_ratings', r)
+    for (const r of views) put('watch_views', r)
+  }
   void (async () => {
     try {
       await adapter().remove('watch_shows', show.id)
     } catch (err) {
-      put('watch_shows', show)
-      for (const r of seasons) put('watch_seasons', r)
-      for (const r of ratings) put('watch_ratings', r)
+      putBack()
       failed(`Couldn't remove ${show.title}`, err)
+      return
     }
+    // Removed for real. Undo puts back the show and everything hanging off
+    // it — its seasons and their dates, the ratings, the episode log — so a
+    // slip of the finger costs nothing.
+    toast(`${show.title} removed`, {
+      duration: 10_000,
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          putBack()
+          void (async () => {
+            try {
+              await adapter().insert('watch_shows', show)
+              for (const r of seasons) await adapter().insert('watch_seasons', r)
+              for (const r of ratings) await adapter().insert('watch_ratings', r)
+              if (viewsReady()) for (const r of views) await adapter().insert('watch_views', r)
+              fire('success')
+            } catch (err) {
+              failed(`Couldn't bring ${show.title} back`, err)
+            }
+          })()
+        },
+      },
+    })
   })()
+}
+
+// --- undo ---------------------------------------------------------------------------
+
+/** A show and its season records as they were, to put back after a mis-tap. */
+export interface WatchSnapshot {
+  show: WatchShow
+  seasons: WatchSeason[]
+}
+
+export function snapshot(show: WatchShow): WatchSnapshot {
+  const current = rows('watch_shows').find((s) => s.id === show.id) ?? show
+  return { show: current, seasons: rows('watch_seasons').filter((r) => r.show_id === show.id) }
+}
+
+/**
+ * Undo "finished": the show goes back exactly where it was — stage, season,
+ * episode — and the season records go back to their old dates, so the pace
+ * and the patterns never learn from a finish that didn't happen.
+ */
+export function restore(snap: WatchSnapshot, profileId: string | null): void {
+  const current = rows('watch_shows').find((s) => s.id === snap.show.id)
+  if (!current) return
+  toast.dismiss(UNDO_TOAST)
+  const { stage, current_season, current_episode, progress_at, started_at, finished_at, plan_from, plan_to, live, lineup_order } = snap.show
+  fire('toggleOff')
+  void updateRow(
+    'watch_shows',
+    current,
+    { stage, current_season, current_episode, progress_at, started_at, finished_at, plan_from, plan_to, live, lineup_order, updated_by: profileId },
+    "Couldn't undo that",
+  )
+  const before = new Map(snap.seasons.map((r) => [r.id, r]))
+  for (const row of rows('watch_seasons').filter((r) => r.show_id === snap.show.id)) {
+    const old = before.get(row.id)
+    if (!old) {
+      // Made by the finish (the next season's start): take it away again.
+      drop('watch_seasons', row.id)
+      void adapter()
+        .remove('watch_seasons', row.id)
+        .catch((err) => {
+          put('watch_seasons', row)
+          failed("Couldn't undo that", err)
+        })
+    } else if (old.started_at !== row.started_at || old.finished_at !== row.finished_at) {
+      void updateRow('watch_seasons', row, { started_at: old.started_at, finished_at: old.finished_at, updated_by: profileId }, "Couldn't undo that")
+    }
+  }
+}
+
+/**
+ * Finish the season and say so with an Undo — every finish button goes
+ * through here, so every finish can be taken back.
+ */
+export function finishWithUndo(
+  show: WatchShow,
+  profileId: string | null,
+  when: { startedAt?: string; finishedAt?: string } = {},
+): { outcome: FinishOutcome; undo: WatchSnapshot } {
+  const undo = snapshot(show)
+  const outcome = finishSeason(show, profileId, when)
+  offerUndo(outcome.kind === 'finished' ? `${show.title} finished` : `Season ${show.current_season} finished`, undo, profileId)
+  return { outcome, undo }
+}
+
+const UNDO_TOAST = 'watched-undo'
+
+/** A toast after a finish, with Undo — the quickest way back from a mis-tap. */
+export function offerUndo(label: string, snap: WatchSnapshot, profileId: string | null): void {
+  toast(label, { id: UNDO_TOAST, duration: 10_000, action: { label: 'Undo', onClick: () => restore(snap, profileId) } })
+}
+
+/**
+ * "We didn't actually finish it" for a show already in Watched: back to
+ * playing its last season, at the last episode they logged, and that
+ * season's finish taken off the record.
+ */
+export function reopenShow(show: WatchShow, profileId: string | null): void {
+  const t = today()
+  const season = show.plan_to ?? lastSeasonOut(show, t) ?? lastPlannedSeason(show) ?? firstSeason(show)
+  const logged = rows('watch_views').filter((v) => v.show_id === show.id && v.season === season)
+  const at = logged.length ? Math.max(...logged.map((v) => v.episode)) : 0
+  const len = seasonLength(show, season)
+  fire('success')
+  void updateRow('watch_shows', show, {
+    stage: 'watching',
+    current_season: season,
+    current_episode: Math.min(at, Math.max(0, len - 1)),
+    progress_at: nowIso(),
+    finished_at: null,
+    watched_before: false,
+    started_at: show.started_at ?? nowIso(),
+    updated_by: profileId,
+  })
+  const row = rows('watch_seasons').find((r) => r.id === seasonRowId(show.id, season))
+  if (row?.finished_at) void updateRow('watch_seasons', row, { finished_at: null, updated_by: profileId })
+  else if (!row) void startSeasonRow(show, season, nowIso(), profileId)
+}
+
+/** When the season playing now really started — the only date it has yet. */
+export function setSeasonStart(show: WatchShow, season: number, startedAt: string, profileId: string | null): void {
+  const row = rows('watch_seasons').find((r) => r.id === seasonRowId(show.id, season))
+  fire('success')
+  if (row) void updateRow('watch_seasons', row, { started_at: startedAt, updated_by: profileId }, "Couldn't save that date")
+  else void startSeasonRow(show, season, startedAt, profileId)
+  if (!show.started_at || Date.parse(startedAt) < Date.parse(show.started_at)) {
+    void updateRow('watch_shows', show, { started_at: startedAt, updated_by: profileId })
+  }
+}
+
+/**
+ * Put real dates on a season — one finished before the app knew, or one
+ * whose record was lost. The pace and the patterns learn from it as if it
+ * had been timed.
+ */
+export function setSeasonDates(show: WatchShow, season: number, startedAt: string, finishedAt: string, profileId: string | null): void {
+  const [start, end] = Date.parse(startedAt) <= Date.parse(finishedAt) ? [startedAt, finishedAt] : [finishedAt, startedAt]
+  const now = nowIso()
+  fire('success')
+  void upsertRow(
+    'watch_seasons',
+    {
+      id: seasonRowId(show.id, season),
+      show_id: show.id,
+      season,
+      show_title: show.title,
+      started_at: start,
+      finished_at: end,
+      watched_before: false,
+      created_by: profileId,
+      updated_by: profileId,
+      created_at: now,
+      updated_at: now,
+    },
+    { started_at: start, finished_at: end, watched_before: false, updated_by: profileId },
+    "Couldn't save those dates",
+  )
 }
 
 // --- ratings ------------------------------------------------------------------------

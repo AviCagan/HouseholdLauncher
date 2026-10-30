@@ -3,7 +3,7 @@ import { useMemo } from 'react'
 import { useData } from '@/store/useData'
 import { useMembers, type Member } from '@/store/useMember'
 import { useProfile } from '@/store/useProfile'
-import type { Destination, FinishOutcome } from './actions'
+import type { Destination, FinishOutcome, WatchSnapshot } from './actions'
 
 /**
  * Which channel is on and which sheet is up. A store rather than props
@@ -26,6 +26,8 @@ export type WatchSheet =
       outcome?: FinishOutcome
       /** Added after the fact: ask which seasons they watched as well. */
       backfill?: boolean
+      /** How the show was before the finish, for "we didn't finish it". */
+      undo?: WatchSnapshot
     }
   | { kind: 'pace' }
   | { kind: 'slot'; showId: string }
@@ -35,6 +37,8 @@ export type WatchSheet =
   | { kind: 'finish'; showId: string }
   /** Log episodes watched earlier, with when. */
   | { kind: 'log'; showId: string; from: number }
+  /** Put real dates on a season: one watched before the app, or one whose record was lost. */
+  | { kind: 'dates'; showId: string }
 
 interface WatchUI {
   tab: WatchTab

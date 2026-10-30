@@ -7,7 +7,7 @@ import { useMe, useWatchUI } from './store'
 import { Chip, NoSignal, Poster, ReorderRow, SectionHead } from './ui'
 import {
   between,
-  finishSeason,
+  finishWithUndo,
   firstSeason,
   setLineupOrder,
   slotIntoLineup,
@@ -152,16 +152,16 @@ function NowCard({ show, projection, now }: { show: WatchShow; projection: Proje
   const open = useWatchUI((s) => s.open)
   const season = show.current_season ?? 1
   const len = seasonLength(show, season)
-  const done = projection?.position?.done ?? show.current_episode
-  const estimated = projection?.position?.estimated ?? false
+  // Exactly where they ticked to: the counter only moves on + and −.
+  const done = Math.min(show.current_episode, len)
   const seasonDone = projection?.seasonFinish.get(season)
   const final = season === lastPlannedSeason(show) && (show.status === 'Ended' || show.tvmaze_id === null)
   const nextEpisode = allEpisodes(show).filter((e) => e.season === season)[done]
   const nextAirs = nextEpisode?.airdate && nextEpisode.airdate > isoDay(now) ? nextEpisode.airdate : null
 
   function finish() {
-    const outcome = finishSeason(show, me)
-    open({ kind: 'rate', showId: show.id, seasons: [season], includeShow: outcome.kind === 'finished', outcome })
+    const { outcome, undo } = finishWithUndo(show, me)
+    open({ kind: 'rate', showId: show.id, seasons: [season], includeShow: outcome.kind === 'finished', outcome, undo })
   }
   // Tap for now; hold to say when — the dates are what the pace learns from.
   const finishHold = useHold(finish, () => open({ kind: 'finish', showId: show.id }))
@@ -191,11 +191,10 @@ function NowCard({ show, projection, now }: { show: WatchShow; projection: Proje
           </div>
           <h3 className="tv-glow mt-1 line-clamp-2 text-[17px] font-bold leading-tight">{show.title}</h3>
           <p className="tv-osd tv-green mt-1.5 text-[24px]">
-            S{season} · {estimated ? '≈' : ''}
-            {done}/{len}
+            S{season} · {done}/{len}
           </p>
           <p className="tv-osd text-[13px]" style={{ color: 'var(--tv-faint)' }}>
-            EPISODES WATCHED{estimated ? ' · ESTIMATE' : ''}
+            EPISODES WATCHED
           </p>
           <EpisodeTrack done={done} len={len} />
           <p className="tv-osd mt-1.5 text-[15px]" style={{ color: 'var(--tv-dim)' }}>

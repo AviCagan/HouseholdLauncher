@@ -14,7 +14,7 @@ import { WatchedTab } from './WatchedTab'
 import { SearchSheet } from './SearchSheet'
 import { ShowSheet } from './ShowSheet'
 import { RateSheet } from './RateSheet'
-import { FinishSheet, LogSheet, ManualSheet, PaceSheet, PosterSheet, SlotSheet } from './sheets'
+import { DatesSheet, FinishSheet, LogSheet, ManualSheet, PaceSheet, PosterSheet, SlotSheet } from './sheets'
 import { needsRefresh, refreshShow } from './actions'
 
 /**
@@ -191,6 +191,7 @@ export function WatchedApp() {
           includeShow={top.includeShow}
           outcome={top.outcome}
           backfill={top.backfill}
+          undo={top.undo}
         />
       )}
       {top?.kind === 'pace' && <PaceSheet key={stack.length} />}
@@ -198,6 +199,7 @@ export function WatchedApp() {
       {top?.kind === 'posters' && <PosterSheet key={stack.length} showId={top.showId} />}
       {top?.kind === 'manual' && <ManualSheet key={stack.length} preset={top.preset} />}
       {top?.kind === 'finish' && <FinishSheet key={`${stack.length}:${top.showId}`} showId={top.showId} />}
+      {top?.kind === 'dates' && <DatesSheet key={`${stack.length}:${top.showId}`} showId={top.showId} />}
       {top?.kind === 'log' && <LogSheet key={`${stack.length}:${top.showId}`} showId={top.showId} from={top.from} />}
     </div>
   )

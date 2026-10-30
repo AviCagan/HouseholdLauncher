@@ -2,12 +2,27 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useData } from '@/store/useData'
 import type { DataAdapter } from '@/data/adapter'
 import type { WatchShow } from '@/data/types'
-import { addShow, between, eveningOf, finishSeason, logEpisodes, rate, unwatchedEpisode, watchedEpisode, type ShowData } from './actions'
+import {
+  addShow,
+  between,
+  eveningOf,
+  finishSeason,
+  finishWithUndo,
+  logEpisodes,
+  rate,
+  removeShow,
+  reopenShow,
+  restore,
+  setSeasonDates,
+  unwatchedEpisode,
+  watchedEpisode,
+  type ShowData,
+} from './actions'
 import { ratingRowId, seasonRowId, viewRowId } from './ids'
 import { addDaysIso, isoDay } from './model'
 import { season, seasonsInfo, show } from './testkit'
 
-vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }) }))
+vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn(), dismiss: vi.fn() }) }))
 
 /** An adapter that records what was asked of it. */
 function recorder(overrides: Partial<DataAdapter> = {}) {
@@ -349,3 +364,118 @@ describe('finishing with dates', () => {
     expect(row.started_at).toBe(row.finished_at)
   })
 })
+
+describe('taking it back', () => {
+  const twoSeasons = () =>
+    show({
+      id: 'pitt',
+      title: 'The Pitt',
+      stage: 'watching',
+      current_season: 1,
+      current_episode: 11,
+      progress_at: '2026-10-29T21:00:00.000Z',
+      started_at: '2026-10-01T20:00:00.000Z',
+      episodes: [...season(1, 15, '2025-01-09', 50), ...season(2, 15, '2026-01-08', 50)],
+    })
+
+  it('undoes "finished season": same season, same episode, and no finish on record', async () => {
+    const { adapter, calls } = recorder()
+    const s = twoSeasons()
+    const startRow = { ...seasonRowFor(s.id, 1), started_at: '2026-10-01T20:00:00.000Z' }
+    useData.setState({ adapter, watch_shows: [s], watch_seasons: [startRow] })
+    const { outcome, undo } = finishWithUndo(s, 'avi')
+    expect(outcome).toEqual({ kind: 'continued', season: 2 })
+    await flush()
+    await flush()
+    expect(useData.getState().watch_shows[0].current_season).toBe(2)
+    expect(useData.getState().watch_seasons).toHaveLength(2)
+
+    restore(undo, 'avi')
+    await flush()
+    const back = useData.getState().watch_shows[0]
+    expect([back.stage, back.current_season, back.current_episode]).toEqual(['watching', 1, 11])
+    const seasons = useData.getState().watch_seasons
+    expect(seasons).toHaveLength(1)
+    expect(seasons[0].finished_at).toBeNull()
+    expect(calls.some((c) => c.op === 'remove' && c.table === 'watch_seasons' && c.id === seasonRowId('pitt', 2))).toBe(true)
+  })
+
+  it('undoes finishing the whole show', async () => {
+    const { adapter } = recorder()
+    const s = { ...twoSeasons(), status: 'Ended', current_season: 2, current_episode: 14 }
+    useData.setState({ adapter, watch_shows: [s], watch_seasons: [] })
+    const { outcome, undo } = finishWithUndo(s, 'avi')
+    expect(outcome.kind).toBe('finished')
+    await flush()
+    expect(useData.getState().watch_shows[0].stage).toBe('watched')
+    restore(undo, 'avi')
+    await flush()
+    expect(useData.getState().watch_shows[0]).toMatchObject({ stage: 'watching', current_season: 2, current_episode: 14, finished_at: null })
+    expect(useData.getState().watch_seasons).toHaveLength(0)
+  })
+
+  it('puts a finished show back on at the last episode logged', async () => {
+    const { adapter } = recorder()
+    const s = { ...twoSeasons(), stage: 'watched' as const, current_season: null, current_episode: 0, plan_to: 2, finished_at: '2026-10-29T21:00:00.000Z' }
+    const views = [3, 4, 5].map((e) => ({
+      id: viewRowId('pitt', 2, e), show_id: 'pitt', season: 2, episode: e, watched_at: '2026-10-28T21:00:00.000Z', minutes: 50, created_by: null, created_at: '', updated_at: '',
+    }))
+    const row = { ...seasonRowFor('pitt', 2), started_at: '2026-10-20T20:00:00.000Z', finished_at: '2026-10-29T21:00:00.000Z' }
+    useData.setState({ adapter, watch_shows: [s], watch_seasons: [row], watch_views: views })
+    reopenShow(s, 'avi')
+    await flush()
+    expect(useData.getState().watch_shows[0]).toMatchObject({ stage: 'watching', current_season: 2, current_episode: 5, finished_at: null })
+    expect(useData.getState().watch_seasons[0].finished_at).toBeNull()
+  })
+
+  it('records dates for a season watched before (or whose record was lost)', async () => {
+    const { adapter } = recorder()
+    const s = twoSeasons()
+    useData.setState({ adapter, watch_shows: [s], watch_seasons: [] })
+    setSeasonDates(s, 1, eveningOf('2026-09-01', 20), eveningOf('2026-09-20'), 'avi')
+    await flush()
+    expect(useData.getState().watch_seasons[0]).toMatchObject({
+      id: seasonRowId('pitt', 1),
+      season: 1,
+      started_at: eveningOf('2026-09-01', 20),
+      finished_at: eveningOf('2026-09-20'),
+      watched_before: false,
+    })
+  })
+
+  it('brings a removed show back with its seasons, scores and episode log', async () => {
+    const { adapter, calls } = recorder()
+    const s = twoSeasons()
+    const row = { ...seasonRowFor('pitt', 1), started_at: '2026-10-01T20:00:00.000Z' }
+    const score = { id: ratingRowId('pitt', 1, 'avi'), show_id: 'pitt', season: 1, profile_id: 'avi', score_x2: 18, created_at: '', updated_at: '' }
+    useData.setState({ adapter, watch_shows: [s], watch_seasons: [row], watch_ratings: [score] })
+    const { toast } = await import('sonner')
+    removeShow(s)
+    await flush()
+    expect(useData.getState().watch_shows).toHaveLength(0)
+    const undo = (toast as unknown as { mock: { calls: [string, { action: { onClick: () => void } }][] } }).mock.calls.at(-1)![1].action
+    undo.onClick()
+    await flush()
+    await flush()
+    expect(useData.getState().watch_shows).toHaveLength(1)
+    expect(useData.getState().watch_seasons).toHaveLength(1)
+    expect(useData.getState().watch_ratings).toHaveLength(1)
+    expect(calls.filter((c) => c.op === 'insert').map((c) => c.table)).toEqual(['watch_shows', 'watch_seasons', 'watch_ratings'])
+  })
+})
+
+function seasonRowFor(showId: string, season: number) {
+  return {
+    id: seasonRowId(showId, season),
+    show_id: showId,
+    season,
+    show_title: null,
+    started_at: null as string | null,
+    finished_at: null as string | null,
+    watched_before: false,
+    created_by: null,
+    updated_by: null,
+    created_at: '',
+    updated_at: '',
+  }
+}
