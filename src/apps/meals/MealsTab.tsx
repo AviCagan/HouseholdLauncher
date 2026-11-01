@@ -77,7 +77,7 @@ function List({
   faded?: boolean
 }) {
   return (
-    <div className="flex flex-col gap-3" style={{ opacity: faded ? 0.8 : 1 }}>
+    <div className="flex flex-col gap-3 lg:grid lg:grid-cols-2 xl:grid-cols-3" style={{ opacity: faded ? 0.8 : 1 }}>
       <AnimatePresence initial={false}>
         {meals.map((meal) => {
           const s = summariseMeal(meal, dishes)

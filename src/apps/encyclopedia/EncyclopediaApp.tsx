@@ -4,6 +4,7 @@ import { Icon } from '@/components/primitives/Icon'
 import { useData } from '@/store/useData'
 import { useLauncher } from '@/store/useLauncher'
 import { fire } from '@/lib/haptics'
+import { useDesktop } from '@/lib/useDesktop'
 import type { LexiconEntry } from '@/data/types'
 import { EntrySheet, type SheetMode } from './EntrySheet'
 import {
@@ -26,6 +27,10 @@ import './encyclopedia.css'
  * letters between the sections, and every entry with its part of speech and
  * pronunciation. It starts empty. The empty page is the invitation.
  *
+ * On a laptop it opens like a book: the title page, the index and the word
+ * of the day down the left margin, and the entries set in two columns on
+ * the right — which is how a dictionary page has always looked.
+ *
  * Styled under `.lex` — see encyclopedia.css for the reasoning.
  */
 export function EncyclopediaApp() {
@@ -33,6 +38,7 @@ export function EncyclopediaApp() {
   const profiles = useData((s) => s.profiles)
   const goHome = useLauncher((s) => s.goHome)
   const consumeDeepLink = useLauncher((s) => s.consumeDeepLink)
+  const desktop = useDesktop()
 
   const [query, setQuery] = useState('')
   const [sheet, setSheet] = useState<{ entry: LexiconEntry | null; mode: SheetMode; draftTerm?: string } | null>(null)
@@ -71,6 +77,164 @@ export function EncyclopediaApp() {
     el.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
+  const title = (
+    <div className="min-w-0 flex-1 lg:flex-none">
+      <h1 className="lex-serif text-[25px] font-bold leading-none tracking-tight lg:text-[28px]">
+        A<span style={{ color: 'var(--lex-ox)' }}>&amp;</span>J Encyclopedia
+      </h1>
+      <p className="lex-caps mt-1.5">{volumeLine(entries.length)}</p>
+    </div>
+  )
+
+  const search = (
+    <div className="relative mt-2">
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Look up a word…"
+        aria-label="Look up a word"
+        autoCapitalize="off"
+        autoCorrect="off"
+        spellCheck={false}
+        enterKeyHint="search"
+        className="lex-input pr-9"
+      />
+      {query && (
+        <button
+          onClick={() => {
+            fire('tap')
+            setQuery('')
+          }}
+          aria-label="Clear search"
+          className="absolute right-0 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center"
+          style={{ color: 'var(--lex-ink-faint)' }}
+        >
+          <Icon name="close" size={15} />
+        </button>
+      )}
+    </div>
+  )
+
+  const index = entries.length > 0 && (
+    <div
+      className={desktop ? 'mt-3 flex flex-wrap gap-x-0.5 gap-y-1' : 'scroll-x -mx-5 mt-2 flex gap-0.5 px-5'}
+      aria-label="Index"
+    >
+      {[...ALPHABET, '#'].map((letter) => {
+        const has = present.has(letter)
+        return (
+          <button
+            key={letter}
+            onClick={() => has && jump(letter)}
+            disabled={!has}
+            aria-label={has ? `Jump to ${letter}` : undefined}
+            className="lex-serif min-w-[24px] shrink-0 py-1 text-center text-[13px]"
+            style={{ color: has ? 'var(--lex-ink)' : 'var(--lex-ink-faint)', fontWeight: has ? 700 : 400, opacity: has ? 1 : 0.5 }}
+          >
+            {letter}
+          </button>
+        )
+      })}
+    </div>
+  )
+
+  const addButton = (
+    <motion.button
+      whileTap={{ scale: 0.97 }}
+      onClick={() => define()}
+      className="lex-stamp pointer-events-auto flex items-center gap-2 px-6 py-3.5 text-[15px]"
+    >
+      <span aria-hidden>✒︎</span>
+      Add an entry
+    </motion.button>
+  )
+
+  const body = (
+    <>
+      {entries.length === 0 ? (
+        <EmptyVolume onAdd={() => define()} />
+      ) : (
+        <>
+          {!q && today && !desktop && <WordOfTheDay entry={today} onOpen={() => open(today)} />}
+
+          {q && groups.length === 0 && (
+            <div className="pt-8 text-center">
+              <p className="text-[15px] italic" style={{ color: 'var(--lex-ink-dim)' }}>
+                No entry for “{q}”.
+              </p>
+              <button onClick={() => define(q)} className="lex-outline mt-3 px-4 py-2 text-[14px]">
+                Define “{q}”
+              </button>
+            </div>
+          )}
+
+          <div className={desktop ? 'lex-columns' : undefined}>
+            {groups.map((g) => (
+              <section key={g.letter} data-letter={g.letter} className="pt-5 first:lg:pt-0">
+                <motion.div
+                  initial={{ opacity: 0, x: -6 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="lex-keep flex items-end gap-3"
+                  style={{ borderBottom: '1px solid var(--lex-rule-strong)' }}
+                >
+                  <span className="lex-dropcap pb-1">{g.letter}</span>
+                  <span className="lex-caps pb-2">
+                    {g.entries.length} {g.entries.length === 1 ? 'entry' : 'entries'}
+                  </span>
+                </motion.div>
+                <AnimatePresence initial={false}>
+                  {g.entries.map((entry) => (
+                    <EntryRow key={entry.id} entry={entry} onOpen={() => open(entry)} />
+                  ))}
+                </AnimatePresence>
+              </section>
+            ))}
+          </div>
+
+          {!q && (
+            <p className="lex-ornament pt-8 text-center text-[14px]" aria-hidden>
+              ❦
+            </p>
+          )}
+        </>
+      )}
+    </>
+  )
+
+  const entrySheet = (
+    <EntrySheet
+      open={sheet !== null}
+      entry={sheet?.entry ?? null}
+      mode={sheet?.mode ?? 'view'}
+      draftTerm={sheet?.draftTerm}
+      nameOf={nameOf}
+      onEdit={() => setSheet((s) => (s ? { ...s, mode: 'edit' } : s))}
+      onClose={() => setSheet(null)}
+    />
+  )
+
+  if (desktop) {
+    return (
+      <div className="lex flex h-full flex-col">
+        <div className="mx-auto grid min-h-0 w-full max-w-[1280px] flex-1 grid-cols-[300px_minmax(0,1fr)] gap-12 px-8 pt-7">
+          <aside className="scroll-y flex min-h-0 flex-col pb-10">
+            {title}
+            <div className="lex-rule-double mt-4" />
+            {search}
+            {index}
+            {!q && today && <WordOfTheDay entry={today} onOpen={() => open(today)} />}
+            <div className="mt-5 self-start">{addButton}</div>
+          </aside>
+
+          <div ref={listRef} className="scroll-y min-h-0 pb-14 pr-2">
+            {body}
+          </div>
+        </div>
+        {entrySheet}
+      </div>
+    )
+  }
+
   return (
     <div className="lex flex h-full flex-col">
       <header className="shrink-0 px-5 pb-3 pt-[max(var(--safe-top),0.75rem)]">
@@ -86,132 +250,24 @@ export function EncyclopediaApp() {
           >
             <Icon name="back" size={19} strokeWidth={2.2} />
           </button>
-          <div className="min-w-0 flex-1">
-            <h1 className="lex-serif text-[25px] font-bold leading-none tracking-tight">
-              A<span style={{ color: 'var(--lex-ox)' }}>&amp;</span>J Encyclopedia
-            </h1>
-            <p className="lex-caps mt-1.5">{volumeLine(entries.length)}</p>
-          </div>
+          {title}
         </div>
 
         <div className="lex-rule-double mt-3" />
 
-        <div className="relative mt-2">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Look up a word…"
-            aria-label="Look up a word"
-            autoCapitalize="off"
-            autoCorrect="off"
-            spellCheck={false}
-            enterKeyHint="search"
-            className="lex-input pr-9"
-          />
-          {query && (
-            <button
-              onClick={() => {
-                fire('tap')
-                setQuery('')
-              }}
-              aria-label="Clear search"
-              className="absolute right-0 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center"
-              style={{ color: 'var(--lex-ink-faint)' }}
-            >
-              <Icon name="close" size={15} />
-            </button>
-          )}
-        </div>
-
-        {entries.length > 0 && (
-          <div className="scroll-x -mx-5 mt-2 flex gap-0.5 px-5" aria-label="Index">
-            {[...ALPHABET, '#'].map((letter) => {
-              const has = present.has(letter)
-              return (
-                <button
-                  key={letter}
-                  onClick={() => has && jump(letter)}
-                  disabled={!has}
-                  aria-label={has ? `Jump to ${letter}` : undefined}
-                  className="lex-serif min-w-[24px] shrink-0 py-1 text-center text-[13px]"
-                  style={{ color: has ? 'var(--lex-ink)' : 'var(--lex-ink-faint)', fontWeight: has ? 700 : 400, opacity: has ? 1 : 0.5 }}
-                >
-                  {letter}
-                </button>
-              )
-            })}
-          </div>
-        )}
+        {search}
+        {index}
       </header>
 
       <div ref={listRef} className="scroll-y min-h-0 flex-1 px-5 pb-[140px]">
-        {entries.length === 0 ? (
-          <EmptyVolume onAdd={() => define()} />
-        ) : (
-          <>
-            {!q && today && <WordOfTheDay entry={today} onOpen={() => open(today)} />}
-
-            {q && groups.length === 0 && (
-              <div className="pt-8 text-center">
-                <p className="text-[15px] italic" style={{ color: 'var(--lex-ink-dim)' }}>
-                  No entry for “{q}”.
-                </p>
-                <button onClick={() => define(q)} className="lex-outline mt-3 px-4 py-2 text-[14px]">
-                  Define “{q}”
-                </button>
-              </div>
-            )}
-
-            {groups.map((g) => (
-              <section key={g.letter} data-letter={g.letter} className="pt-5">
-                <motion.div
-                  initial={{ opacity: 0, x: -6 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  className="flex items-end gap-3"
-                  style={{ borderBottom: '1px solid var(--lex-rule-strong)' }}
-                >
-                  <span className="lex-dropcap pb-1">{g.letter}</span>
-                  <span className="lex-caps pb-2">
-                    {g.entries.length} {g.entries.length === 1 ? 'entry' : 'entries'}
-                  </span>
-                </motion.div>
-                <AnimatePresence initial={false}>
-                  {g.entries.map((entry) => (
-                    <EntryRow key={entry.id} entry={entry} onOpen={() => open(entry)} />
-                  ))}
-                </AnimatePresence>
-              </section>
-            ))}
-
-            {!q && (
-              <p className="lex-ornament pt-8 text-center text-[14px]" aria-hidden>
-                ❦
-              </p>
-            )}
-          </>
-        )}
+        {body}
       </div>
 
       <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-5 pb-[max(var(--safe-bottom),1rem)]">
-        <motion.button
-          whileTap={{ scale: 0.97 }}
-          onClick={() => define()}
-          className="lex-stamp pointer-events-auto flex items-center gap-2 px-6 py-3.5 text-[15px]"
-        >
-          <span aria-hidden>✒︎</span>
-          Add an entry
-        </motion.button>
+        {addButton}
       </div>
 
-      <EntrySheet
-        open={sheet !== null}
-        entry={sheet?.entry ?? null}
-        mode={sheet?.mode ?? 'view'}
-        draftTerm={sheet?.draftTerm}
-        nameOf={nameOf}
-        onEdit={() => setSheet((s) => (s ? { ...s, mode: 'edit' } : s))}
-        onClose={() => setSheet(null)}
-      />
+      {entrySheet}
     </div>
   )
 }
@@ -228,7 +284,7 @@ function EntryRow({ entry, onOpen }: { entry: LexiconEntry; onOpen: () => void }
       exit={{ opacity: 0, transition: { duration: 0.12 } }}
       transition={{ type: 'spring', stiffness: 420, damping: 32 }}
       onClick={onOpen}
-      className="block w-full py-3 text-left"
+      className="lex-keep block w-full py-3 text-left"
       style={{ borderBottom: '1px dotted var(--lex-rule)' }}
     >
       <div className="flex flex-wrap items-baseline gap-x-2">

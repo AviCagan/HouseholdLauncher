@@ -170,14 +170,14 @@ export function Tour() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[70] flex flex-col justify-end"
+          className="fixed inset-0 z-[70] flex flex-col justify-end lg:items-center lg:justify-center"
           style={{ background: 'color-mix(in oklab, #000 62%, transparent)' }}
         >
           {/* Tapping the dimmed area does nothing on purpose: a stray tap while
             reading shouldn't silently end the walkthrough. */}
           <motion.div
             layout
-            className="m-3 flex flex-col gap-4 rounded-[26px] p-5 pb-[calc(var(--safe-bottom)+1.25rem)]"
+            className="m-3 flex flex-col gap-4 rounded-[26px] p-5 pb-[calc(var(--safe-bottom)+1.25rem)] lg:w-[540px] lg:p-6 lg:pb-6"
             style={{
               background: 'var(--bg-elevated)',
               border: '1px solid var(--border-strong)',

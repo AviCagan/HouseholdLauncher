@@ -20,7 +20,18 @@ import type { DebtDirection } from '@/data/types'
  * convenience feature: the summary groups on the name, so reusing the exact
  * spelling is what keeps one person from becoming two rows in the roll-up.
  */
-export function AddDebtBar({ direction }: { direction: DebtDirection }) {
+export function AddDebtBar({
+  direction,
+  docked = false,
+}: {
+  direction: DebtDirection
+  /**
+   * In the flow of the page rather than floating at the bottom — the laptop
+   * layout puts one at the top of each list. Suggestions then drop below the
+   * field instead of rising above it.
+   */
+  docked?: boolean
+}) {
   const [name, setName] = useState('')
   const [amount, setAmount] = useState('')
   const [reason, setReason] = useState('')
@@ -83,14 +94,20 @@ export function AddDebtBar({ direction }: { direction: DebtDirection }) {
   }
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-3 pb-[calc(var(--safe-bottom)+0.75rem)]">
+    <div
+      className={
+        docked
+          ? 'flex flex-col-reverse gap-2'
+          : 'pointer-events-none fixed inset-x-0 bottom-0 z-40 px-3 pb-[calc(var(--safe-bottom)+0.75rem)]'
+      }
+    >
       <AnimatePresence>
         {suggestions.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 6 }}
-            className="pointer-events-auto mx-auto mb-2 flex max-w-[520px] flex-wrap gap-1.5"
+            className={`pointer-events-auto flex flex-wrap gap-1.5 ${docked ? 'px-1' : 'mx-auto mb-2 max-w-[520px]'}`}
           >
             {suggestions.map((suggestion) => (
               <button
@@ -114,7 +131,7 @@ export function AddDebtBar({ direction }: { direction: DebtDirection }) {
       </AnimatePresence>
 
       <div
-        className="pointer-events-auto mx-auto max-w-[520px] rounded-3xl p-2"
+        className={`pointer-events-auto rounded-3xl p-2 ${docked ? '' : 'mx-auto max-w-[520px]'}`}
         style={{
           background: 'var(--surface)',
           border: '1px solid var(--border)',

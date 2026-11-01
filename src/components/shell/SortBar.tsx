@@ -28,7 +28,7 @@ export function SortBar({
   const toggleDir = useUI((s) => s.toggleSortDir)
 
   return (
-    <div className="flex items-center gap-1.5 px-1 pb-3">
+    <div className="flex items-center gap-1.5 px-1 pb-3 lg:max-w-[640px]">
       {options.map((o) => {
         const on = o.key === sortBy
         return (

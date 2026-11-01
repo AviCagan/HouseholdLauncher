@@ -108,7 +108,7 @@ export function ShoppingTab() {
             hint="Add items below and tag them with a store. Then hit Trip and we'll work out the driving order."
           />
         ) : (
-          <div className="flex flex-col">
+          <div className="flex flex-col lg:grid lg:grid-cols-2 lg:items-start lg:gap-x-6">
             {groups.physical.map(({ store, items: list }) => (
               <StoreGroup
                 key={store.id}
@@ -137,7 +137,7 @@ export function ShoppingTab() {
 
             {/* Online stores sit apart — they're never part of a driving trip. */}
             {groups.online.length > 0 && (
-              <div className="mt-6">
+              <div className="mt-6 lg:col-span-2">
                 <div className="flex items-center gap-2 px-2 pb-1">
                   <Icon name="globe" size={14} strokeWidth={2.4} />
                   <span

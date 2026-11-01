@@ -52,9 +52,10 @@ export function DishesTab() {
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search dishes or ingredients…"
         aria-label="Search dishes"
+        className="w-full lg:max-w-[520px]"
       />
 
-      <div className="scroll-x -mx-4 flex gap-1.5 px-4 pb-1">
+      <div className="scroll-x -mx-4 flex gap-1.5 px-4 pb-1 lg:mx-0 lg:flex-wrap lg:px-0">
         <Chip active={kind === null} onClick={() => setKind(null)}>
           All
         </Chip>
@@ -70,7 +71,7 @@ export function DishesTab() {
           Nothing matches that.
         </p>
       ) : (
-        <div className="grid grid-cols-2 gap-3 pb-2">
+        <div className="grid grid-cols-2 gap-3 pb-2 lg:grid-cols-4 xl:grid-cols-5">
           <AnimatePresence initial={false}>
             {shown.map((dish) => (
               <DishCard key={dish.id} dish={dish} onOpen={() => openSheet({ kind: 'dish', dish })} />

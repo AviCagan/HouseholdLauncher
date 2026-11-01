@@ -289,3 +289,59 @@
   user-select: none;
   -webkit-user-select: none;
 }
+
+/* ---------------------------------------------------------------------------
+   Laptop.
+
+   Everything above was written for a thumb. On a wide window the app grows a
+   sidebar (launcher/DesktopShell.tsx) and every sheet becomes a dialog
+   (primitives/Sheet.tsx); the rules here are the small things a mouse and a
+   keyboard expect that a phone never shows: a scrollbar you can see and grab,
+   and a hover state on anything you can press.
+--------------------------------------------------------------------------- */
+@media (min-width: 64rem) {
+  .scroll-y {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+  .scroll-y::-webkit-scrollbar {
+    display: block;
+    width: 10px;
+  }
+  .scroll-y::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scroll-y::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: padding-box;
+  }
+}
+
+.desk-nav {
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+/* The pencil on a list row: there for the mouse, quiet until it arrives. */
+.row-edit {
+  opacity: 0.45;
+  transition: opacity 150ms ease;
+}
+
+@media (hover: hover) {
+  .desk-nav:hover {
+    background: var(--surface-2);
+  }
+  .row-edit:hover {
+    opacity: 1;
+  }
+  /* A sticker lifts a little under the pointer; the press still sinks it. */
+  .m-card.m-press:hover:not(:active) {
+    box-shadow: 5px 5px 0 var(--m-line);
+  }
+  .things .rail-btn:hover:not(:active),
+  .things .quick-add-btn:hover:not(:active) {
+    filter: brightness(1.06);
+  }
+}

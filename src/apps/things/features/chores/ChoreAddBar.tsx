@@ -57,7 +57,7 @@ export function ChoreAddBar() {
         : describeRecurrence(preset.count, preset.unit)
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2 lg:flex-col-reverse">
       <AnimatePresence>
         {recurring && (
           <motion.div

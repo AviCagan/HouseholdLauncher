@@ -74,7 +74,7 @@ export function WishlistTab() {
           hint="Stuff you want to buy for yourselves — not household needs. Tap the meter to say how badly."
         />
       ) : (
-        <div className="grid grid-cols-2 gap-2.5 px-1">
+        <div className="grid grid-cols-2 gap-2.5 px-1 lg:grid-cols-4 xl:grid-cols-5">
           <AnimatePresence initial={false}>
             {active.map((wish) => (
               <WishCard key={wish.id} wish={wish} profiles={profiles} />
@@ -84,7 +84,7 @@ export function WishlistTab() {
       )}
 
       <Section label="Bought" count={purchased.length}>
-        <div className="grid grid-cols-2 gap-2.5 px-1">
+        <div className="grid grid-cols-2 gap-2.5 px-1 lg:grid-cols-4 xl:grid-cols-5">
           {purchased.map((wish) => (
             <WishCard key={wish.id} wish={wish} profiles={profiles} />
           ))}

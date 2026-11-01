@@ -5,6 +5,7 @@ import { Icon } from '@/components/primitives/Icon'
 import { useLauncher } from '@/store/useLauncher'
 import { useData } from '@/store/useData'
 import { fire } from '@/lib/haptics'
+import { useDesktop } from '@/lib/useDesktop'
 import { WatchedWordmark } from './Logo'
 import { useWatchUI, type WatchTab } from './store'
 import { NoSignal } from './ui'
@@ -43,6 +44,7 @@ export function WatchedApp() {
   // and fail on the first add.
   const notSetUp = useData((s) => s.missingTables.some((t) => t.startsWith('watch_')))
   const [staticKey, setStaticKey] = useState(0)
+  const desktop = useDesktop()
 
   // A notification tap: the shelf, the lineup, or straight to a rating.
   useEffect(() => {
@@ -106,17 +108,21 @@ export function WatchedApp() {
 
   return (
     <div className="tv flex h-full flex-col">
-      <header className="tv-top flex shrink-0 items-center gap-2 px-3 pb-2 pt-[max(var(--safe-top),0.6rem)]">
-        <button
-          onClick={() => {
-            fire('tap')
-            goHome()
-          }}
-          aria-label="Back to the launcher"
-          className="tv-btn grid h-10 w-10 shrink-0 place-items-center"
-        >
-          <Icon name="back" size={19} strokeWidth={2.4} />
-        </button>
+      <header className="tv-top flex shrink-0 items-center gap-2 px-3 pb-2 pt-[max(var(--safe-top),0.6rem)] lg:mx-auto lg:w-full lg:max-w-[1040px]">
+        {/* The launcher's sidebar is the way back on a laptop. Not hidden
+            with a utility: .tv-btn sets its own display, unlayered. */}
+        {!desktop && (
+          <button
+            onClick={() => {
+              fire('tap')
+              goHome()
+            }}
+            aria-label="Back to the launcher"
+            className="tv-btn grid h-10 w-10 shrink-0 place-items-center"
+          >
+            <Icon name="back" size={19} strokeWidth={2.4} />
+          </button>
+        )}
         <div className="flex min-w-0 flex-1 justify-center">
           <WatchedWordmark size={40} />
         </div>
@@ -132,7 +138,7 @@ export function WatchedApp() {
         </button>
       </header>
 
-      <div className="min-h-0 flex-1 px-3 pb-3 pt-1">
+      <div className="min-h-0 flex-1 px-3 pb-3 pt-1 lg:mx-auto lg:w-full lg:max-w-[1040px]">
         <div className="tv-screen tv-poweron h-full">
           <div key={tab} className="scroll-y relative z-0 h-full">
             {notSetUp ? (
@@ -153,7 +159,7 @@ export function WatchedApp() {
       </div>
 
       <nav className="tv-panel safe-bottom shrink-0 px-3 pt-2.5" aria-label="Channels">
-        <div className="flex items-center gap-1.5 pb-2.5">
+        <div className="flex items-center gap-1.5 pb-2.5 lg:mx-auto lg:max-w-[1040px]">
           <span className="tv-grille h-10 w-3.5 shrink-0" aria-hidden />
           {CHANNELS.map((c) => (
             <button

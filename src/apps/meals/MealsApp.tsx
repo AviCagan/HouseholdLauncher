@@ -4,6 +4,7 @@ import { Icon } from '@/components/primitives/Icon'
 import { useData } from '@/store/useData'
 import { useLauncher } from '@/store/useLauncher'
 import { fire } from '@/lib/haptics'
+import { useDesktop } from '@/lib/useDesktop'
 import { Confetti } from './doodles'
 import { DishesTab } from './DishesTab'
 import { DishSheet } from './DishSheet'
@@ -37,6 +38,15 @@ const TABS: { key: TabKey; label: string; emoji: string }[] = [
   { key: 'plan', label: 'Plep', emoji: '📆' },
 ]
 
+type AddKind = 'dish' | 'import' | 'meal' | 'template'
+
+/** What the add button offers — fanned out of the tomato on a phone, laid along the header on a laptop. */
+const ADD_OPTIONS: { key: AddKind; label: string; emoji: string; tone: string }[] = [
+  { key: 'meal', label: 'Plan a meal', emoji: '🍽️', tone: 'var(--m-butter)' },
+  { key: 'import', label: 'Import a recipe', emoji: '🔗', tone: 'var(--m-sky)' },
+  { key: 'dish', label: 'Add a dish', emoji: '🥘', tone: 'var(--m-mint)' },
+]
+
 export function MealsApp() {
   const tab = useMealsUI((s) => s.tab)
   const setTab = useMealsUI((s) => s.setTab)
@@ -50,6 +60,15 @@ export function MealsApp() {
   const meals = useData((s) => s.meals)
   const [fab, setFab] = useState(false)
   const onShelf = shelved(dishes).length
+  const desktop = useDesktop()
+
+  function pick(kind: AddKind) {
+    setFab(false)
+    if (kind === 'dish') openSheet({ kind: 'dish', dish: null })
+    if (kind === 'import') openSheet({ kind: 'import' })
+    if (kind === 'meal') openSheet({ kind: 'meal', meal: null })
+    if (kind === 'template') openSheet({ kind: 'template', template: null })
+  }
 
   /*
     Honour a notification tap: {tab, id}. The dish or meal is opened only if
@@ -73,7 +92,7 @@ export function MealsApp() {
 
   return (
     <div className="meals flex h-full flex-col">
-      <header className="shrink-0 px-4 pb-2 pt-[max(var(--safe-top),0.75rem)]">
+      <header className="shrink-0 px-4 pb-2 pt-[max(var(--safe-top),0.75rem)] lg:px-8 lg:pt-4">
         <div className="flex items-center gap-3">
           <motion.button
             whileTap={{ scale: 0.9, rotate: -8 }}
@@ -82,7 +101,7 @@ export function MealsApp() {
               goHome()
             }}
             aria-label="Back to the launcher"
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-full"
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-full lg:hidden"
             style={{ background: 'var(--m-card)', border: '2.5px solid var(--m-line)', boxShadow: 'var(--m-shadow-sm)', color: 'var(--m-ink)' }}
           >
             <Icon name="back" size={20} strokeWidth={2.8} />
@@ -98,6 +117,58 @@ export function MealsApp() {
               {dishes.length - onShelf} {dishes.length - onShelf === 1 ? 'dish' : 'dishes'} · {meals.length} {meals.length === 1 ? 'meal' : 'meals'}
             </p>
           </div>
+          {/* Laptop: the tabs sit in the title row, and the tomato's three
+              choices are laid out beside them as buttons — no fan to open,
+              nothing floating over the grid. */}
+          {desktop && (
+            <nav
+              className="flex gap-1 rounded-[18px] p-1"
+              style={{ background: 'var(--m-card)', border: '2.5px solid var(--m-line)', boxShadow: 'var(--m-shadow-sm)' }}
+              aria-label="Sections"
+            >
+              {TABS.map((t) => {
+                const active = t.key === tab
+                return (
+                  <button
+                    key={t.key}
+                    onClick={() => {
+                      if (active) return
+                      fire('snap')
+                      setTab(t.key)
+                    }}
+                    aria-current={active ? 'page' : undefined}
+                    className="relative flex items-center gap-1.5 rounded-[13px] px-3.5 py-2 text-[13px] font-extrabold"
+                    style={{ color: active ? '#fff' : 'var(--m-ink)' }}
+                  >
+                    {active && (
+                      <motion.span layoutId="meals-tab" className="absolute inset-0 rounded-[13px]" style={{ background: 'var(--m-tomato)' }} transition={{ type: 'spring', stiffness: 520, damping: 34 }} />
+                    )}
+                    <span className="relative text-[15px] leading-none">{t.emoji}</span>
+                    <span className="relative">{t.label}</span>
+                  </button>
+                )
+              })}
+            </nav>
+          )}
+          {desktop && (
+            <div className="ml-auto flex items-center gap-2">
+              {ADD_OPTIONS.map((o) => (
+                <motion.button
+                  key={o.key}
+                  whileTap={{ x: 2, y: 2 }}
+                  onClick={() => {
+                    fire('snap')
+                    pick(o.key)
+                  }}
+                  className="m-card m-press flex items-center gap-2 px-3.5 py-2 text-[13px] font-extrabold"
+                  style={{ background: o.tone, borderRadius: 999 }}
+                >
+                  <span className="text-[16px] leading-none">{o.emoji}</span>
+                  {o.label}
+                </motion.button>
+              ))}
+            </div>
+          )}
           {/* The shelf: recipes found and saved for later, behind a star. */}
           <motion.button
             whileTap={{ scale: 0.9, rotate: 12 }}
@@ -121,6 +192,7 @@ export function MealsApp() {
           </motion.button>
         </div>
 
+        {!desktop && (
         <nav className="mt-3 flex gap-1.5 rounded-[20px] p-1.5" style={{ background: 'var(--m-card)', border: '2.5px solid var(--m-line)', boxShadow: 'var(--m-shadow-sm)' }} aria-label="Sections">
           {TABS.map((t) => {
             const active = t.key === tab
@@ -147,12 +219,14 @@ export function MealsApp() {
             )
           })}
         </nav>
+        )}
       </header>
 
-      <div className="scroll-y min-h-0 flex-1 px-4 pb-[120px] pt-2">
+      <div className="scroll-y min-h-0 flex-1 px-4 pb-[120px] pt-2 lg:px-8 lg:pb-12 lg:pt-3">
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={tab}
+            className="lg:mx-auto lg:max-w-[1320px]"
             initial={{ opacity: 0, y: 10, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.98 }}
@@ -166,17 +240,7 @@ export function MealsApp() {
         </AnimatePresence>
       </div>
 
-      <Fab
-        open={fab}
-        onToggle={() => setFab((v) => !v)}
-        onPick={(kind) => {
-          setFab(false)
-          if (kind === 'dish') openSheet({ kind: 'dish', dish: null })
-          if (kind === 'import') openSheet({ kind: 'import' })
-          if (kind === 'meal') openSheet({ kind: 'meal', meal: null })
-          if (kind === 'template') openSheet({ kind: 'template', template: null })
-        }}
-      />
+      {!desktop && <Fab open={fab} onToggle={() => setFab((v) => !v)} onPick={pick} />}
 
       <DishSheet
         open={sheet?.kind === 'dish'}
@@ -207,13 +271,9 @@ export function MealsApp() {
  * difference between "add a dish" and "plan a meal" has to be readable at a
  * glance, and an icon for either is a guess.
  */
-function Fab({ open, onToggle, onPick }: { open: boolean; onToggle: () => void; onPick: (k: 'dish' | 'import' | 'meal' | 'template') => void }) {
+function Fab({ open, onToggle, onPick }: { open: boolean; onToggle: () => void; onPick: (k: AddKind) => void }) {
   const reduce = useReduceMotion()
-  const options: { key: 'dish' | 'import' | 'meal' | 'template'; label: string; emoji: string; tone: string }[] = [
-    { key: 'meal', label: 'Plan a meal', emoji: '🍽️', tone: 'var(--m-butter)' },
-    { key: 'import', label: 'Import a recipe', emoji: '🔗', tone: 'var(--m-sky)' },
-    { key: 'dish', label: 'Add a dish', emoji: '🥘', tone: 'var(--m-mint)' },
-  ]
+  const options = ADD_OPTIONS
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex flex-col items-end gap-2 px-5 pb-[max(var(--safe-bottom),1rem)]">
       <AnimatePresence>

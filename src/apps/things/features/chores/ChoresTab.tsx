@@ -67,7 +67,7 @@ export function ChoresTab() {
           hint="Add a chore below. Tap the repeat button to make it recurring — it'll rest after each time and come back on its own."
         />
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 lg:grid lg:grid-cols-2 lg:gap-2.5">
           <AnimatePresence initial={false}>
             {active.map((chore) => (
               <motion.div
@@ -136,7 +136,7 @@ export function ChoresTab() {
             </span>
           </div>
 
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 lg:grid lg:grid-cols-2 lg:gap-2.5">
             <AnimatePresence initial={false}>
               {resting.map((chore) => (
                 <RestingCard
