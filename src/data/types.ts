@@ -671,3 +671,64 @@ export interface WatchSettings {
   updated_by: string | null
   updated_at: string
 }
+
+// ---------------------------------------------------------------------------
+// Inventory
+// ---------------------------------------------------------------------------
+
+/**
+ * What a file in an item's Drive folder is for.
+ *
+ *   photo — a picture of the thing itself; one of them is the overall photo
+ *   part  — a spare part, an accessory, whatever came in the box besides it
+ *   doc   — paperwork: the manual, the warranty, a receipt, a scan of any
+ */
+export type InventoryFileKind = 'photo' | 'part' | 'doc'
+
+/** One file in an item's Drive folder, as the app knows it. */
+export interface InventoryFile {
+  /** The Drive file id. */
+  id: string
+  kind: InventoryFileKind
+  name: string
+  mime: string
+  /** Open it in Drive. */
+  url: string
+  size: number | null
+  added_at: string
+}
+
+/**
+ * Something the household bought and wants to keep the paperwork for.
+ *
+ * The files are in Google Drive, one folder per item; this row is the details
+ * the app sorts by and which file is which. See supabase/023_inventory.sql.
+ */
+export interface InventoryItem {
+  id: string
+  name: string
+  brand: string | null
+  model: string | null
+  category: string | null
+  store: string | null
+  price_cents: number | null
+  /** Free text — "bubby" paid for the cooler. */
+  paid_by: string | null
+  /** YYYY-MM-DD */
+  purchased_on: string | null
+  /** YYYY-MM-DD */
+  warranty_until: string | null
+  location: string | null
+  notes: string | null
+  drive_folder_id: string | null
+  drive_folder_url: string | null
+  notes_doc_id: string | null
+  cover_file_id: string | null
+  /** A small data: URI of the overall photo, so the list never waits on Drive. */
+  cover_thumb: string | null
+  files: InventoryFile[]
+  created_by: string | null
+  updated_by: string | null
+  created_at: string
+  updated_at: string
+}

@@ -100,6 +100,16 @@ export const APPS: AppDef[] = [
     // thought of it, is theirs.
   },
   {
+    id: 'inventory',
+    name: 'Inventory',
+    blurb: 'What we bought, its paperwork and spare parts',
+    icon: 'box',
+    color: '#c27c2c',
+    platforms: ['android', 'web'],
+    // Not for everyone by default: what the household owns and what it paid
+    // is the owners' to share.
+  },
+  {
     id: 'bluetooth',
     name: 'Bluetooth',
     blurb: 'Drop the car without digging through settings',

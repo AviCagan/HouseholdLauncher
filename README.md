@@ -21,6 +21,7 @@ from Safari on iPhone.
 | **Meals** | Dishes with what they cost and what's in them, meals built from templates — Shabbat, every holiday, a weeknight — that add up cost and nutrition per plate and scale to however many are coming — a slider sets the headcount, and batches, cost and a copyable shopping list follow it — a recipe importer that reads a link or an Instagram caption, a two-week planner ("Plep") that puts the board on Google Calendar, and a "Missing ingredients?" button that sends what's needed to the Things shopping list, sorted by store. The one app that's allowed to look like a sticker book. |
 | **A&J Encyclopedia** | A dictionary of the words only the two of them use, typeset like the real thing — headword, pronunciation, part of speech, an example, an origin — with an alphabet index, a word of the day, and nothing in it until they write it. |
 | **Watched** | What the two of them watch, in the shape of an old CRT set. Each has a shelf and there's a shared one; the lineup plays forward at their pace — learned from when they actually finish seasons — to say when each show starts and when it's done, with a weekly show running alongside a binge. Finish a season and both rate it; the Watched channel ranks everything by each person's score and by the two together. Show data comes from TVmaze; a show it doesn't have can be typed in. "Watched" is a working title. |
+| **Inventory** | The stockroom: everything bought that's worth keeping the paperwork for, as cardboard boxes on a shelf with a stock label each. An item has an overall photo of the whole thing with everything that came with it, photos of its extra parts, its paperwork (scan a paper warranty a page at a time into one PDF, or add a PDF as it is), where it came from, what it cost and who paid, how long it's covered, where it's kept, and notes. The files live in Google Drive — one folder per item in *Joint Stuff › Warranties, manuals, extra parts* — so the folder is the record and the app is the nice way to look at it. Folders made in Drive by hand can be brought in. See [Connecting Drive for Inventory](#connecting-drive-for-inventory). |
 | **Bluetooth** | One switch per paired device, so the car can be dropped without four taps into system settings. Android only — see below. |
 
 Adding another is one entry in [`src/launcher/registry.ts`](src/launcher/registry.ts)
@@ -227,6 +228,47 @@ than producing a build that looks complete and fails silently on the phone.
 
 ---
 
+## Connecting Drive for Inventory
+
+Inventory keeps nothing heavier than a thumbnail in the database. Every photo,
+manual and warranty goes into Google Drive, one folder per item inside
+**Joint Stuff › Warranties, manuals, extra parts** (made if it isn't there),
+along with a doc the app keeps up to date with the item's details and notes —
+so the folder makes sense to anyone who opens it, with or without the app.
+
+The app never signs in to Google. It talks to the `inventory` Edge Function,
+which checks the caller has Inventory and passes the request to a small Google
+Apps Script running as whoever set it up, inside their own Drive. That means
+no Google Cloud project, no consent screen, no token that expires, and the
+same behaviour from the Android app, an iPhone and a laptop.
+
+Once, as an owner:
+
+1. Run `supabase/023_inventory.sql`, and deploy the functions (the
+   **Deploy Supabase functions** workflow does `inventory` with the rest).
+2. Open Inventory → **Connect Google Drive** → **Copy script**. It already has
+   the household's secret in it; the secret is never in this repository.
+3. In a new [Apps Script project](https://script.google.com/home/projects/create),
+   signed in as the account that owns *Joint Stuff*: paste, save, then
+   **Deploy → New deployment → Web app**, *Execute as: Me*, *Who has access:
+   Anyone*. Allow it to use Drive when asked (it's your own script, so
+   **Advanced → Go to…** past the "not verified" screen).
+4. Paste the Web app URL back into Inventory and press **Connect**.
+
+"Anyone" sounds wider than it is: the script answers only requests carrying
+the secret, which only the Edge Function holds (in `inventory_drive`, a table
+no client role can read), and it only ever works inside the Warranties folder.
+Everything else in that Drive is out of its reach.
+
+Folders already in Drive — the first was the Vevor cooler — show up under
+**N folders in Drive to bring in**. Bringing one in sorts its photos into the
+overall photo and extra parts by name, files PDFs as paperwork, and reads its
+doc into the notes, picking out price, store and who paid where the note says.
+The first time the item is edited in the app, that doc is rewritten in the
+app's format with the notes kept.
+
+---
+
 ## Layout
 
 ```
@@ -236,6 +278,7 @@ src/
     things/     to-dos, chores, shopping, wishlist
     owe/        the two money lists
     bluetooth/  device switches + the Capacitor plugin binding
+    inventory/  the stockroom, and its link to Google Drive
   data/         adapters (local + Supabase), types, offline outbox
   store/        zustand state — data, member/access, navigation
   lib/          haptics, sound, notifications, household codes, platform

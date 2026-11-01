@@ -10,6 +10,7 @@ import { OweApp } from '@/apps/owe/OweApp'
 import { MealsApp } from '@/apps/meals/MealsApp'
 import { EncyclopediaApp } from '@/apps/encyclopedia/EncyclopediaApp'
 import { WatchedApp } from '@/apps/watched/WatchedApp'
+import { InventoryApp } from '@/apps/inventory/InventoryApp'
 
 /**
  * Renders whichever app is open, with the guards that every app shares.
@@ -77,6 +78,8 @@ export function AppHost({ appId }: { appId: string }) {
       {appId === 'encyclopedia' && <EncyclopediaApp />}
       {/* And Watched: it's a television, the cabinet is the frame. */}
       {appId === 'watched' && <WatchedApp />}
+      {/* Inventory's header is its own: a stockroom sign, not the plain frame. */}
+      {appId === 'inventory' && <InventoryApp />}
       {appId === 'owe' && (
         <AppFrame name={app.name} color={app.color} onBack={goHome}>
           <OweApp />

@@ -8,6 +8,7 @@ import type {
   Debt,
   Dish,
   HouseholdSettings,
+  InventoryItem,
   LexiconEntry,
   Meal,
   MealTemplate,
@@ -56,6 +57,8 @@ export const TABLES = [
   'watch_ratings',
   'watch_settings',
   'watch_views',
+  // Inventory.
+  'inventory_items',
 ] as const
 
 export type TableName = (typeof TABLES)[number]
@@ -85,6 +88,7 @@ export interface TableMap {
   watch_ratings: WatchRating
   watch_settings: WatchSettings
   watch_views: WatchView
+  inventory_items: InventoryItem
 }
 
 export type ChangeEvent<T extends TableName = TableName> =

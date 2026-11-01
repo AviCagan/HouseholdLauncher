@@ -63,6 +63,10 @@ jobs:
           # the entire point of it. Every other action authenticates the caller
           # itself — see the identify() function in its source.
           supabase functions deploy household --project-ref "$PROJECT_REF" --no-verify-jwt
+          # Inventory's link to Google Drive. No JWT verification for the same
+          # reason: the browser's CORS preflight carries no token. Every real
+          # request is checked against the caller's session in the function.
+          supabase functions deploy inventory --project-ref "$PROJECT_REF" --no-verify-jwt
 
       # Only the sender needs secrets, and only once they exist. Skipping this
       # leaves the other two functions perfectly usable.
