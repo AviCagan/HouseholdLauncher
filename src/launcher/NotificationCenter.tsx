@@ -50,6 +50,7 @@ export function NotificationCenter() {
       open={open}
       onClose={() => setInbox(false)}
       height="78vh"
+      desktop="drawer"
       title={
         <div className="flex w-full items-center justify-between gap-3">
           <span className="text-[17px] font-bold">Notifications</span>

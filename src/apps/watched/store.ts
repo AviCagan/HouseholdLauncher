@@ -16,7 +16,7 @@ import type { Destination, FinishOutcome, WatchSnapshot } from './actions'
 export type WatchTab = 'onair' | 'shelf' | 'watched'
 
 export type WatchSheet =
-  | { kind: 'search'; preset: Destination | null }
+  | { kind: 'search'; preset: Destination | null; /** What to search for straight away. */ query?: string }
   | { kind: 'show'; showId: string }
   | {
       kind: 'rate'

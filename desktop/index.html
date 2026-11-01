@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/icons/favicon-64.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- Its own manifest, so "Install app" in a desktop browser opens this
+         page in its own window rather than the phone launcher. -->
+    <link rel="manifest" href="/desktop/manifest.webmanifest" />
+    <meta name="theme-color" content="#0e0e12" />
+    <meta name="description" content="Household, on a laptop" />
+
+    <title>Household</title>
+    <style>
+      /* Paint the background before React mounts so launch isn't a white flash. */
+      html { background: #0e0e12; }
+      @media (prefers-color-scheme: light) { html { background: #f6f6f8; } }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/desktop/main.tsx"></script>
+  </body>
+</html>

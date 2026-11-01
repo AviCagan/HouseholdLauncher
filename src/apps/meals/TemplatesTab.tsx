@@ -30,7 +30,7 @@ export function TemplatesTab() {
   const sorted = [...templates].sort((a, b) => a.sort_order - b.sort_order)
 
   return (
-    <div className="flex flex-col gap-3 pb-2">
+    <div className="m-list flex flex-col gap-3 pb-2">
       <MCard onClick={() => openSheet({ kind: 'template', template: null })} className="flex items-center gap-3 px-3.5 py-3" tone="var(--m-berry-soft)">
         <span className="grid h-11 w-11 place-items-center rounded-[14px] text-[22px]" style={{ background: 'var(--m-card)', border: '2px solid var(--m-line)' }}>
           ➕

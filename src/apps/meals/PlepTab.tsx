@@ -101,7 +101,7 @@ export function PlepTab() {
       {weeks.map((week) => (
         <div key={week.label}>
           <Heading>{week.label}</Heading>
-          <div className="flex flex-col gap-2">
+          <div className="m-week flex flex-col gap-2">
             {week.days.map((day) => (
               <DayCard
                 key={day.date}
@@ -158,14 +158,15 @@ function DayCard({
     <motion.div
       layout
       transition={POP}
-      className="m-card-flat flex gap-3 px-3 py-2.5"
+      data-weekday={day.weekday}
+      className="m-day m-card-flat flex gap-3 px-3 py-2.5"
       style={{
         background: day.shabbat ? 'var(--m-butter-soft)' : 'var(--m-card)',
         borderColor: isToday ? 'var(--m-tomato)' : undefined,
       }}
     >
       <div
-        className="flex w-[68px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5"
+        className="m-day-date flex w-[68px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5"
         style={{ background: 'var(--m-card)', border: '2px solid var(--m-line)' }}
       >
         <span className="max-w-full truncate text-[8.5px] font-black uppercase tracking-[0.01em]" style={{ color: isToday ? 'var(--m-tomato)' : 'var(--m-ink-dim)' }}>

@@ -9,18 +9,24 @@ import './styles/index.css'
 import App from './App.tsx'
 import { setupServiceWorker } from './lib/serviceWorker'
 import { installSafeArea } from './lib/safeArea'
+import { redirectToDesktopIfLaptop } from './lib/layoutChoice'
 
-// Registers on the web, tears down on native — see the module for why the APK
-// must not have one.
-setupServiceWorker()
+// A laptop opening this link is sent to the laptop page instead, unless the
+// phone layout was chosen in this browser — see the module for who is never
+// redirected. Rendering first would flash the phone launcher on the way out.
+if (!redirectToDesktopIfLaptop()) {
+  // Registers on the web, tears down on native — see the module for why the
+  // APK must not have one.
+  setupServiceWorker()
 
-// Before the first render: every header's top padding is derived from these,
-// so resolving them afterwards would show one frame of content tucked under
-// the status bar on exactly the devices this exists to fix.
-installSafeArea()
+  // Before the first render: every header's top padding is derived from
+  // these, so resolving them afterwards would show one frame of content
+  // tucked under the status bar on exactly the devices this exists to fix.
+  installSafeArea()
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  )
+}

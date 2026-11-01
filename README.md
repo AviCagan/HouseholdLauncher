@@ -7,8 +7,9 @@ No email, no accounts, no password resets. You type a household code and you're
 in — and the code is what decides which apps you get, so a friend can have the
 Owe list without the shopping list.
 
-One codebase ships two ways: an APK to sideload on Android, and a PWA to install
-from Safari on iPhone.
+One codebase ships three ways: an APK to sideload on Android, a PWA to install
+from Safari on iPhone, and a laptop layout of the same site for a desktop
+browser — see [On a laptop](#on-a-laptop).
 
 ---
 
@@ -25,7 +26,11 @@ from Safari on iPhone.
 
 Adding another is one entry in [`src/launcher/registry.ts`](src/launcher/registry.ts)
 plus a screen component. Access control, badges, notification preferences and
-the settings rows all derive from that entry.
+the settings rows all derive from that entry. The laptop page lists it in its
+sidebar from the same entry; giving it a laptop layout is one more line in
+[`src/desktop/DeskAppHost.tsx`](src/desktop/DeskAppHost.tsx) (until then it
+says to use the phone), and a letter in `src/desktop/appKeys.ts` for its
+G-then-letter shortcut.
 
 ---
 
@@ -35,6 +40,11 @@ the settings rows all derive from that entry.
 npm install
 npm run dev
 ```
+
+On a laptop the dev server sends you on to the laptop page (`/desktop/`), as
+the live site does. To work on the phone launcher there, open it once with
+`?phone` on the end — that is remembered — or use the browser's device toolbar,
+which reports a touch screen and so is never redirected.
 
 It connects to the household's Supabase project out of the box — the URL and
 publishable key are committed in [`src/lib/env.ts`](src/lib/env.ts), which is
@@ -73,6 +83,42 @@ keytool -genkeypair -v -keystore household.keystore -alias household \
   -dname "CN=Household Launcher, OU=Household, O=Household, C=US"
 base64 -w0 household.keystore    # paste this as ANDROID_KEYSTORE_B64
 ```
+
+---
+
+## On a laptop
+
+The same site has a second page built for a keyboard, a pointer and a wide
+screen: **`/HouseholdLauncher/desktop/`**. Open the household's usual link in a
+laptop browser and you land there on your own — anything with a mouse or
+trackpad and a window at least 1024px wide is sent across before the phone
+launcher draws a frame. Phones, the APK and Home Screen installs are never
+moved. **Phone layout** at the bottom of the sidebar goes back, and the choice
+is remembered in that browser until **Settings → General → Laptop layout**
+undoes it (or `?phone` is added to the address).
+
+It is the same data, sign-in and code: one origin, so a household code entered
+on either page in a browser is the session for both. Every edit form is the
+phone's own, drawn as a dialog that closes with Esc instead of a sheet dragged
+down by its handle (`Sheet` checks `lib/surface.ts`), so an app's laptop view
+only has to lay its lists out — the editing is shared.
+
+| | |
+|---|---|
+| **Shell** | A sidebar of apps with their badges instead of the home grid, an **Overview** of every app at once as the home page (urgent to-dos you can tick off there, ready chores, the shopping list by store, this week's meals, what's on, who owes what, the word of the day), and the address bar in step with the app — `#/meals` is a bookmark, back and forward move between apps. |
+| **⌘K / Ctrl K** | One box over everything: type a name and pick the to-do, dish, debt, show or word it belongs to; or type something new and add it to any list, define it, or look it up on TVmaze, without leaving the page you're on. |
+| **Things** | All four lists as columns on one board, each with its own add box (due date, how often, which store, whose wish on a second line). J/K or the arrows move, X finishes, C claims, E edits, 1–3 set urgency, Del deletes after a second press. Columns can be hidden for a narrow window. |
+| **Owe & Owed** | Both lists side by side with a per-person table, so someone on both is visible rather than remembered. Paying is Paid, then Confirm — the trackpad's version of the zipper. |
+| **Meals** | The phone's tabs at full width: the dish stickers flow into as many columns as fit, and Plep is a real calendar, a week to a row. P, D and I plan, add and import. |
+| **Encyclopedia** | A dictionary app: alphabet down the edge, headwords beside it, the chosen entry set in full on the facing page. ↑/↓ turn the page. |
+| **Watched** | Three screens in one cabinet — on air, the shelves and the ratings side by side. V puts it back to one set with channel buttons. |
+
+`?` on any screen lists every shortcut that works there. Single-letter keys
+never fire while you're typing in a box or while a dialog is open.
+
+The page has its own web manifest, so **Install app** in Chrome or Edge opens
+it in a window of its own. It shares the phone page's service worker, which is
+what lets Web Push reach a desktop browser too.
 
 ---
 
@@ -230,12 +276,18 @@ than producing a build that looks complete and fails silently on the phone.
 ## Layout
 
 ```
+desktop/        index.html for the laptop page
 src/
+  desktop/      the laptop shell — sidebar, overview, ⌘K, shortcuts — and each
+                app's laptop view; reuses the stores, actions and edit sheets
   launcher/     the shell — registry, home grid, notification centre, settings
   apps/
     things/     to-dos, chores, shopping, wishlist
     owe/        the two money lists
     bluetooth/  device switches + the Capacitor plugin binding
+    meals/      dishes, meals, templates, the Plep planner
+    encyclopedia/ the A&J dictionary
+    watched/    shelves, the lineup, ratings
   data/         adapters (local + Supabase), types, offline outbox
   store/        zustand state — data, member/access, navigation
   lib/          haptics, sound, notifications, household codes, platform

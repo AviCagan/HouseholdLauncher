@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import '@fontsource/vt323/latin-400.css'
 import './watched.css'
 import { Icon } from '@/components/primitives/Icon'
@@ -15,7 +15,7 @@ import { SearchSheet } from './SearchSheet'
 import { ShowSheet } from './ShowSheet'
 import { RateSheet } from './RateSheet'
 import { DatesSheet, FinishSheet, LogSheet, ManualSheet, PaceSheet, PosterSheet, SlotSheet } from './sheets'
-import { needsRefresh, refreshShow } from './actions'
+import { openWatchedLink, useKeepShowsCurrent } from './deepLink'
 
 /**
  * Watched (working title).
@@ -34,11 +34,9 @@ const CHANNELS: { id: WatchTab; n: number; label: string }[] = [
 export function WatchedApp() {
   const tab = useWatchUI((s) => s.tab)
   const setTab = useWatchUI((s) => s.setTab)
-  const stack = useWatchUI((s) => s.stack)
   const open = useWatchUI((s) => s.open)
   const goHome = useLauncher((s) => s.goHome)
   const consumeDeepLink = useLauncher((s) => s.consumeDeepLink)
-  const shows = useData((s) => s.watch_shows)
   // The server hasn't had 021_watched.sql yet: say so, rather than look empty
   // and fail on the first add.
   const notSetUp = useData((s) => s.missingTables.some((t) => t.startsWith('watch_')))
@@ -47,53 +45,13 @@ export function WatchedApp() {
   // A notification tap: the shelf, the lineup, or straight to a rating.
   useEffect(() => {
     const link = consumeDeepLink()
-    if (!link) return
-    const id = typeof link.id === 'string' ? link.id : null
-    const where = typeof link.tab === 'string' ? link.tab : ''
-    if (where.startsWith('rate:') && id) {
-      const season = Number(where.slice(5)) || 0
-      setTab('watched')
-      open({ kind: 'rate', showId: id, seasons: season ? [season] : [], includeShow: season === 0 })
-    } else if (where === 'shelf' || where === 'onair') {
-      setTab(where)
-      if (id) open({ kind: 'show', showId: id })
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (link) openWatchedLink(link)
   }, [consumeDeepLink])
 
   // Leaving the app closes its sheets, so coming back lands on the screen.
   useEffect(() => () => useWatchUI.getState().closeAll(), [])
 
-  /*
-    Keep airing shows current: new episodes, new seasons, air dates. A few
-    per visit, one at a time, so a big library never fires a burst at
-    TVmaze's rate limit — and only for shows that can actually have changed.
-  */
-  const refreshed = useRef(false)
-  const alive = useRef(true)
-  useEffect(() => {
-    alive.current = true
-    return () => {
-      alive.current = false
-    }
-  }, [])
-  useEffect(() => {
-    // Once per visit, as soon as there are shows. Not cancelled by the
-    // shows changing — each refresh changes them.
-    if (refreshed.current || shows.length === 0) return
-    refreshed.current = true
-    const now = new Date()
-    const rank = (s: (typeof shows)[number]) =>
-      s.stage === 'watching' ? 0 : s.stage === 'lineup' ? 1 : s.stage === 'shelf' ? 2 : 3
-    const stale = shows.filter((s) => needsRefresh(s, now)).sort((a, b) => rank(a) - rank(b)).slice(0, 6)
-    void (async () => {
-      for (const show of stale) {
-        if (!alive.current) return
-        await refreshShow(show)
-        await new Promise((r) => setTimeout(r, 600))
-      }
-    })()
-  }, [shows])
+  useKeepShowsCurrent()
 
   function changeChannel(next: WatchTab) {
     if (next === tab) return
@@ -101,8 +59,6 @@ export function WatchedApp() {
     setStaticKey((k) => k + 1)
     setTab(next)
   }
-
-  const top = stack[stack.length - 1]
 
   return (
     <div className="tv flex h-full flex-col">
@@ -181,7 +137,22 @@ export function WatchedApp() {
         </div>
       </nav>
 
-      {top?.kind === 'search' && <SearchSheet key={stack.length} preset={top.preset} />}
+      <WatchedSheets />
+    </div>
+  )
+}
+
+/**
+ * The sheet on top of Watched's stack — only the top one is drawn, so
+ * closing it brings back the one under. Mounted by the phone app and by the
+ * laptop one.
+ */
+export function WatchedSheets() {
+  const stack = useWatchUI((s) => s.stack)
+  const top = stack[stack.length - 1]
+  return (
+    <>
+      {top?.kind === 'search' && <SearchSheet key={stack.length} preset={top.preset} initialQuery={top.query} />}
       {top?.kind === 'show' && <ShowSheet key={`${stack.length}:${top.showId}`} showId={top.showId} />}
       {top?.kind === 'rate' && (
         <RateSheet
@@ -201,6 +172,6 @@ export function WatchedApp() {
       {top?.kind === 'finish' && <FinishSheet key={`${stack.length}:${top.showId}`} showId={top.showId} />}
       {top?.kind === 'dates' && <DatesSheet key={`${stack.length}:${top.showId}`} showId={top.showId} />}
       {top?.kind === 'log' && <LogSheet key={`${stack.length}:${top.showId}`} showId={top.showId} from={top.from} />}
-    </div>
+    </>
   )
 }
