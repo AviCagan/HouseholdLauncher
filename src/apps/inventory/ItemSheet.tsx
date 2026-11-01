@@ -12,6 +12,8 @@ import { DetailsForm } from './forms'
 import { draftOf, inputOf, priceProblem, type Draft } from './draft'
 import { KIND_LABEL, isImage, shortDate, stockCode } from './model'
 import { FileTile, PickButton, SectionHead, WarrantyBadge } from './ui'
+import { QrCode } from './QrCode'
+import { itemUrl } from './links'
 import { usePreview } from './hooks'
 
 /**
@@ -19,7 +21,7 @@ import { usePreview } from './hooks'
  * paperwork, the details and the notes. Files are added straight into the
  * item's Drive folder; the page shows what's there.
  */
-export function ItemSheet({ itemId, onClose }: { itemId: string | null; onClose: () => void }) {
+export function ItemSheet({ itemId, onClose, onPrintLabel }: { itemId: string | null; onClose: () => void; onPrintLabel: (id: string) => void }) {
   const live = useData((s) => (itemId ? s.inventory_items.find((i) => i.id === itemId) ?? null : null))
   // Held for the closing animation, which plays after the row is gone when
   // the item has just been removed.
@@ -29,7 +31,7 @@ export function ItemSheet({ itemId, onClose }: { itemId: string | null; onClose:
 
   return (
     <Sheet open={itemId !== null && live !== null} onClose={onClose} height="94vh" title={item ? <Title item={item} /> : null}>
-      {item && <ItemBody key={item.id} item={item} onClose={onClose} />}
+      {item && <ItemBody key={item.id} item={item} onClose={onClose} onPrintLabel={() => onPrintLabel(item.id)} />}
     </Sheet>
   )
 }
@@ -43,7 +45,7 @@ function Title({ item }: { item: InventoryItem }) {
   )
 }
 
-function ItemBody({ item, onClose }: { item: InventoryItem; onClose: () => void }) {
+function ItemBody({ item, onClose, onPrintLabel }: { item: InventoryItem; onClose: () => void; onPrintLabel: () => void }) {
   const profileId = useProfile((s) => s.profileId)
   const connected = useDrive((s) => s.status?.connected === true)
   const busy = useInventoryBusy((s) => s.busy[item.id])
@@ -142,6 +144,22 @@ function ItemBody({ item, onClose }: { item: InventoryItem; onClose: () => void 
         <PickButton icon="file" label="Add file" accept="application/pdf,image/*" multiple disabled={!connected} onPick={(f) => void addFiles(item.id, f, 'doc')} />
       </SectionHead>
       <Tiles files={docs} coverId={null} onOpen={setFileId} empty="The manual, the warranty, the receipt — scan the paper ones, add PDFs as they are." />
+
+      <SectionHead title="Label">
+        <button onClick={onPrintLabel} className="inv-btn inv-btn--quiet !px-2.5 !py-1.5 !text-[12.5px]">
+          <Icon name="file" size={14} /> Print label
+        </button>
+      </SectionHead>
+      <div className="flex items-center gap-4">
+        <div className="shrink-0 rounded-lg bg-white p-1.5" style={{ border: '1px solid var(--border)' }}>
+          <QrCode value={itemUrl(item.id)} size={112} label={`QR code for ${item.name}`} />
+        </div>
+        <p className="text-[12.5px] leading-snug" style={{ color: 'var(--text-dim)' }}>
+          Scan this with a phone camera to open <b style={{ color: 'var(--text)' }}>{item.name}</b> here. Print it as a label for the item, its box or its bag of spare parts — any
+          size, with the name underneath.
+          <span className="inv-code mt-1 block">{stockCode(item.id)}</span>
+        </p>
+      </div>
 
       <SectionHead title="Details">
         {editing ? (

@@ -16,7 +16,10 @@ declare const self: ServiceWorkerGlobalScope
 cleanupOutdatedCaches()
 // Shell assets only. API calls (Supabase, OSRM, Photon) are never cached —
 // a stale grocery list is worse than a spinner.
-precacheAndRoute(self.__WB_MANIFEST)
+// `item` too: a scanned Inventory label opens the site with ?item=<id>, and
+// that has to be served the cached page like any other visit — offline in a
+// garage included — rather than missing the cache over a query string.
+precacheAndRoute(self.__WB_MANIFEST, { ignoreURLParametersMatching: [/^utm_/, /^fbclid$/, /^item$/] })
 
 self.addEventListener('install', () => {
   void self.skipWaiting()

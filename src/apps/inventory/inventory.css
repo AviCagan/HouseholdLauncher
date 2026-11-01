@@ -165,21 +165,6 @@
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
 }
 
-/* Barcode bars, purely for looks — the stock code under them is the real tag. */
-.inv .inv-barcode {
-  height: 16px;
-  background: repeating-linear-gradient(
-    90deg,
-    var(--inv-ink) 0 1px,
-    transparent 1px 3px,
-    var(--inv-ink) 3px 5px,
-    transparent 5px 6px,
-    var(--inv-ink) 6px 7px,
-    transparent 7px 10px
-  );
-  opacity: 0.85;
-}
-
 .inv .inv-code {
   font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   font-size: 10px;

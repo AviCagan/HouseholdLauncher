@@ -4,6 +4,8 @@ import { Icon, type IconName } from '@/components/primitives/Icon'
 import { formatPrice } from '@/lib/money'
 import type { InventoryFile, InventoryItem } from '@/data/types'
 import { usePreview } from './hooks'
+import { QrCode } from './QrCode'
+import { itemUrl } from './links'
 import { GOOGLE_DOC, isImage, stockCode, warranty } from './model'
 
 export function WarrantyBadge({ item, short = false }: { item: Pick<InventoryItem, 'warranty_until'>; short?: boolean }) {
@@ -59,8 +61,8 @@ export function ItemBox({ item, onOpen, busy }: { item: InventoryItem; onOpen: (
           {[item.brand, item.store, item.price_cents != null ? formatPrice(item.price_cents) : null].filter(Boolean).join(' · ') || ' '}
         </span>
         <div className="mt-1.5 flex items-end justify-between gap-2">
-          <span className="min-w-0">
-            <span className="inv-barcode block w-[72px]" aria-hidden />
+          <span className="flex min-w-0 items-center gap-1.5">
+            <QrCode value={itemUrl(item.id)} size={30} label={`QR code for ${item.name}`} className="shrink-0" />
             <span className="inv-code">{stockCode(item.id)}</span>
           </span>
           <span className="flex shrink-0 items-center gap-1.5 text-[11px] font-bold" style={{ color: 'var(--inv-ink-faint)' }}>

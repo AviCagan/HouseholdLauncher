@@ -101,3 +101,15 @@ export const pinToPassword = (pin: string): string => `things-household-${pin}`
  */
 export const isConfigured = (): boolean =>
   raw.VITE_LOCAL_ONLY !== '1' && SUPABASE_URL.length > 0 && SUPABASE_ANON_KEY.length > 0
+
+/*
+  Where the web app lives on the public internet.
+
+  Needed wherever a link has to work from outside the app — above all the QR
+  codes on Inventory's printed labels, which are scanned by a phone's camera
+  and opened in a browser. Inside the Android APK `location.origin` is
+  https://localhost, which means nothing to anyone else's camera, so the
+  address is stated rather than worked out. An environment variable still
+  wins, for a copy of the app hosted somewhere else.
+*/
+export const PUBLIC_APP_URL = (raw.VITE_PUBLIC_APP_URL?.trim() || 'https://avicagan.github.io/HouseholdLauncher/').replace(/\/?$/, '/')

@@ -30,6 +30,7 @@ import { ensurePushRegistered } from './lib/notifications'
 import { errorMessage, withRetry } from './lib/errors'
 import { isNative } from './lib/platform'
 import { useDesktop } from './lib/useDesktop'
+import { itemIdFromUrl } from './apps/inventory/links'
 
 /** Swap the local adapter for Supabase and replay anything queued offline. */
 async function goLive() {
@@ -159,6 +160,39 @@ export default function App() {
     if (boot !== 'ready' || !profileId || !isConfigured()) return
     void ensurePushRegistered(profileId)
   }, [boot, profileId])
+
+  /*
+    A scanned Inventory label.
+
+    The QR code on a label is this site's address with ?item=<id> on the end.
+    A phone camera opens it in the browser — or, in the Android app, Android
+    hands it over as an app link. Either way it waits here until sign-in is
+    done (a first scan on a new phone meets the code screen first) and then
+    opens Inventory on that item.
+  */
+  const [linkedItem, setLinkedItem] = useState<string | null>(() => itemIdFromUrl(window.location.href))
+  useEffect(() => {
+    if (!isNative()) return
+    const listener = CapApp.addListener('appUrlOpen', ({ url }) => {
+      const id = itemIdFromUrl(url)
+      if (id) setLinkedItem(id)
+    })
+    return () => {
+      void listener.then((l) => l.remove())
+    }
+  }, [])
+  useEffect(() => {
+    if (!linkedItem || boot !== 'ready' || !profileId) return
+    useLauncher.getState().openApp('inventory', { id: linkedItem })
+    setLinkedItem(null)
+    // Out of the address bar, so a reload doesn't reopen it and a copied
+    // link is the plain one.
+    const url = new URL(window.location.href)
+    if (url.searchParams.has('item')) {
+      url.searchParams.delete('item')
+      window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`)
+    }
+  }, [linkedItem, boot, profileId])
 
   if (boot === 'locked') {
     return (

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
 import { AnimatePresence } from 'motion/react'
 import { Icon } from '@/components/primitives/Icon'
 import { useData } from '@/store/useData'
@@ -13,6 +14,7 @@ import { DriveSetupSheet, ImportSheet } from './DriveSheets'
 import { useUnlinkedFolders } from './hooks'
 import { ReceiveSheet } from './forms'
 import { ItemSheet } from './ItemSheet'
+import { LabelsSheet } from './LabelsSheet'
 import { categories, searchItems, sortItems, warranty, type InventorySort } from './model'
 import { ItemBox } from './ui'
 import './inventory.css'
@@ -52,18 +54,27 @@ export function InventoryApp() {
   const [receiving, setReceiving] = useState(false)
   const [setup, setSetup] = useState(false)
   const [importing, setImporting] = useState(false)
+  /** Labels to print: some items, or null for all of them. */
+  const [labels, setLabels] = useState<{ only: string[] | null } | null>(null)
 
   useEffect(() => {
     void useDrive.getState().refresh()
   }, [])
 
-  // A deep link names an item by id; open it if it's still on the shelf.
+  /*
+    A deep link names an item by id — a scanned label, usually. Watched for
+    as long as the app is open rather than read once on mount, because a
+    label can be scanned while Inventory is already on screen.
+  */
+  const pending = useLauncher((s) => s.pendingDeepLink)
   useEffect(() => {
+    if (!pending) return
     const link = consumeDeepLink()
     const id = typeof link?.id === 'string' ? link.id : null
-    if (id && items.some((i) => i.id === id)) setOpenId(id)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [consumeDeepLink])
+    if (!id) return
+    if (useData.getState().inventory_items.some((i) => i.id === id)) setOpenId(id)
+    else toast("That item isn't in Inventory any more", { description: 'It may have been removed. Its folder would still be in Drive.' })
+  }, [pending, consumeDeepLink])
 
   const cats = useMemo(() => categories(items), [items])
   const shown = useMemo(
@@ -103,6 +114,19 @@ export function InventoryApp() {
               )}
             </p>
           </div>
+          {items.length > 0 && (
+            <button
+              onClick={() => {
+                fire('tap')
+                setLabels({ only: null })
+              }}
+              className="inv-btn inv-btn--quiet shrink-0"
+              title="Print QR labels"
+            >
+              <Icon name="file" size={16} />
+              <span className={desktop ? '' : 'sr-only'}>Labels</span>
+            </button>
+          )}
           <button
             onClick={() => {
               fire('tap')
@@ -183,7 +207,8 @@ export function InventoryApp() {
         )}
       </div>
 
-      <ItemSheet itemId={openId} onClose={() => setOpenId(null)} />
+      <ItemSheet itemId={openId} onClose={() => setOpenId(null)} onPrintLabel={(id) => setLabels({ only: [id] })} />
+      <LabelsSheet open={labels !== null} only={labels?.only ?? null} onClose={() => setLabels(null)} />
       <ReceiveSheet
         open={receiving}
         onClose={() => setReceiving(false)}

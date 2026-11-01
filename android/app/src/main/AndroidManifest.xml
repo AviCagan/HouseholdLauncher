@@ -22,6 +22,18 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- The site's own links — above all the QR codes on Inventory
+                 labels — can open in the app instead of the browser. Not
+                 auto-verified (that needs a file at the root of the domain,
+                 which a project page can't serve), so Android asks once, or
+                 it's switched on under App info → Open by default. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="avicagan.github.io" android:pathPrefix="/HouseholdLauncher" />
+            </intent-filter>
+
         </activity>
 
         <provider
