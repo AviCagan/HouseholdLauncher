@@ -36,9 +36,16 @@ const db = createClient(SUPABASE_URL, SERVICE_ROLE, {
   auth: { persistSession: false },
 })
 
+/*
+  `apikey` has to be in the allowed headers: the app sends it on every call
+  (see src/lib/household.ts and src/lib/unfurl.ts). Without it the browser's
+  preflight came back without permission and the browser never sent the real
+  request at all — so from a browser this function could not be reached, and
+  the app reported it as "Can't reach the household right now".
+*/
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
