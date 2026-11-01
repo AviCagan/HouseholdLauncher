@@ -3,6 +3,7 @@ import { motion } from 'motion/react'
 import { SwipeRow } from './SwipeRow'
 import { UrgencySpine } from './UrgencySpine'
 import { ClaimChip } from './ClaimChip'
+import { Icon } from './Icon'
 import { useUI } from '@/store/useUI'
 import { fire } from '@/lib/haptics'
 import type { Profile, Urgency } from '@/data/types'
@@ -110,6 +111,20 @@ export function ListRow({
         </div>
 
         {trailing}
+        {/* Laptop only: the long-press that opens the editor is a touch
+            gesture, and a mouse has no way to find it. */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            fire('tap')
+            openSheet({ kind: 'item', table, id })
+          }}
+          aria-label="Edit"
+          className="row-edit hidden h-8 w-8 shrink-0 place-items-center rounded-full lg:grid"
+          style={{ color: 'var(--text-dim)' }}
+        >
+          <Icon name="pencil" size={15} />
+        </button>
         <ClaimChip claimedBy={claimedBy} profiles={profiles} onClick={onClaim} />
       </div>
     </SwipeRow>

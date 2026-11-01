@@ -8,6 +8,7 @@ import { Icon } from './components/primitives/Icon'
 import { CodeGate } from './launcher/CodeGate'
 import { Home } from './launcher/Home'
 import { AppHost } from './launcher/AppHost'
+import { DesktopShell } from './launcher/DesktopShell'
 import { NotificationCenter } from './launcher/NotificationCenter'
 import { SettingsSheet } from './launcher/settings/SettingsSheet'
 import { useData } from './store/useData'
@@ -28,6 +29,7 @@ import { startCleanup } from './lib/cleanup'
 import { ensurePushRegistered } from './lib/notifications'
 import { errorMessage, withRetry } from './lib/errors'
 import { isNative } from './lib/platform'
+import { useDesktop } from './lib/useDesktop'
 
 /** Swap the local adapter for Supabase and replay anything queued offline. */
 async function goLive() {
@@ -54,6 +56,7 @@ export default function App() {
   const profileId = useProfile((s) => s.profileId)
   const settings = useSettings()
   const screen = useLauncher((s) => s.screen)
+  const desktop = useDesktop()
   const [boot, setBoot] = useState<Boot>('loading')
   const [bootError, setBootError] = useState<string | null>(null)
 
@@ -223,28 +226,36 @@ export default function App() {
     <div className="flex h-full flex-col overflow-hidden">
       {!isConfigured() && <LocalModeBanner />}
 
-      <div className="relative min-h-0 flex-1">
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={screen.kind === 'app' ? screen.appId : 'home'}
-            className="h-full"
-            // Apps come forward and home falls back, so the two directions read
-            // as entering and leaving rather than as a carousel.
-            initial={{ opacity: 0, scale: screen.kind === 'app' ? 0.97 : 1.02 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: screen.kind === 'app' ? 1.02 : 0.97 }}
-            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-          >
-            {screen.kind === 'home' ? <Home /> : <AppHost appId={screen.appId} />}
-          </motion.div>
-        </AnimatePresence>
-      </div>
+      {/* A wide window gets the sidebar and the dashboard; a phone keeps the
+          grid and one screen at a time. Same stores, same apps underneath. */}
+      {desktop ? (
+        <DesktopShell screen={screen} />
+      ) : (
+        <div className="relative min-h-0 flex-1">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={screen.kind === 'app' ? screen.appId : 'home'}
+              className="h-full"
+              // Apps come forward and home falls back, so the two directions read
+              // as entering and leaving rather than as a carousel.
+              initial={{ opacity: 0, scale: screen.kind === 'app' ? 0.97 : 1.02 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: screen.kind === 'app' ? 1.02 : 0.97 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            >
+              {screen.kind === 'home' ? <Home /> : <AppHost appId={screen.appId} />}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      )}
 
       <NotificationCenter />
       <SettingsSheet />
       <PulseLayer />
       <Toaster
-        position="top-center"
+        // Bottom-right on a laptop, where a toast under the pointer's usual
+        // resting place is less in the way than one across the top.
+        position={desktop ? 'bottom-right' : 'top-center'}
         /*
           Both, and the second one is the one that matters.
 

@@ -36,7 +36,7 @@ export function ShoppingAddBar() {
   const store = stores.find((s) => s.id === storeId) ?? null
 
   return (
-    <div ref={barRef} className="flex flex-col gap-2">
+    <div ref={barRef} className="flex flex-col gap-2 lg:flex-col-reverse">
       <AnimatePresence>
         {picking && (
           <motion.div

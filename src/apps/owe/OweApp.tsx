@@ -7,6 +7,7 @@ import { useData } from '@/store/useData'
 import { useProfile } from '@/store/useProfile'
 import { formatPrice } from '@/lib/money'
 import { fire } from '@/lib/haptics'
+import { useDesktop } from '@/lib/useDesktop'
 import { markPaid, markUnpaid, removeDebt } from './actions'
 import { AddDebtBar } from './AddDebtBar'
 import { DebtEditSheet } from './DebtEditSheet'
@@ -37,6 +38,7 @@ import type { Debt, DebtDirection } from '@/data/types'
  * deliberately harder than the ones that tick off a chore.
  */
 export function OweApp() {
+  const desktop = useDesktop()
   const [direction, setDirection] = useState<DebtDirection>('owed_to_us')
   const [editing, setEditing] = useState<Debt | null>(null)
   const [settling, setSettling] = useState<SettlePlan | null>(null)
@@ -44,10 +46,6 @@ export function OweApp() {
   const debts = useData((s) => s.debts)
   const profileId = useProfile((s) => s.profileId)
 
-  const open = useMemo(() => openDebts(debts, direction), [debts, direction])
-  const paid = useMemo(() => paidDebts(debts, direction), [debts, direction])
-  const people = useMemo(() => summarise(debts, direction), [debts, direction])
-  const total = outstandingTotal(debts, direction)
   // People on both lists at once — the only case where settling means anything.
   const candidates = useMemo(() => settleCandidates(debts), [debts])
   const canSettle = new Set(candidates.map((c) => c.key))
@@ -59,8 +57,86 @@ export function OweApp() {
     setSettling(plan)
   }
 
-  const inbound = direction === 'owed_to_us'
   const closePay = useCallback(() => setPaying(null), [])
+
+  const banners = (
+    <AnimatePresence initial={false}>
+      {candidates.map((c) => (
+        <SettleBanner key={c.key} candidate={c} onSettle={() => openSettle(c.key)} />
+      ))}
+    </AnimatePresence>
+  )
+
+  const sheets = (
+    <>
+      <DebtEditSheet debt={editing} onClose={() => setEditing(null)} />
+      <SettleSheet plan={settling} onClose={() => setSettling(null)} />
+      <PaySheet target={paying} onClose={closePay} />
+    </>
+  )
+
+  const listFor = (dir: DebtDirection) => (
+    <DirectionList
+      direction={dir}
+      debts={debts}
+      profileId={profileId}
+      settleable={canSettle}
+      onSettle={openSettle}
+      onPay={(key) => {
+        fire('tap')
+        setPaying({ key, direction: dir })
+      }}
+      onEdit={(debt) => {
+        fire('tap')
+        setEditing(debt)
+      }}
+      wide={desktop}
+    />
+  )
+
+  /*
+    Laptop: the two lists side by side, each with its own add bar at the top.
+    The switcher exists because a phone can show one at a time; a wide window
+    can show the whole picture, and "we owe Sam $40, Sam owes us $25" is a
+    picture you want to see whole.
+  */
+  if (desktop) {
+    return (
+      <div className="flex h-full flex-col">
+        <div className="scroll-y min-h-0 flex-1 px-6 pb-12 pt-1">
+          <div className="mx-auto max-w-[1200px]">
+            {banners}
+            <div className="mt-3 grid grid-cols-2 items-start gap-5">
+              {DIRECTIONS.map((dir) => {
+                const inbound = dir === 'owed_to_us'
+                const total = outstandingTotal(debts, dir)
+                return (
+                  <section
+                    key={dir}
+                    className="rounded-3xl p-4"
+                    style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
+                  >
+                    <div className="flex items-baseline justify-between gap-3 px-1 pb-3">
+                      <h2 className="text-[17px] font-bold">{inbound ? 'Owed to us' : 'We owe'}</h2>
+                      <span
+                        className="text-[22px] font-bold tabular-nums"
+                        style={{ color: total > 0 ? (inbound ? 'var(--ok)' : 'var(--warn)') : 'var(--text-faint)' }}
+                      >
+                        {formatPrice(total) || '$0'}
+                      </span>
+                    </div>
+                    <AddDebtBar direction={dir} docked />
+                    {listFor(dir)}
+                  </section>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+        {sheets}
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -69,82 +145,111 @@ export function OweApp() {
       </header>
 
       <div className="scroll-y min-h-0 flex-1 px-3 pb-[190px]">
-        <AnimatePresence initial={false}>
-          {candidates.map((c) => (
-            <SettleBanner key={c.key} candidate={c} onSettle={() => openSettle(c.key)} />
-          ))}
-        </AnimatePresence>
-
-        <SummaryPanel
-          people={people}
-          total={total}
-          label={inbound ? 'Owed to us' : 'We owe'}
-          tone={inbound ? 'var(--ok)' : 'var(--warn)'}
-          settleable={canSettle}
-          onSettle={openSettle}
-          payLabel={inbound ? 'Got paid' : 'Pay'}
-          onPay={(key) => {
-            fire('tap')
-            setPaying({ key, direction })
-          }}
-        />
-
-        {open.length === 0 && paid.length === 0 ? (
-          <EmptyState
-            icon={<Icon name="wallet" size={34} />}
-            title={inbound ? 'Nobody owes you' : 'You owe nobody'}
-            hint={
-              inbound
-                ? 'Add someone below when you cover something for them.'
-                : 'Add someone below when they cover something for you.'
-            }
-          />
-        ) : (
-          <>
-            <div className="mt-3 flex flex-col gap-2">
-              <AnimatePresence initial={false}>
-                {open.map((debt) => (
-                  <DebtRow
-                    key={debt.id}
-                    debt={debt}
-                    tone={inbound ? 'var(--ok)' : 'var(--warn)'}
-                    onPaid={() => void markPaid(debt, profileId)}
-                    onEdit={() => {
-                      fire('tap')
-                      setEditing(debt)
-                    }}
-                  />
-                ))}
-              </AnimatePresence>
-            </div>
-
-            <Section
-              label="History"
-              count={paid.length}
-              icon={
-                <span style={{ color: 'var(--text-faint)' }}>
-                  <Icon name="history" size={14} />
-                </span>
-              }
-            >
-              {paid.map((debt) => (
-                <PaidRow
-                  key={debt.id}
-                  debt={debt}
-                  onUndo={() => void markUnpaid(debt, profileId)}
-                  onDelete={() => void removeDebt(debt)}
-                />
-              ))}
-            </Section>
-          </>
-        )}
+        {banners}
+        {listFor(direction)}
       </div>
 
       <AddDebtBar direction={direction} />
-      <DebtEditSheet debt={editing} onClose={() => setEditing(null)} />
-      <SettleSheet plan={settling} onClose={() => setSettling(null)} />
-      <PaySheet target={paying} onClose={closePay} />
+      {sheets}
     </div>
+  )
+}
+
+const DIRECTIONS: DebtDirection[] = ['owed_to_us', 'we_owe']
+
+/** One list: the per-person roll-up, the open entries, and the history. */
+function DirectionList({
+  direction,
+  debts,
+  profileId,
+  settleable,
+  onSettle,
+  onPay,
+  onEdit,
+  wide,
+}: {
+  direction: DebtDirection
+  debts: Debt[]
+  profileId: string | null
+  settleable: Set<string>
+  onSettle: (key: string) => void
+  onPay: (key: string) => void
+  onEdit: (debt: Debt) => void
+  /** The laptop column: the heading above already carries the total. */
+  wide: boolean
+}) {
+  const open = useMemo(() => openDebts(debts, direction), [debts, direction])
+  const paid = useMemo(() => paidDebts(debts, direction), [debts, direction])
+  const people = useMemo(() => summarise(debts, direction), [debts, direction])
+  const total = outstandingTotal(debts, direction)
+  const inbound = direction === 'owed_to_us'
+
+  return (
+    <>
+      <SummaryPanel
+        people={people}
+        total={total}
+        label={wide ? 'By person' : inbound ? 'Owed to us' : 'We owe'}
+        tone={inbound ? 'var(--ok)' : 'var(--warn)'}
+        settleable={settleable}
+        onSettle={onSettle}
+        payLabel={inbound ? 'Got paid' : 'Pay'}
+        onPay={onPay}
+        wrap={wide}
+        showTotal={!wide}
+      />
+
+      {open.length === 0 && paid.length === 0 ? (
+        <EmptyState
+          icon={<Icon name="wallet" size={34} />}
+          title={inbound ? 'Nobody owes you' : 'You owe nobody'}
+          hint={
+            inbound
+              ? wide
+                ? 'Add someone above when you cover something for them.'
+                : 'Add someone below when you cover something for them.'
+              : wide
+                ? 'Add someone above when they cover something for you.'
+                : 'Add someone below when they cover something for you.'
+          }
+        />
+      ) : (
+        <>
+          <div className="mt-3 flex flex-col gap-2">
+            <AnimatePresence initial={false}>
+              {open.map((debt) => (
+                <DebtRow
+                  key={debt.id}
+                  debt={debt}
+                  tone={inbound ? 'var(--ok)' : 'var(--warn)'}
+                  onPaid={() => void markPaid(debt, profileId)}
+                  onEdit={() => onEdit(debt)}
+                />
+              ))}
+            </AnimatePresence>
+          </div>
+
+          <Section
+            label="History"
+            count={paid.length}
+            icon={
+              <span style={{ color: 'var(--text-faint)' }}>
+                <Icon name="history" size={14} />
+              </span>
+            }
+          >
+            {paid.map((debt) => (
+              <PaidRow
+                key={debt.id}
+                debt={debt}
+                onUndo={() => void markUnpaid(debt, profileId)}
+                onDelete={() => void removeDebt(debt)}
+              />
+            ))}
+          </Section>
+        </>
+      )}
+    </>
   )
 }
 
@@ -271,6 +376,8 @@ function SummaryPanel({
   onSettle,
   payLabel,
   onPay,
+  wrap = false,
+  showTotal = true,
 }: {
   people: ReturnType<typeof summarise>
   total: number
@@ -282,6 +389,9 @@ function SummaryPanel({
   payLabel: string
   /** Record a payment against this person's whole balance. */
   onPay: (key: string) => void
+  /** Cards wrap onto new lines instead of scrolling sideways — the laptop has the room. */
+  wrap?: boolean
+  showTotal?: boolean
 }) {
   if (people.length === 0) return null
 
@@ -294,12 +404,14 @@ function SummaryPanel({
         >
           {label} · {people.length} {people.length === 1 ? 'person' : 'people'}
         </span>
-        <span className="text-[15px] font-bold tabular-nums" style={{ color: tone }}>
-          {formatPrice(total)}
-        </span>
+        {showTotal && (
+          <span className="text-[15px] font-bold tabular-nums" style={{ color: tone }}>
+            {formatPrice(total)}
+          </span>
+        )}
       </div>
 
-      <div className="scroll-x -mx-3 flex gap-2 px-3 pb-1">
+      <div className={wrap ? 'flex flex-wrap gap-2 pb-1' : 'scroll-x -mx-3 flex gap-2 px-3 pb-1'}>
         {people.map((person) => (
           // The settle badge sits beside the card's button rather than inside
           // it, since a button can't contain another button.

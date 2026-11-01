@@ -46,7 +46,7 @@ export function TodosTab() {
           hint="Type below to add the first thing. Swipe a row right to finish it, left to claim it."
         />
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 lg:grid lg:grid-cols-2 lg:gap-2.5">
           <AnimatePresence initial={false}>
             {active.map((todo) => (
               <motion.div

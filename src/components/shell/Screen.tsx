@@ -25,7 +25,7 @@ export function Screen({
           with an 8px gap, 16px from the right edge — 96px — plus a little
           breathing room. It was sized for one button, which is why the bell
           landed on top of Shopping's Plan trip button. */}
-      <header className="shrink-0 pb-2 pl-5 pr-[104px] pt-[max(var(--safe-top),0.75rem)]">
+      <header className="shrink-0 pb-2 pl-5 pr-[104px] pt-[max(var(--safe-top),0.75rem)] lg:px-6 lg:pt-5">
         <div className="flex items-end justify-between gap-3">
           {/* min-w-0 so a long action keeps its own width and squeezes the
               title instead of wrapping itself onto two lines. */}
@@ -43,7 +43,7 @@ export function Screen({
       </header>
 
       {/* Bottom padding clears the quick-add bar and the floating dock. */}
-      <div className="scroll-y min-h-0 flex-1 px-3 pb-[205px]">{children}</div>
+      <div className="scroll-y min-h-0 flex-1 px-3 pb-[205px] lg:px-6 lg:pb-12">{children}</div>
     </div>
   )
 }

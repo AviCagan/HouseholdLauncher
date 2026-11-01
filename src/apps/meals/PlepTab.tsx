@@ -77,7 +77,7 @@ export function PlepTab() {
 
   return (
     <div className="flex flex-col gap-3 pb-2">
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-2 lg:max-w-[640px]">
         <MCard onClick={() => setShopOpen(true)} className="flex items-center gap-2.5 px-3 py-3" tone="var(--m-mint-soft)">
           <span className="text-[24px]">🛒</span>
           <span className="min-w-0">
@@ -101,11 +101,15 @@ export function PlepTab() {
       {weeks.map((week) => (
         <div key={week.label}>
           <Heading>{week.label}</Heading>
-          <div className="flex flex-col gap-2">
-            {week.days.map((day) => (
+          {/* Laptop: a row per week, a column per weekday, so Friday is
+              always under Friday and the board reads like a calendar. The
+              first week starts on today, hence the column offset. */}
+          <div className="flex flex-col gap-2 lg:grid lg:grid-cols-7 lg:gap-2.5">
+            {week.days.map((day, i) => (
               <DayCard
                 key={day.date}
                 day={day}
+                column={i === 0 ? day.weekday + 1 : undefined}
                 dishes={dishes}
                 onPlan={() => {
                   fire('tap')
@@ -143,11 +147,14 @@ export function PlepTab() {
 
 function DayCard({
   day,
+  column,
   dishes,
   onPlan,
   onOpen,
 }: {
   day: PlanDay
+  /** Which weekday column this card starts in, on the laptop board. */
+  column?: number
   dishes: Dish[]
   onPlan: () => void
   onOpen: (meal: Meal) => void
@@ -158,39 +165,47 @@ function DayCard({
     <motion.div
       layout
       transition={POP}
-      className="m-card-flat flex gap-3 px-3 py-2.5"
+      className="m-card-flat flex gap-3 px-3 py-2.5 lg:min-h-[172px] lg:flex-col lg:gap-2 lg:px-2.5 lg:py-2"
       style={{
         background: day.shabbat ? 'var(--m-butter-soft)' : 'var(--m-card)',
         borderColor: isToday ? 'var(--m-tomato)' : undefined,
+        gridColumnStart: column,
       }}
     >
       <div
-        className="flex w-[68px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5"
+        className="flex w-[68px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 lg:w-full lg:flex-row lg:justify-start lg:gap-1.5 lg:px-2 lg:py-1"
         style={{ background: 'var(--m-card)', border: '2px solid var(--m-line)' }}
       >
-        <span className="max-w-full truncate text-[8.5px] font-black uppercase tracking-[0.01em]" style={{ color: isToday ? 'var(--m-tomato)' : 'var(--m-ink-dim)' }}>
+        <span className="max-w-full truncate text-[8.5px] font-black uppercase tracking-[0.01em] lg:order-2 lg:min-w-0 lg:flex-1 lg:text-[9.5px]" style={{ color: isToday ? 'var(--m-tomato)' : 'var(--m-ink-dim)' }}>
           {day.label}
         </span>
-        <span className="m-title text-[20px] leading-none">{dayNum}</span>
-        <span className="text-[10px] font-bold" style={{ color: 'var(--m-ink-dim)' }}>
+        <span className="m-title text-[20px] leading-none lg:order-1 lg:text-[18px]">{dayNum}</span>
+        {/* On the board the month is said once per row, on the first card:
+            "Nov" seven times across is noise, and the day's number plus the
+            week heading already place it. */}
+        <span className={`text-[10px] font-bold lg:order-3 lg:text-[11px] ${column === undefined ? 'lg:hidden' : ''}`} style={{ color: 'var(--m-ink-dim)' }}>
           {month}
         </span>
         {day.shabbat && (
-          <span className="text-[14px] leading-none" aria-label={day.shabbat === 'dinner' ? 'Shabbat dinner' : 'Shabbat lunch'}>
+          <span className="text-[14px] leading-none lg:order-4" aria-label={day.shabbat === 'dinner' ? 'Shabbat dinner' : 'Shabbat lunch'}>
             {day.shabbat === 'dinner' ? '🕯️' : '☀️'}
           </span>
         )}
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col justify-center gap-1.5">
+      <div className="flex min-w-0 flex-1 flex-col justify-center gap-1.5 lg:justify-start">
         {day.meals.map((meal) => {
           const url = googleMealEventUrl(meal, dishes)
           return (
-            <div key={meal.id} className="flex items-center gap-1.5">
-              <button onClick={() => onOpen(meal)} className="m-chip min-w-0 flex-1 !justify-start !py-2" style={{ background: 'var(--m-card)' }}>
-                <span>{meal.emoji || occasionEmoji(meal.occasion)}</span>
-                <span className="min-w-0 truncate">{meal.name}</span>
-                <span className="ml-auto shrink-0 text-[11px] font-bold" style={{ color: 'var(--m-ink-faint)' }}>
+            <div key={meal.id} className="flex items-center gap-1.5 lg:flex-col lg:items-stretch lg:gap-1">
+              {/* On the board a name wraps rather than truncating, and the
+                  calendar button sits under the chip instead of beside it: a
+                  cell a seventh of the window wide has no room for "Roast
+                  chicken & Green salad" and a button on one line. */}
+              <button onClick={() => onOpen(meal)} className="m-chip min-w-0 flex-1 !justify-start !py-2 lg:items-start lg:whitespace-normal lg:text-left" style={{ background: 'var(--m-card)' }}>
+                <span className="lg:leading-[15px]">{meal.emoji || occasionEmoji(meal.occasion)}</span>
+                <span className="min-w-0 truncate lg:line-clamp-3 lg:whitespace-normal lg:leading-[15px]">{meal.name}</span>
+                <span className="ml-auto shrink-0 text-[11px] font-bold lg:hidden" style={{ color: 'var(--m-ink-faint)' }}>
                   for {meal.people}
                 </span>
               </button>
@@ -201,10 +216,11 @@ function DayCard({
                     openExternal(url)
                   }}
                   aria-label={`Add ${meal.name} to Google Calendar now`}
-                  className="grid h-8 w-8 shrink-0 place-items-center rounded-full"
+                  className="grid h-8 w-8 shrink-0 place-items-center rounded-full lg:flex lg:h-auto lg:w-auto lg:items-center lg:gap-1 lg:self-start lg:rounded-md lg:px-1.5 lg:py-0.5 lg:text-[10.5px] lg:font-bold lg:opacity-70 lg:hover:opacity-100"
                   style={{ border: '2px solid var(--m-line)', background: 'var(--m-card)', color: 'var(--m-ink)' }}
                 >
                   <Icon name="calendar" size={14} strokeWidth={2.4} />
+                  <span className="hidden lg:inline">Google Calendar</span>
                 </button>
               )}
             </div>

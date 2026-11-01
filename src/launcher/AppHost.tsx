@@ -113,19 +113,19 @@ function AppFrame({
 }) {
   return (
     <div className="flex h-full flex-col">
-      <header className="flex shrink-0 items-center gap-2 px-2 pb-1 pt-[max(var(--safe-top),0.5rem)]">
+      <header className="flex shrink-0 items-center gap-2 px-2 pb-1 pt-[max(var(--safe-top),0.5rem)] lg:px-6 lg:pt-5">
         <button
           onClick={() => {
             fire('tap')
             onBack()
           }}
           aria-label="Back to home"
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-full"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-full lg:hidden"
           style={{ color: 'var(--text-dim)' }}
         >
           <Icon name="back" size={21} strokeWidth={2.4} />
         </button>
-        <h1 className="min-w-0 truncate text-[19px] font-bold tracking-tight" style={{ color }}>
+        <h1 className="min-w-0 truncate text-[19px] font-bold tracking-tight lg:text-[24px]" style={{ color }}>
           {name}
         </h1>
       </header>

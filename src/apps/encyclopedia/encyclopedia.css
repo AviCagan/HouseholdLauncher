@@ -192,4 +192,18 @@
     color: var(--lex-gold);
     letter-spacing: 0.4em;
   }
+  /* The laptop page: entries in two columns with a rule down the gutter,
+     the way a dictionary is set. Sections may run across the fold; a single
+     entry, or a letter's heading with its first entry, never splits. */
+  .lex-columns {
+    column-count: 2;
+    column-gap: 48px;
+    column-rule: 1px solid var(--lex-rule);
+  }
+  .lex-keep {
+    break-inside: avoid;
+  }
+  .lex-columns .lex-dropcap {
+    break-after: avoid;
+  }
 }
