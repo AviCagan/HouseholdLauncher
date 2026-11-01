@@ -15,7 +15,6 @@ import { ShelfSheet } from './ShelfSheet'
 import { shelved } from './shelf'
 import { TemplateSheet, TemplatesTab } from './TemplatesTab'
 import { useMealsUI, type MealsTab as TabKey } from './store'
-import { openMealsLink } from './deepLink'
 import { POP, useReduceMotion } from './ui'
 import './meals.css'
 
@@ -41,7 +40,10 @@ const TABS: { key: TabKey; label: string; emoji: string }[] = [
 export function MealsApp() {
   const tab = useMealsUI((s) => s.tab)
   const setTab = useMealsUI((s) => s.setTab)
+  const sheet = useMealsUI((s) => s.sheet)
   const openSheet = useMealsUI((s) => s.openSheet)
+  const closeSheet = useMealsUI((s) => s.closeSheet)
+  const burst = useMealsUI((s) => s.burst)
   const goHome = useLauncher((s) => s.goHome)
   const consumeDeepLink = useLauncher((s) => s.consumeDeepLink)
   const dishes = useData((s) => s.dishes)
@@ -56,7 +58,17 @@ export function MealsApp() {
   */
   useEffect(() => {
     const link = consumeDeepLink()
-    if (link) openMealsLink(link)
+    if (!link) return
+    const wanted = link.tab
+    if (wanted === 'dishes' || wanted === 'meals' || wanted === 'templates' || wanted === 'plan') setTab(wanted)
+    if (wanted === 'shelf') openSheet({ kind: 'shelf' })
+    const id = typeof link.id === 'string' ? link.id : null
+    if (!id) return
+    const dish = dishes.find((d) => d.id === id)
+    if (dish) openSheet({ kind: 'dish', dish })
+    const meal = meals.find((m) => m.id === id)
+    if (meal) openSheet({ kind: 'meal', meal })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [consumeDeepLink])
 
   return (
@@ -166,7 +178,24 @@ export function MealsApp() {
         }}
       />
 
-      <MealsSheets />
+      <DishSheet
+        open={sheet?.kind === 'dish'}
+        dish={sheet?.kind === 'dish' ? sheet.dish : null}
+        draft={sheet?.kind === 'dish' ? sheet.draft : undefined}
+        note={sheet?.kind === 'dish' ? sheet.note : undefined}
+        onClose={closeSheet}
+      />
+      <MealSheet
+        open={sheet?.kind === 'meal'}
+        meal={sheet?.kind === 'meal' ? sheet.meal : null}
+        template={sheet?.kind === 'meal' ? sheet.template : null}
+        date={sheet?.kind === 'meal' ? sheet.date ?? null : null}
+        onClose={closeSheet}
+      />
+      <TemplateSheet open={sheet?.kind === 'template'} template={sheet?.kind === 'template' ? sheet.template : null} onClose={closeSheet} />
+      <ImportSheet open={sheet?.kind === 'import'} onClose={closeSheet} />
+      <ShelfSheet open={sheet?.kind === 'shelf'} onClose={closeSheet} />
+      <Confetti burst={burst} />
     </div>
   )
 }
@@ -237,38 +266,5 @@ function Fab({ open, onToggle, onPick }: { open: boolean; onToggle: () => void; 
         <Icon name="plus" size={28} strokeWidth={3} />
       </motion.button>
     </div>
-  )
-}
-
-/**
- * Every sheet Meals can open, driven by its UI store. Mounted once by the
- * phone app and once by the laptop one, so a dish opened from either is the
- * same form.
- */
-export function MealsSheets() {
-  const sheet = useMealsUI((s) => s.sheet)
-  const closeSheet = useMealsUI((s) => s.closeSheet)
-  const burst = useMealsUI((s) => s.burst)
-  return (
-    <>
-      <DishSheet
-        open={sheet?.kind === 'dish'}
-        dish={sheet?.kind === 'dish' ? sheet.dish : null}
-        draft={sheet?.kind === 'dish' ? sheet.draft : undefined}
-        note={sheet?.kind === 'dish' ? sheet.note : undefined}
-        onClose={closeSheet}
-      />
-      <MealSheet
-        open={sheet?.kind === 'meal'}
-        meal={sheet?.kind === 'meal' ? sheet.meal : null}
-        template={sheet?.kind === 'meal' ? sheet.template : null}
-        date={sheet?.kind === 'meal' ? sheet.date ?? null : null}
-        onClose={closeSheet}
-      />
-      <TemplateSheet open={sheet?.kind === 'template'} template={sheet?.kind === 'template' ? sheet.template : null} onClose={closeSheet} />
-      <ImportSheet open={sheet?.kind === 'import'} onClose={closeSheet} />
-      <ShelfSheet open={sheet?.kind === 'shelf'} onClose={closeSheet} />
-      <Confetti burst={burst} />
-    </>
   )
 }

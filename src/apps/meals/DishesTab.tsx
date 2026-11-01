@@ -70,7 +70,7 @@ export function DishesTab() {
           Nothing matches that.
         </p>
       ) : (
-        <div className="m-grid grid grid-cols-2 gap-3 pb-2">
+        <div className="grid grid-cols-2 gap-3 pb-2">
           <AnimatePresence initial={false}>
             {shown.map((dish) => (
               <DishCard key={dish.id} dish={dish} onOpen={() => openSheet({ kind: 'dish', dish })} />

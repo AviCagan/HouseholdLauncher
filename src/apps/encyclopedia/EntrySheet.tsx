@@ -216,11 +216,7 @@ export function EntrySheet({
   )
 }
 
-/**
- * An entry as it reads in the book. The sheet's view face on the phone, and
- * the right-hand page on the laptop.
- */
-export function Reading({
+function Reading({
   entry,
   nameOf,
   onEdit,

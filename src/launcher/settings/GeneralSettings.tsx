@@ -9,9 +9,6 @@ import { signOut } from '@/lib/supabase'
 import { useProfile } from '@/store/useProfile'
 import { isConfigured } from '@/lib/env'
 import { fire } from '@/lib/haptics'
-import { isNative } from '@/lib/platform'
-import { isDesktop } from '@/lib/surface'
-import { rememberLayout } from '@/lib/layoutChoice'
 
 /**
  * Your own settings: who you are, the code you sign in with, and the way out.
@@ -85,24 +82,6 @@ export function GeneralSettings() {
 
       {isOwner && isConfigured() && household?.legacy_auth_enabled !== false && (
         <LegacyCard />
-      )}
-
-      {/* The way back after choosing "Phone layout" on a laptop — that choice
-          is remembered, so without this the laptop page is only reachable by
-          typing its address. Browser only, and only where it would fit. */}
-      {!isNative() && !isDesktop() && window.innerWidth >= 768 && (
-        <SettingsGroup>
-          <SettingsRow
-            icon="grid"
-            title="Laptop layout"
-            subtitle="Every app side by side, with keyboard shortcuts — for a bigger screen"
-            onClick={() => {
-              fire('tap')
-              rememberLayout('desktop')
-              window.location.href = `${import.meta.env.BASE_URL}desktop/`
-            }}
-          />
-        </SettingsGroup>
       )}
 
       <SettingsGroup>

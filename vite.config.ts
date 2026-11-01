@@ -45,27 +45,8 @@ const FCM_CONFIGURED = existsSync(
   path.resolve(import.meta.dirname, 'android/app/google-services.json'),
 )
 
-/*
-  Two pages, one bundle graph.
-
-  `index.html` is the phone launcher. `desktop/index.html` is the laptop one
-  (see src/lib/surface.ts): the same stores, sign-in and edit forms, laid out
-  for a keyboard and a wide screen. Rollup splits what they share into common
-  chunks, so the second page costs its own layouts and nothing else.
-
-  The APK gets only the phone page — nothing inside a phone's WebView can
-  navigate to the other one, so building it there would be dead weight.
-*/
-const pages = {
-  main: path.resolve(import.meta.dirname, 'index.html'),
-  ...(isNative ? {} : { desktop: path.resolve(import.meta.dirname, 'desktop/index.html') }),
-}
-
 export default defineConfig({
   base,
-  build: {
-    rollupOptions: { input: pages },
-  },
   define: {
     __BUILD_SHA__: JSON.stringify(BUILD_SHA),
     __BUILD_TIME__: JSON.stringify(BUILD_TIME),
@@ -116,20 +97,5 @@ export default defineConfig({
         ],
       },
     }),
-    {
-      // The PWA plugin links the phone's manifest into every page it builds.
-      // The laptop page has its own (desktop/manifest.webmanifest), and two
-      // manifests on one page is one too many — so drop the injected one
-      // there. Listed after VitePWA so it runs after the injection.
-      name: 'desktop-own-manifest',
-      enforce: 'post',
-      transformIndexHtml: {
-        order: 'post',
-        handler(html, ctx) {
-          if (!ctx.path.includes('/desktop/')) return html
-          return html.replace(`<link rel="manifest" href="${base}manifest.webmanifest">`, '')
-        },
-      },
-    },
   ],
 })

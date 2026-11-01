@@ -36,11 +36,6 @@ export type IconName =
   | 'chef'
   | 'book'
   | 'tv'
-  | 'search'
-  | 'keyboard'
-  | 'sidebar'
-  | 'phone'
-  | 'home'
 
 const PATHS: Record<IconName, string> = {
   check: 'M4 12.5 9 17.5 20 6.5',
@@ -89,12 +84,6 @@ const PATHS: Record<IconName, string> = {
   checkCircle: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z M8 12.2l2.7 2.8L16 9.5',
   history:
     'M3.5 12a8.5 8.5 0 1 0 2.6-6.1M3.5 5v4.5H8 M12 7.5V12l3 1.8',
-  search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z M20 20l-4.2-4.2',
-  keyboard:
-    'M4 6.5h16a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5H4A1.5 1.5 0 0 1 2.5 16V8A1.5 1.5 0 0 1 4 6.5Z M6.5 10h.01 M10 10h.01 M13.5 10h.01 M17 10h.01 M8 14h8',
-  sidebar: 'M4.5 4h15A1.5 1.5 0 0 1 21 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5v-13A1.5 1.5 0 0 1 4.5 4Z M9 4v16',
-  phone: 'M8 2.5h8A1.5 1.5 0 0 1 17.5 4v16a1.5 1.5 0 0 1-1.5 1.5H8A1.5 1.5 0 0 1 6.5 20V4A1.5 1.5 0 0 1 8 2.5Z M11 18.5h2',
-  home: 'M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1v-8.5Z',
 }
 
 interface Props {

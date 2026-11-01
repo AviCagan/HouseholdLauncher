@@ -47,12 +47,12 @@ function statusChip(status: string | null) {
   return null
 }
 
-export function SearchSheet({ preset, initialQuery = '' }: { preset: Destination | null; initialQuery?: string }) {
+export function SearchSheet({ preset }: { preset: Destination | null }) {
   const close = useWatchUI((s) => s.close)
   const replace = useWatchUI((s) => s.replace)
   const open = useWatchUI((s) => s.open)
   const library = useData((s) => s.watch_shows)
-  const [query, setQuery] = useState(initialQuery)
+  const [query, setQuery] = useState('')
   const [hits, setHits] = useState<SearchHit[]>([])
   const [state, setState] = useState<'idle' | 'loading' | 'error'>('idle')
   const [picked, setPicked] = useState<Pickable | null>(null)

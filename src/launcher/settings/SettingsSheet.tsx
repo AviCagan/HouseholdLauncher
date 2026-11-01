@@ -48,7 +48,6 @@ export function SettingsSheet() {
         open={section !== null}
         onClose={closeSettings}
         height="88vh"
-        desktop="wide"
         title={<span className="text-[17px] font-bold">Settings</span>}
       >
         <div

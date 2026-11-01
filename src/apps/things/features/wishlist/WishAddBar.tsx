@@ -1,12 +1,14 @@
 import { useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { Icon } from '@/components/primitives/Icon'
-import { useData } from '@/store/useData'
+import { useData, dataActions } from '@/store/useData'
 import { useProfile } from '@/store/useProfile'
 import { Avatar } from '@/components/primitives/ClaimChip'
 import { fire } from '@/lib/haptics'
 import { parsePrice } from '@/lib/money'
-import { addWishEntry } from '../addFromLink'
+import { unfurl, isUrl, domainOf } from '@/lib/unfurl'
+import { newId } from '@/data/adapter'
+import { toast } from 'sonner'
 import { DesireMeter } from '@/components/primitives/DesireMeter'
 import { type Desire } from '@/data/types'
 
@@ -30,12 +32,57 @@ export function WishAddBar() {
   async function commit() {
     const raw = value.trim()
     if (!raw) return
+
     const manualPrice = price.trim() ? parsePrice(price) : null
+
+    // Not a link: straightforward add.
+    if (!isUrl(raw)) {
+      void dataActions.addWish(raw, desire, profileId, {
+        owner_id: owner,
+        ...(manualPrice != null ? { price_cents: manualPrice } : {}),
+      })
+      setValue('')
+      setPrice('')
+      inputRef.current?.focus()
+      return
+    }
+
+    // A link goes in immediately using the domain, then fills itself in when
+    // the preview comes back — waiting on the network before the item appears
+    // would make pasting feel broken.
+    const id = newId()
+    void dataActions.addWish(domainOf(raw), desire, profileId, {
+      id,
+      owner_id: owner,
+      url: raw,
+      ...(manualPrice != null ? { price_cents: manualPrice } : {}),
+    })
     setValue('')
     setPrice('')
     inputRef.current?.focus()
-    // A pasted link fills itself in once its preview arrives — see addFromLink.ts.
-    await addWishEntry({ raw, desire, profileId, owner, priceCents: manualPrice, onPreview: setLoadingPreview })
+
+    setLoadingPreview(true)
+    const preview = await unfurl(raw)
+    setLoadingPreview(false)
+
+    if (!preview) {
+      // Silent by design when the unfurl service isn't set up — the item is
+      // already added and usable, it just kept the domain as its name.
+      return
+    }
+
+    await dataActions.patchRow('wishlist_items', id, {
+      ...(preview.title ? { title: preview.title.slice(0, 120) } : {}),
+      ...(preview.image ? { image_url: preview.image } : {}),
+      // Never let a scraped price overwrite one that was typed in.
+      ...(manualPrice == null && preview.priceCents != null
+        ? { price_cents: preview.priceCents }
+        : {}),
+    })
+    fire('success')
+    toast.success('Filled in from the link', {
+      description: 'Tap the title or price to change either.',
+    })
   }
 
   return (
