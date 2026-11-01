@@ -47,19 +47,38 @@ export function AddDebtBar({ direction }: { direction: DebtDirection }) {
 
   async function submit() {
     if (!canSubmit || cents === null) return
+    const typed = { name, amount, reason }
+
+    /*
+      Clear before the save, not after it.
+
+      The row is on the list the moment addDebt is called (it's optimistic),
+      so there is nothing to wait for. Clearing on the way back from the
+      network used to wipe whatever had been typed for the next entry in the
+      meantime — and left the fields full while the save was in flight, so a
+      second Enter added the same debt twice.
+    */
+    setName('')
+    setAmount('')
+    setReason('')
+    setExpanded(false)
+    nameRef.current?.focus()
+
     const created = await addDebt({
       direction,
-      counterparty: name,
+      counterparty: typed.name,
       amountCents: cents,
-      reason: reason || null,
+      reason: typed.reason || null,
       profileId,
     })
-    if (created) {
-      setName('')
-      setAmount('')
-      setReason('')
-      setExpanded(false)
-      nameRef.current?.focus()
+
+    if (!created) {
+      // It didn't go in (addDebt has already said so). Give the words back,
+      // but never over something typed since.
+      setName((n) => n || typed.name)
+      setAmount((a) => a || typed.amount)
+      setReason((r) => r || typed.reason)
+      if (typed.reason) setExpanded(true)
     }
   }
 
