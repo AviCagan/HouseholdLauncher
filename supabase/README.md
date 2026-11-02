@@ -61,6 +61,7 @@ in one go, and it's safe to re-run.
 > | `021_watched.sql` | Watched — shelves, the lineup, seasons and ratings |
 > | `022_watch_views.sql` | Watched: each episode logged with when, so the pace learns as you go |
 > | `023_inventory.sql` | Inventory — what the household bought, with its Drive folder of photos and paperwork |
+> | `024_inventory_lifetime.sql` | Inventory: lifetime warranties |
 >
 > Without `007`, setting a chore to repeat *yearly* fails; without `009`,
 > picking specific weekdays fails; without `006`, changing a profile photo

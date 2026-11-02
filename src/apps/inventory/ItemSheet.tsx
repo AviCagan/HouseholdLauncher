@@ -11,7 +11,7 @@ import { useDrive } from './drive'
 import { DetailsForm } from './forms'
 import { draftOf, inputOf, priceProblem, type Draft } from './draft'
 import { KIND_LABEL, isImage, shortDate, stockCode } from './model'
-import { FileTile, PickButton, SectionHead, WarrantyBadge } from './ui'
+import { FileTile, PhotoButtons, PickButton, SectionHead, WarrantyBadge } from './ui'
 import { QrCode } from './QrCode'
 import { itemUrl } from './links'
 import { usePreview } from './hooks'
@@ -123,12 +123,12 @@ function ItemBody({ item, onClose, onPrintLabel }: { item: InventoryItem; onClos
       )}
 
       <SectionHead title="Overall" count={photos.length}>
-        <PickButton icon="camera" label="Add photo" accept="image/*" multiple disabled={!connected} onPick={(f) => void addFiles(item.id, f, 'photo')} />
+        <PhotoButtons label="Add photo" multiple disabled={!connected} onPick={(f) => void addFiles(item.id, f, 'photo')} />
       </SectionHead>
       <Tiles files={photos} coverId={item.cover_file_id} onOpen={setFileId} empty="The whole thing, with everything that came with it." />
 
       <SectionHead title="Extra parts" count={parts.length}>
-        <PickButton icon="camera" label="Add part" accept="image/*" multiple disabled={!connected} onPick={(f) => void addFiles(item.id, f, 'part')} />
+        <PhotoButtons label="Add part" multiple disabled={!connected} onPick={(f) => void addFiles(item.id, f, 'part')} />
       </SectionHead>
       <Tiles files={parts} coverId={item.cover_file_id} onOpen={setFileId} empty="Spares, accessories, the bits in the bag — so you know what you have and what it looks like." />
 
@@ -269,7 +269,7 @@ function Facts({ item }: { item: InventoryItem }) {
     ['Price', item.price_cents != null ? formatPrice(item.price_cents) : null],
     ['Paid for by', item.paid_by],
     ['Bought on', item.purchased_on ? shortDate(item.purchased_on) : null],
-    ['Warranty until', item.warranty_until ? shortDate(item.warranty_until) : null],
+    ['Warranty', item.warranty_lifetime ? 'Lifetime' : item.warranty_until ? `Until ${shortDate(item.warranty_until)}` : null],
     ['Kept in', item.location],
   ]
   const filled = rows.filter(([, v]) => v)

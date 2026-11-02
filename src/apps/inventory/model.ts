@@ -11,7 +11,7 @@ import { formatPrice } from '@/lib/money'
 
 // --- warranty ----------------------------------------------------------------
 
-export type WarrantyState = 'none' | 'active' | 'soon' | 'expired'
+export type WarrantyState = 'none' | 'active' | 'soon' | 'expired' | 'lifetime'
 
 export interface Warranty {
   state: WarrantyState
@@ -31,7 +31,8 @@ export function localDay(iso: string): Date {
   return new Date(y, (m ?? 1) - 1, d ?? 1)
 }
 
-export function warranty(item: Pick<InventoryItem, 'warranty_until'>, today = new Date()): Warranty {
+export function warranty(item: Pick<InventoryItem, 'warranty_until' | 'warranty_lifetime'>, today = new Date()): Warranty {
+  if (item.warranty_lifetime) return { state: 'lifetime', daysLeft: null, label: 'Lifetime warranty' }
   if (!item.warranty_until) return { state: 'none', daysLeft: null, label: 'No warranty date' }
   const start = new Date(today.getFullYear(), today.getMonth(), today.getDate())
   const days = Math.round((localDay(item.warranty_until).getTime() - start.getTime()) / DAY_MS)
@@ -40,6 +41,9 @@ export function warranty(item: Pick<InventoryItem, 'warranty_until'>, today = ne
   if (days <= SOON_DAYS) return { state: 'soon', daysLeft: days, label: `Warranty ends in ${days} day${days === 1 ? '' : 's'}` }
   return { state: 'active', daysLeft: days, label: `Covered until ${shortDate(item.warranty_until)}` }
 }
+
+/** Covered right now — by a date still ahead, or for life. */
+export const covered = (w: Warranty): boolean => w.state === 'active' || w.state === 'soon' || w.state === 'lifetime'
 
 /** The warranty end, a whole number of years after purchase (or today). */
 export function yearsFrom(purchasedOn: string | null, years: number, today = new Date()): string {
@@ -224,7 +228,8 @@ export function detailsDocText(item: InventoryItem): string {
   if (item.paid_by) bought.push(`paid for by ${item.paid_by}`)
   if (bought.length) lines.push(`Bought ${bought.join(', ')}`)
 
-  if (item.warranty_until) lines.push(`Warranty until ${shortDate(item.warranty_until)}`)
+  if (item.warranty_lifetime) lines.push('Lifetime warranty')
+  else if (item.warranty_until) lines.push(`Warranty until ${shortDate(item.warranty_until)}`)
   if (item.location) lines.push(`Kept in ${item.location}`)
 
   lines.push('', NOTES_HEADING, item.notes?.trim() || '(none yet)', '', DOC_FOOTER)
@@ -257,6 +262,8 @@ export interface NoteFacts {
   price_cents: number | null
   store: string | null
   paid_by: string | null
+  /** The note says "lifetime warranty" (or "warranty: lifetime"). */
+  lifetime: boolean
 }
 
 /**
@@ -278,6 +285,7 @@ export function factsFromNotes(text: string): NoteFacts {
     price_cents: price ? Math.round(Number(price[1].replace(',', '.')) * 100) : null,
     store: store ? store[1].trim() : null,
     paid_by: payer ? payer[1].trim() : null,
+    lifetime: /\blifetime\s+warrant|\bwarrant(?:y|ied)\s*(?:is\s*|:\s*)?(?:for\s+)?(?:a\s+)?life(?:time)?\b/i.test(text),
   }
 }
 
@@ -299,10 +307,12 @@ export function sortItems(items: InventoryItem[], by: InventorySort, today = new
   const out = [...items]
   if (by === 'name') return out.sort((a, b) => a.name.localeCompare(b.name))
   if (by === 'warranty') {
-    // Soonest to run out first; no date, then already ended, at the bottom.
+    // Soonest to run out first, then lifetime (never runs out), then already
+    // ended, then no warranty at all.
     const rank = (i: InventoryItem) => {
       const w = warranty(i, today)
       if (w.state === 'none') return Number.MAX_SAFE_INTEGER
+      if (w.state === 'lifetime') return Number.MAX_SAFE_INTEGER - 2_000_000
       if (w.state === 'expired') return Number.MAX_SAFE_INTEGER - 1_000_000 - (w.daysLeft ?? 0)
       return w.daysLeft ?? 0
     }

@@ -718,6 +718,11 @@ export interface InventoryItem {
   purchased_on: string | null
   /** YYYY-MM-DD */
   warranty_until: string | null
+  /**
+   * Covered for as long as it's owned; `warranty_until` is ignored when set.
+   * Optional because rows written before 024_inventory_lifetime.sql lack it.
+   */
+  warranty_lifetime?: boolean
   location: string | null
   notes: string | null
   drive_folder_id: string | null

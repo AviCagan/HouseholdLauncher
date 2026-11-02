@@ -261,6 +261,10 @@
   background: color-mix(in oklab, var(--inv-bad) 14%, transparent);
   color: var(--inv-bad);
 }
+.inv .inv-badge[data-state='lifetime'] {
+  background: color-mix(in oklab, var(--inv-yellow) 32%, transparent);
+  color: color-mix(in oklab, var(--inv-ink) 85%, var(--inv-yellow));
+}
 .inv .inv-badge[data-state='none'] {
   background: var(--surface-2);
   color: var(--text-faint);

@@ -3,6 +3,7 @@ import {
   DOC_FOOTER,
   GOOGLE_DOC,
   classifyFolder,
+  covered,
   detailsDocText,
   factsFromNotes,
   guessKind,
@@ -82,7 +83,7 @@ describe('the Vevor cooler folder', () => {
   })
 
   it('reads price, store and who paid out of the note', () => {
-    expect(factsFromNotes(VEVOR_NOTES)).toEqual({ price_cents: 10000, store: 'Home Depot', paid_by: 'bubby' })
+    expect(factsFromNotes(VEVOR_NOTES)).toEqual({ price_cents: 10000, store: 'Home Depot', paid_by: 'bubby', lifetime: false })
   })
 
   it('keeps a hand-written doc whole as the notes, minus the stray blank lines', () => {
@@ -109,7 +110,14 @@ describe('factsFromNotes', () => {
   })
 
   it('leaves out what it cannot find', () => {
-    expect(factsFromNotes('works great')).toEqual({ price_cents: null, store: null, paid_by: null })
+    expect(factsFromNotes('works great')).toEqual({ price_cents: null, store: null, paid_by: null, lifetime: false })
+  })
+
+  it('notices a lifetime warranty, however it is put', () => {
+    expect(factsFromNotes('Craftsman ratchet, lifetime warranty').lifetime).toBe(true)
+    expect(factsFromNotes('Warranty: lifetime').lifetime).toBe(true)
+    expect(factsFromNotes('warranty is for life, keep the receipt').lifetime).toBe(true)
+    expect(factsFromNotes('2 year warranty').lifetime).toBe(false)
   })
 })
 
@@ -120,6 +128,12 @@ describe('the notes doc', () => {
     expect(text).toContain('Bought at Home Depot, for $100')
     expect(text.endsWith(DOC_FOOTER)).toBe(true)
     expect(notesFromDoc(text)).toBe('Two ice packs.\nGold part in the drawer.')
+  })
+
+  it('writes a lifetime warranty into the doc, not a date', () => {
+    const text = detailsDocText(item({ name: 'Ratchet', warranty_lifetime: true, warranty_until: '2030-01-01' }))
+    expect(text).toContain('Lifetime warranty')
+    expect(text).not.toContain('Warranty until')
   })
 
   it('reads no notes back from a doc written with none', () => {
@@ -162,6 +176,13 @@ describe('warranty', () => {
     expect(warranty(item({ warranty_until: '2026-10-31' }), today)).toMatchObject({ state: 'expired', daysLeft: -1 })
   })
 
+  it('reads a lifetime warranty as covered for good, whatever the date says', () => {
+    const w = warranty(item({ warranty_lifetime: true, warranty_until: '2020-01-01' }), today)
+    expect(w).toMatchObject({ state: 'lifetime', label: 'Lifetime warranty' })
+    expect(covered(w)).toBe(true)
+    expect(covered(warranty(item({ warranty_until: '2026-10-31' }), today))).toBe(false)
+  })
+
   it('adds whole years to the purchase date', () => {
     expect(yearsFrom('2026-11-01', 2, today)).toBe('2028-11-01')
     expect(yearsFrom(null, 1, today)).toBe('2027-11-01')
@@ -178,6 +199,12 @@ describe('the list', () => {
     expect(sortItems([a, b, c], 'recent').map((i) => i.id)).toEqual(['c', 'b', 'a'])
     expect(sortItems([c, b, a], 'name').map((i) => i.id)).toEqual(['a', 'b', 'c'])
     expect(sortItems([c, b, a], 'warranty', today).map((i) => i.id)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('puts lifetime after anything still running out, before what has ended', () => {
+    const today = new Date(2026, 10, 1)
+    const forever = item({ id: 'l', name: 'Ratchet', warranty_lifetime: true })
+    expect(sortItems([c, b, forever, a], 'warranty', today).map((i) => i.id)).toEqual(['a', 'l', 'b', 'c'])
   })
 
   it('searches every text field', () => {

@@ -51,6 +51,17 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Lets the app see a camera app. Since Android 11 an app can't find
+         another app's activities unless it says which it needs, and without
+         this Capacitor's WebView finds no camera for a photo input marked
+         `capture` and quietly opens the gallery instead — the Camera buttons
+         in Inventory, and its page scanner, would never reach the camera. -->
+    <queries>
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+    </queries>
+
     <!--
       Bluetooth, for the toggle app.
 

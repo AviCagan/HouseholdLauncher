@@ -14,6 +14,7 @@ export interface Draft {
   paid_by: string
   purchased_on: string
   warranty_until: string
+  warranty_lifetime: boolean
   location: string
   notes: string
 }
@@ -29,6 +30,7 @@ export function draftOf(item: InventoryItem | null): Draft {
     paid_by: item?.paid_by ?? '',
     purchased_on: item?.purchased_on ?? (item ? '' : isoDay(new Date())),
     warranty_until: item?.warranty_until ?? '',
+    warranty_lifetime: item?.warranty_lifetime === true,
     location: item?.location ?? '',
     notes: item?.notes ?? '',
   }
@@ -44,7 +46,9 @@ export function inputOf(d: Draft): ItemInput {
     price_cents: d.price.trim() ? parsePrice(d.price) : null,
     paid_by: d.paid_by,
     purchased_on: d.purchased_on || null,
-    warranty_until: d.warranty_until || null,
+    // A lifetime warranty has no end date to keep.
+    warranty_until: d.warranty_lifetime ? null : d.warranty_until || null,
+    warranty_lifetime: d.warranty_lifetime,
     location: d.location,
     notes: d.notes,
   }

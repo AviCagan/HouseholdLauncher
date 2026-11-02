@@ -3,20 +3,23 @@ import { motion } from 'motion/react'
 import { Icon, type IconName } from '@/components/primitives/Icon'
 import { formatPrice } from '@/lib/money'
 import type { InventoryFile, InventoryItem } from '@/data/types'
+import { useDesktop } from '@/lib/useDesktop'
 import { usePreview } from './hooks'
 import { QrCode } from './QrCode'
 import { itemUrl } from './links'
 import { GOOGLE_DOC, isImage, stockCode, warranty } from './model'
 
-export function WarrantyBadge({ item, short = false }: { item: Pick<InventoryItem, 'warranty_until'>; short?: boolean }) {
+export function WarrantyBadge({ item, short = false }: { item: Pick<InventoryItem, 'warranty_until' | 'warranty_lifetime'>; short?: boolean }) {
   const w = warranty(item)
   if (short && w.state === 'none') return null
   const text = short
-    ? w.state === 'active'
-      ? 'Covered'
-      : w.state === 'soon'
-        ? `${w.daysLeft}d left`
-        : 'Expired'
+    ? w.state === 'lifetime'
+      ? 'Lifetime'
+      : w.state === 'active'
+        ? 'Covered'
+        : w.state === 'soon'
+          ? `${w.daysLeft}d left`
+          : 'Expired'
     : w.label
   return (
     <span className="inv-badge" data-state={w.state}>
@@ -174,5 +177,37 @@ export function PickButton({
         }}
       />
     </label>
+  )
+}
+
+/**
+ * Where a photo comes from: the camera or the photos already on the phone.
+ *
+ * Two buttons rather than one because one can't offer both everywhere. A
+ * plain photo input gives iPhone a choice menu, but inside the Android app the
+ * WebView sends it straight to the gallery with no camera at all — the camera
+ * only opens for an input marked `capture`, which in turn can't pick an
+ * existing photo. So a phone gets one of each. A laptop has no camera worth
+ * pointing at a cooler and gets a single file picker.
+ */
+export function PhotoButtons({
+  label,
+  multiple = false,
+  disabled,
+  onPick,
+}: {
+  /** What the one laptop button says: "Add photo", "Add part". */
+  label: string
+  multiple?: boolean
+  disabled?: boolean
+  onPick: (files: File[]) => void
+}) {
+  const desktop = useDesktop()
+  if (desktop) return <PickButton icon="image" label={label} accept="image/*" multiple={multiple} disabled={disabled} onPick={onPick} />
+  return (
+    <>
+      <PickButton icon="camera" label="Camera" accept="image/*" capture="environment" disabled={disabled} onPick={onPick} />
+      <PickButton icon="image" label="Photos" accept="image/*" multiple={multiple} disabled={disabled} onPick={onPick} />
+    </>
   )
 }

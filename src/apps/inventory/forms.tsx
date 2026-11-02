@@ -7,6 +7,7 @@ import { addFiles, addItem } from './actions'
 import { useDrive } from './drive'
 import { categories, suggestions, yearsFrom } from './model'
 import { draftOf, inputOf, priceProblem, type Draft } from './draft'
+import { PhotoButtons } from './ui'
 
 /**
  * The details of an item, as a form — used to receive a new one and to edit
@@ -65,26 +66,48 @@ export function DetailsForm({ draft, onChange, withNotes = true }: { draft: Draf
 
       <Field label="Warranty until">
         <div className="flex flex-wrap items-center gap-2">
-          <input
-            type="date"
-            value={draft.warranty_until}
-            onChange={set('warranty_until')}
-            aria-label="Warranty until"
-            className="inv-field !w-auto min-w-[160px] flex-1"
-          />
-          {[1, 2, 3].map((n) => (
+          {draft.warranty_lifetime ? (
+            <span className="inv-badge !px-3 !py-2 !text-[13px]" data-state="lifetime">
+              <Icon name="checkCircle" size={13} strokeWidth={2.6} /> Covered for life
+            </span>
+          ) : (
+            <input
+              type="date"
+              value={draft.warranty_until}
+              onChange={set('warranty_until')}
+              aria-label="Warranty until"
+              className="inv-field !w-auto min-w-[160px] flex-1"
+            />
+          )}
+          {!draft.warranty_lifetime &&
+            [1, 2, 3].map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => onChange({ ...draft, warranty_until: yearsFrom(draft.purchased_on || null, n) })}
+                className="inv-btn inv-btn--quiet !px-2.5 !py-1.5 !text-[12px]"
+                title={`${n} year${n === 1 ? '' : 's'} from when it was bought`}
+              >
+                +{n} yr
+              </button>
+            ))}
+          <button
+            type="button"
+            onClick={() => onChange({ ...draft, warranty_lifetime: !draft.warranty_lifetime })}
+            aria-pressed={draft.warranty_lifetime}
+            className="inv-btn !px-2.5 !py-1.5 !text-[12px]"
+            style={draft.warranty_lifetime ? undefined : { background: 'var(--surface)', boxShadow: 'none', borderColor: 'var(--border)' }}
+            title="Covered for as long as you own it"
+          >
+            Lifetime
+          </button>
+          {(draft.warranty_until || draft.warranty_lifetime) && (
             <button
-              key={n}
               type="button"
-              onClick={() => onChange({ ...draft, warranty_until: yearsFrom(draft.purchased_on || null, n) })}
-              className="inv-btn inv-btn--quiet !px-2.5 !py-1.5 !text-[12px]"
-              title={`${n} year${n === 1 ? '' : 's'} from when it was bought`}
+              onClick={() => onChange({ ...draft, warranty_until: '', warranty_lifetime: false })}
+              className="text-[12px] font-semibold"
+              style={{ color: 'var(--text-faint)' }}
             >
-              +{n} yr
-            </button>
-          ))}
-          {draft.warranty_until && (
-            <button type="button" onClick={() => onChange({ ...draft, warranty_until: '' })} className="text-[12px] font-semibold" style={{ color: 'var(--text-faint)' }}>
               None
             </button>
           )}
@@ -172,11 +195,7 @@ export function ReceiveSheet({ open, onClose, onReceived }: { open: boolean; onC
     <Sheet open={open} onClose={onClose} height="92vh" title={<span className="inv-stencil text-[16px]">Receive an item</span>}>
       <div className="flex flex-col gap-4 pb-4">
         <div className="flex items-center gap-3">
-          <label
-            className="inv-tile grid h-24 w-24 shrink-0 cursor-pointer place-items-center"
-            title={connected ? 'Take or choose the overall photo' : 'Connect Google Drive to add photos'}
-            style={{ opacity: connected ? 1 : 0.5 }}
-          >
+          <div className="inv-tile grid h-24 w-24 shrink-0 place-items-center" style={{ opacity: connected ? 1 : 0.5 }}>
             {photoUrl ? (
               <img src={photoUrl} alt="Overall photo" />
             ) : (
@@ -185,22 +204,22 @@ export function ReceiveSheet({ open, onClose, onReceived }: { open: boolean; onC
                 Photo
               </span>
             )}
-            <input
-              type="file"
-              accept="image/*"
-              disabled={!connected}
-              className="sr-only"
-              onChange={(e) => {
-                setPhoto(e.target.files?.[0] ?? null)
-                e.target.value = ''
-              }}
-            />
-          </label>
-          <p className="text-[12.5px] leading-snug" style={{ color: 'var(--text-dim)' }}>
-            {connected
-              ? 'A photo of the whole thing with everything that came with it. Parts, the manual and the warranty go on next.'
-              : 'Photos and paperwork need Google Drive connected — the details can go in now and the rest later.'}
-          </p>
+          </div>
+          <div className="flex min-w-0 flex-col gap-2">
+            <p className="text-[12.5px] leading-snug" style={{ color: 'var(--text-dim)' }}>
+              {connected
+                ? 'A photo of the whole thing with everything that came with it. Parts, the manual and the warranty go on next.'
+                : 'Photos and paperwork need Google Drive connected — the details can go in now and the rest later.'}
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              <PhotoButtons label={photo ? 'Change photo' : 'Add photo'} disabled={!connected} onPick={(f) => setPhoto(f[0] ?? null)} />
+              {photo && (
+                <button onClick={() => setPhoto(null)} className="text-[12px] font-semibold" style={{ color: 'var(--text-faint)' }}>
+                  Remove
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
         <DetailsForm draft={draft} onChange={setDraft} />

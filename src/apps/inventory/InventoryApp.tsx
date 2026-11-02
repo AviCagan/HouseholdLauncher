@@ -15,7 +15,7 @@ import { useUnlinkedFolders } from './hooks'
 import { ReceiveSheet } from './forms'
 import { ItemSheet } from './ItemSheet'
 import { LabelsSheet } from './LabelsSheet'
-import { categories, searchItems, sortItems, warranty, type InventorySort } from './model'
+import { categories, covered, searchItems, sortItems, warranty, type InventorySort } from './model'
 import { ItemBox } from './ui'
 import './inventory.css'
 
@@ -81,7 +81,7 @@ export function InventoryApp() {
     () => sortItems(searchItems(items, query), sort).filter((i) => !category || i.category === category),
     [items, query, sort, category],
   )
-  const covered = items.filter((i) => warranty(i).state === 'active' || warranty(i).state === 'soon').length
+  const coveredCount = items.filter((i) => covered(warranty(i))).length
   const ending = items.filter((i) => warranty(i).state === 'soon').length
 
   return (
@@ -105,7 +105,7 @@ export function InventoryApp() {
             <h1 className="inv-stencil truncate text-[26px] leading-none lg:text-[32px]">Inventory</h1>
             <p className="mt-1 text-[12px] font-bold" style={{ color: 'var(--text-dim)' }}>
               {items.length} {items.length === 1 ? 'item' : 'items'}
-              {covered > 0 && ` · ${covered} under warranty`}
+              {coveredCount > 0 && ` · ${coveredCount} under warranty`}
               {ending > 0 && (
                 <span style={{ color: 'var(--inv-warn)' }}>
                   {' '}

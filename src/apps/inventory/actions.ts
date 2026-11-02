@@ -112,7 +112,7 @@ const errorText = (err: unknown) => (err instanceof Error ? err.message : String
 
 export type ItemInput = Pick<
   InventoryItem,
-  'name' | 'brand' | 'model' | 'category' | 'store' | 'price_cents' | 'paid_by' | 'purchased_on' | 'warranty_until' | 'location' | 'notes'
+  'name' | 'brand' | 'model' | 'category' | 'store' | 'price_cents' | 'paid_by' | 'purchased_on' | 'warranty_until' | 'warranty_lifetime' | 'location' | 'notes'
 >
 
 const clean = (s: string | null | undefined): string | null => {
@@ -453,6 +453,7 @@ export async function importFolder(folder: DriveFolder, profileId: string | null
     paid_by: facts.paid_by,
     purchased_on: null,
     warranty_until: null,
+    warranty_lifetime: facts.lifetime,
     location: null,
     notes: notes || null,
     drive_folder_id: folder.id,
