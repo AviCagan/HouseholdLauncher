@@ -34,30 +34,30 @@ export function DetailsForm({ draft, onChange, withNotes = true }: { draft: Draf
   return (
     <div className="flex flex-col gap-3">
       <Field label="What is it">
-        <input value={draft.name} onChange={set('name')} placeholder="Evaporative cooler" aria-label="Name" className="inv-field !text-[17px] font-bold" />
+        <input value={draft.name} onChange={set('name')} aria-label="Name" className="inv-field !text-[17px] font-bold" />
       </Field>
 
       <div className="grid grid-cols-2 gap-3">
         <Field label="Brand">
-          <input value={draft.brand} onChange={set('brand')} placeholder="Vevor" aria-label="Brand" list="inv-brand" className="inv-field" />
+          <input value={draft.brand} onChange={set('brand')} aria-label="Brand" list="inv-brand" className="inv-field" />
         </Field>
         <Field label="Model">
-          <input value={draft.model} onChange={set('model')} placeholder="Optional" aria-label="Model" className="inv-field" />
+          <input value={draft.model} onChange={set('model')} aria-label="Model" className="inv-field" />
         </Field>
         <Field label="Category">
-          <input value={draft.category} onChange={set('category')} placeholder="Appliance" aria-label="Category" list="inv-category" className="inv-field" />
+          <input value={draft.category} onChange={set('category')} aria-label="Category" list="inv-category" className="inv-field" />
         </Field>
         <Field label="Kept in">
-          <input value={draft.location} onChange={set('location')} placeholder="Garage" aria-label="Kept in" list="inv-location" className="inv-field" />
+          <input value={draft.location} onChange={set('location')} aria-label="Kept in" list="inv-location" className="inv-field" />
         </Field>
         <Field label="Bought at">
-          <input value={draft.store} onChange={set('store')} placeholder="Home Depot" aria-label="Bought at" list="inv-store" className="inv-field" />
+          <input value={draft.store} onChange={set('store')} aria-label="Bought at" list="inv-store" className="inv-field" />
         </Field>
         <Field label="Price" hint={problem}>
-          <input value={draft.price} onChange={set('price')} placeholder="0.00" inputMode="decimal" aria-label="Price" className="inv-field tabular-nums" />
+          <input value={draft.price} onChange={set('price')} inputMode="decimal" aria-label="Price" className="inv-field tabular-nums" />
         </Field>
         <Field label="Paid for by">
-          <input value={draft.paid_by} onChange={set('paid_by')} placeholder="Who paid" aria-label="Paid for by" list="inv-paid" className="inv-field" />
+          <input value={draft.paid_by} onChange={set('paid_by')} aria-label="Paid for by" list="inv-paid" className="inv-field" />
         </Field>
         <Field label="Bought on">
           <input type="date" value={draft.purchased_on} onChange={set('purchased_on')} aria-label="Bought on" className="inv-field" />
@@ -120,7 +120,6 @@ export function DetailsForm({ draft, onChange, withNotes = true }: { draft: Draf
             value={draft.notes}
             onChange={set('notes')}
             rows={4}
-            placeholder="What came with it, where the spare part is, who to call…"
             aria-label="Notes"
             className="inv-field resize-y leading-snug"
           />

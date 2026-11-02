@@ -11,14 +11,14 @@ import {
   preview,
   primePreview,
   readDoc,
-  scanToPdf,
   trashFile,
   uploadFile,
   writeDoc,
   type DriveFolder,
 } from './drive'
 import { classifyFolder, describeKind, detailsDocText, factsFromNotes, isImage, notesFromDoc, reconcile } from './model'
-import { PAGE_MAX, blobFromBase64, prepareFile, thumbFromBlob } from './photos'
+import { blobFromBase64, prepareFile, thumbFromBlob } from './photos'
+import { scanWithGoogle } from './scanner'
 
 /**
  * Writes for Inventory.
@@ -316,27 +316,34 @@ export async function addFiles(id: string, picked: File[], kind: InventoryFileKi
   if (done > 0) fire('success')
 }
 
-/** Pages of a paper warranty or manual, photographed, made into one PDF in Drive. */
-export async function scanPages(id: string, pages: File[], title: string): Promise<void> {
-  if (pages.length === 0) return
+/**
+ * Scan paperwork with Google's document scanner (the Android app) and put
+ * the PDF it makes straight into the item's Drive folder.
+ */
+export async function scanIntoItem(id: string): Promise<void> {
   if (!driveConnected()) {
     toast('Connect Google Drive first', { description: 'Scans are kept in Drive.' })
     return
   }
   const folderId = latest(id)?.drive_folder_id ?? (await ensureItemFolder(id))
   if (!folderId) return
-  busy(id, `Making a ${pages.length}-page PDF…`)
   try {
-    const prepared = await Promise.all(pages.map((p, i) => prepareFile(p, `Page ${i + 1}`, PAGE_MAX)))
-    const images = prepared.filter((p) => isImage(p.mime))
-    if (images.length === 0) throw new Error('Scans need to be photos')
-    const pdf = await scanToPdf(folderId, title.trim() || 'Scan', images.map(({ mime, data }) => ({ mime, data })), describeKind('doc'))
-    await attach(id, asFile(pdf, 'doc'))
+    const pdf = await scanWithGoogle(() => busy(id, 'Getting Google’s scanner ready — a one-time download…'))
+    if (!pdf) return
+    busy(id, 'Sending the scan to Drive…')
+    const item = latest(id)
+    const when = new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+    const uploaded = await uploadFile(
+      folderId,
+      { name: `${item?.name ?? 'Scan'} — scan ${when}.pdf`, mime: 'application/pdf', data: pdf.data },
+      describeKind('doc'),
+    )
+    await attach(id, asFile(uploaded, 'doc'))
     fire('success')
-    toast.success(`${pdf.name} is in Drive`)
+    toast.success(`${pdf.pages}-page scan is in Drive`)
   } catch (err) {
     fire('error')
-    toast.error("Couldn't make the scan", { description: errorText(err) })
+    toast.error("Couldn't scan that", { description: errorText(err) })
   } finally {
     busy(id, null)
   }
@@ -417,7 +424,10 @@ export async function syncItem(id: string, quiet = false): Promise<void> {
       patch.cover_thumb = url
     }
     await patchRow(id, patch)
-    if (!quiet) {
+    if (quiet && next.added > 0) {
+      fire('success')
+      toast(`${next.added} new from Drive`, { description: latest(id)?.name })
+    } else if (!quiet) {
       const changes = [next.added && `${next.added} new`, next.removed && `${next.removed} gone`].filter(Boolean)
       toast(changes.length ? `From Drive: ${changes.join(', ')}` : 'Up to date with Drive')
     }

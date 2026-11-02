@@ -21,7 +21,7 @@ export const ROOT_NAME = 'Warranties, manuals, extra parts'
 export const PARENT_NAME = 'Joint Stuff'
 
 /** Keep in step with the ops the Edge Function forwards. */
-export const BRIDGE_OPS = ['ping', 'folders', 'list', 'ensureFolder', 'upload', 'scan', 'preview', 'trash', 'readDoc', 'writeDoc'] as const
+export const BRIDGE_OPS = ['ping', 'folders', 'list', 'ensureFolder', 'upload', 'preview', 'trash', 'readDoc', 'writeDoc'] as const
 export type BridgeOp = (typeof BRIDGE_OPS)[number]
 
 export function bridgeSource(secret: string): string {
@@ -207,32 +207,6 @@ var OPS = {
     var file = itemFolder(req.folderId).createFile(bytes(req.data, req.mime, req.name));
     if (req.description) file.setDescription(req.description);
     return fileInfo(file);
-  },
-
-  /** Photographed pages of a paper document, made into one PDF. */
-  scan: function (req) {
-    var folder = itemFolder(req.folderId);
-    var title = req.name || 'Scan';
-    var doc = DocumentApp.create(title + ' (being scanned)');
-    var body = doc.getBody();
-    body.setMarginTop(18).setMarginBottom(18).setMarginLeft(18).setMarginRight(18);
-    var maxW = body.getPageWidth() - 36;
-    var maxH = body.getPageHeight() - 36;
-    for (var i = 0; i < req.pages.length; i++) {
-      var page = req.pages[i];
-      var para = i === 0 ? body.getParagraphs()[0] : body.appendParagraph('');
-      var image = para.appendInlineImage(bytes(page.data, page.mime, 'page-' + (i + 1)));
-      var scale = Math.min(maxW / image.getWidth(), maxH / image.getHeight(), 1);
-      image.setWidth(Math.floor(image.getWidth() * scale));
-      image.setHeight(Math.floor(image.getHeight() * scale));
-      if (i < req.pages.length - 1) body.appendPageBreak();
-    }
-    doc.saveAndClose();
-    var temp = DriveApp.getFileById(doc.getId());
-    var pdf = folder.createFile(temp.getAs('application/pdf').setName(title + '.pdf'));
-    if (req.description) pdf.setDescription(req.description);
-    temp.setTrashed(true);
-    return fileInfo(pdf);
   },
 
   /** A picture of any file — photo, PDF, doc — about size px on its long side. */

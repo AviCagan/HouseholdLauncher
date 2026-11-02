@@ -161,7 +161,7 @@ export function InventoryApp() {
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Find an item, a store, a stock code…"
+                placeholder="Search"
                 aria-label="Search inventory"
                 className="inv-field !pl-9"
               />

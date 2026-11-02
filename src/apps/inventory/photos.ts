@@ -17,8 +17,6 @@ export interface Prepared {
 
 /** Long side of a photo sent to Drive. */
 export const PHOTO_MAX = 2400
-/** Long side of a scanned page — legible print, a smaller PDF. */
-export const PAGE_MAX = 1800
 /** Long side of the cover thumbnail kept in the database. */
 export const THUMB_MAX = 360
 

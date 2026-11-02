@@ -38,10 +38,13 @@ export function LabelsSheet({ open, onClose, only }: { open: boolean; onClose: (
   const [inches, setInches] = useState(readSize)
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
+  /** Labels to print for each chosen item — one for the thing, one for its box… */
+  const [copies, setCopies] = useState(1)
 
   useEffect(() => {
     if (!open) return
     setPicked(new Set(only ?? items.map((i) => i.id)))
+    setCopies(1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
@@ -57,7 +60,10 @@ export function LabelsSheet({ open, onClose, only }: { open: boolean; onClose: (
 
   const L = labelLayout(inches)
   const chosen = sorted.filter((i) => picked.has(i.id))
-  const pages = Math.max(1, Math.ceil(chosen.length / L.perPage))
+  const total = chosen.length * copies
+  const pages = Math.max(1, Math.ceil(total / L.perPage))
+  /** As many of each as fills the page — never fewer than one. */
+  const fillCopies = Math.max(1, Math.floor(L.perPage / Math.max(1, chosen.length)))
   const sample = chosen[0] ?? sorted[0]
   const fitted = Math.abs(L.qr - inches * PT_PER_IN) > 0.5
 
@@ -65,7 +71,11 @@ export function LabelsSheet({ open, onClose, only }: { open: boolean; onClose: (
     if (chosen.length === 0) return
     setBusy(true)
     try {
-      const pdf = await labelsPdf(chosen, inches)
+      // Each item `copies` times, kept together so a cut-out strip is all one thing.
+      const pdf = await labelsPdf(
+        chosen.flatMap((item) => Array.from({ length: copies }, () => item)),
+        inches,
+      )
       await savePdf(pdf, labelFileName(chosen))
       fire('success')
     } catch (err) {
@@ -123,15 +133,48 @@ export function LabelsSheet({ open, onClose, only }: { open: boolean; onClose: (
             ))}
           </div>
           <p className="mt-2 text-[12.5px] font-semibold" style={{ color: 'var(--text-dim)' }}>
-            {L.perPage} {L.perPage === 1 ? 'label' : 'labels'} a page
-            {chosen.length > 0 && ` · ${pages} ${pages === 1 ? 'page' : 'pages'} for ${chosen.length}`}
+            Up to {L.perPage} fit on a page at this size
             {fitted && ' · shrunk to fit the page'}
+          </p>
+        </div>
+
+        <div>
+          <span className="inv-stencil text-[11px]" style={{ color: 'var(--text-faint)' }}>
+            How many of each
+          </span>
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+            <button onClick={() => setCopies((c) => Math.max(1, c - 1))} aria-label="Fewer" className="inv-btn inv-btn--quiet !h-10 !w-10 !p-0 text-[20px]">
+              −
+            </button>
+            <input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={500}
+              value={copies}
+              onChange={(e) => setCopies(Math.min(500, Math.max(1, Math.floor(Number(e.target.value) || 1))))}
+              aria-label="Labels for each item"
+              className="inv-field !w-[72px] text-center !text-[17px] font-black tabular-nums"
+            />
+            <button onClick={() => setCopies((c) => Math.min(500, c + 1))} aria-label="More" className="inv-btn inv-btn--quiet !h-10 !w-10 !p-0 text-[20px]">
+              +
+            </button>
+            {chosen.length > 0 && fillCopies > 1 && copies !== fillCopies && (
+              <button onClick={() => setCopies(fillCopies)} className="inv-btn inv-btn--quiet !px-3 !py-2 !text-[12.5px]" title="As many of each as fit on one page">
+                Fill the page ({fillCopies})
+              </button>
+            )}
+          </div>
+          <p className="mt-2 text-[12.5px] font-semibold" style={{ color: 'var(--text-dim)' }}>
+            {total === 0
+              ? 'Pick at least one item below.'
+              : `${total} ${total === 1 ? 'label' : 'labels'} on ${pages} ${pages === 1 ? 'page' : 'pages'}`}
           </p>
         </div>
 
         <div className="flex items-start gap-4">
           {/* The page, to scale: how many fit, and how they sit. */}
-          <PagePreview inches={inches} count={Math.min(chosen.length || 1, L.perPage)} />
+          <PagePreview inches={inches} count={Math.min(total, L.perPage)} />
           {/* One label, at about real size on a laptop screen (CSS inches). */}
           <div className="min-w-0 flex-1 overflow-hidden">
             {sample && (
@@ -191,9 +234,9 @@ export function LabelsSheet({ open, onClose, only }: { open: boolean; onClose: (
           </div>
         </div>
 
-        <button onClick={() => void make()} disabled={chosen.length === 0 || busy} className="inv-btn inv-btn--orange w-full !py-3 !text-[15px]">
+        <button onClick={() => void make()} disabled={total === 0 || busy} className="inv-btn inv-btn--orange w-full !py-3 !text-[15px]">
           <Icon name="file" size={16} />
-          {busy ? 'Making the PDF…' : `Make a PDF of ${chosen.length} ${chosen.length === 1 ? 'label' : 'labels'}`}
+          {busy ? 'Making the PDF…' : `Make a PDF of ${total} ${total === 1 ? 'label' : 'labels'}`}
         </button>
         <p className="-mt-2 text-center text-[11.5px]" style={{ color: 'var(--text-faint)' }}>
           Print at 100% (“Actual size”), not “Fit to page”, so the codes come out the size chosen. Scanning one with a phone camera opens that item.
@@ -212,14 +255,15 @@ function PagePreview({ inches, count }: { inches: number; count: number }) {
   return (
     <svg width={PAGE_W * scale} height={PAGE_H * scale} viewBox={`0 0 ${PAGE_W} ${PAGE_H}`} className="shrink-0 rounded-sm" style={{ background: '#fff', boxShadow: '0 1px 4px rgb(0 0 0 / 0.25)' }} aria-hidden>
       <rect x={MARGIN} y={MARGIN} width={PAGE_W - 2 * MARGIN} height={PAGE_H - 2 * MARGIN} fill="none" stroke="#ddd" strokeWidth={2} strokeDasharray="6 6" />
-      {Array.from({ length: L.perPage }, (_, i) => {
+      {/* Only the labels that will print — an empty sheet of cells read as
+          "it's going to fill the page", which it isn't. */}
+      {Array.from({ length: count }, (_, i) => {
         const x = left + (i % L.cols) * L.cellW
         const y = top + Math.floor(i / L.cols) * L.cellH
-        const filled = i < count
         return (
           <g key={i}>
             <rect x={x} y={y} width={L.cellW} height={L.cellH} fill="none" stroke="#bbb" strokeWidth={2} />
-            <rect x={x + (L.cellW - L.qr) / 2} y={y + L.pad} width={L.qr} height={L.qr} fill={filled ? '#222' : '#eee'} />
+            <rect x={x + (L.cellW - L.qr) / 2} y={y + L.pad} width={L.qr} height={L.qr} fill="#222" />
           </g>
         )
       })}

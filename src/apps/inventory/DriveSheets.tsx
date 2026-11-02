@@ -120,10 +120,10 @@ export function DriveSetupSheet({ open, onClose }: { open: boolean; onClose: () 
           </Step>
 
           <Step n={3} title="Paste the Web app URL">
+            <p>The one Google shows when it's deployed, ending in /exec.</p>
             <input
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://script.google.com/macros/s/…/exec"
               aria-label="Web app URL"
               className="inv-field mt-1 font-mono !text-[12.5px]"
               spellCheck={false}

@@ -110,8 +110,6 @@ export const listFolder = (folderId: string) => op<{ folder: DriveFolder; files:
 export const ensureFolder = (name: string, folderId: string | null) => op<DriveFolder>('ensureFolder', { name, folderId })
 export const uploadFile = (folderId: string, file: { name: string; mime: string; data: string }, description: string) =>
   op<DriveFile>('upload', { folderId, ...file, description })
-export const scanToPdf = (folderId: string, name: string, pages: { mime: string; data: string }[], description: string) =>
-  op<DriveFile>('scan', { folderId, name, pages, description })
 export const trashFile = (fileId: string) => op<{ ok: true }>('trash', { fileId })
 export const readDoc = (docId: string) => op<{ text: string }>('readDoc', { docId }).then((r) => r.text)
 export const writeDoc = (folderId: string, docId: string | null, title: string, text: string) =>

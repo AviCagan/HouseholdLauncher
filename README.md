@@ -21,7 +21,7 @@ from Safari on iPhone.
 | **Meals** | Dishes with what they cost and what's in them, meals built from templates — Shabbat, every holiday, a weeknight — that add up cost and nutrition per plate and scale to however many are coming — a slider sets the headcount, and batches, cost and a copyable shopping list follow it — a recipe importer that reads a link or an Instagram caption, a two-week planner ("Plep") that puts the board on Google Calendar, and a "Missing ingredients?" button that sends what's needed to the Things shopping list, sorted by store. The one app that's allowed to look like a sticker book. |
 | **A&J Encyclopedia** | A dictionary of the words only the two of them use, typeset like the real thing — headword, pronunciation, part of speech, an example, an origin — with an alphabet index, a word of the day, and nothing in it until they write it. |
 | **Watched** | What the two of them watch, in the shape of an old CRT set. Each has a shelf and there's a shared one; the lineup plays forward at their pace — learned from when they actually finish seasons — to say when each show starts and when it's done, with a weekly show running alongside a binge. Finish a season and both rate it; the Watched channel ranks everything by each person's score and by the two together. Show data comes from TVmaze; a show it doesn't have can be typed in. "Watched" is a working title. |
-| **Inventory** | The stockroom: everything bought that's worth keeping the paperwork for, as cardboard boxes on a shelf with a stock label each. An item has an overall photo of the whole thing with everything that came with it, photos of its extra parts, its paperwork (scan a paper warranty a page at a time into one PDF, or add a PDF as it is), where it came from, what it cost and who paid, how long it's covered (to a date, or for life), where it's kept, and notes. The files live in Google Drive — one folder per item in *Joint Stuff › Warranties, manuals, extra parts* — so the folder is the record and the app is the nice way to look at it. Folders made in Drive by hand can be brought in. Every item has a real QR code, and **Print labels** makes a PDF of them — name and stock code under each, sized with a slider from ½″ to 6″ — to stick on the thing, its box or its bag of spares; scanning one with a phone camera opens that item. See [Connecting Drive for Inventory](#connecting-drive-for-inventory). |
+| **Inventory** | The stockroom: everything bought that's worth keeping the paperwork for, as cardboard boxes on a shelf with a stock label each. An item has an overall photo of the whole thing with everything that came with it, photos of its extra parts, its paperwork (paper ones scanned with Google's document scanner, the one in Google Drive, or a PDF added as it is), where it came from, what it cost and who paid, how long it's covered (to a date, or for life), where it's kept, and notes. The files live in Google Drive — one folder per item in *Joint Stuff › Warranties, manuals, extra parts* — so the folder is the record and the app is the nice way to look at it. Folders made in Drive by hand can be brought in. Every item has a real QR code, and **Print labels** makes a PDF of them — name and stock code under each, sized with a slider from ½″ to 6″, as many of each as you ask for — to stick on the thing, its box or its bag of spares; scanning one with a phone camera opens that item. See [Connecting Drive for Inventory](#connecting-drive-for-inventory). |
 | **Bluetooth** | One switch per paired device, so the car can be dropped without four taps into system settings. Android only — see below. |
 
 Adding another is one entry in [`src/launcher/registry.ts`](src/launcher/registry.ts)
@@ -277,16 +277,37 @@ drawn in the browser (pdf-lib) — vector squares, so it prints sharp at any
 size — and should be printed at 100%, not "fit to page", for the codes to
 come out the size chosen.
 
-Photos come from the camera or from the phone's photos, as two buttons: inside
-the Android app a plain photo picker only ever offers the gallery, and the
-manifest declares the camera intent so Android 11+ lets the app find the
-camera at all.
+The sheet prints one label per item unless you ask for more (**How many of
+each**, or **Fill the page** for a whole sheet of one size). It says how many
+would fit, but doesn't fill the page by itself.
 
 In the Android app the PDF goes to the share sheet (print, Drive, email), and
 the app can open scanned labels itself instead of the browser. Android doesn't
 do that by default for a site it can't verify the app belongs to, so switch it
 on once: **App info → Household → Open by default → Add links →
 avicagan.github.io**.
+
+### Scanning paperwork
+
+**Scan** is Google's own document scanner — the one inside Google Drive, with
+the edge-finding, straightening, shadow clean-up and many pages to one PDF.
+It's ML Kit's document scanner from Google Play services
+(`@capacitor-mlkit/document-scanner`), so the Android app opens it right over
+the item and puts the PDF in the item's folder. Play services downloads it
+the first time it's asked for; the app says so while it waits.
+
+A web page can't open it (and an iPhone has no Play services), so on a phone
+browser the button is **Scan in Drive**: it opens the item's folder in the
+Drive app, where the same scanner is behind **+ → Scan** and saves into that
+folder. Coming back to Inventory checks the folder and picks the scan up. On
+a laptop there's no scanner, just **Add file**.
+
+### Photos
+
+Photos come from the camera or from the phone's photos, as two buttons: inside
+the Android app a plain photo picker only ever offers the gallery, and the
+manifest declares the camera intent so Android 11+ lets the app find the
+camera at all.
 
 ---
 

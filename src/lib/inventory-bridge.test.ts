@@ -36,7 +36,7 @@ describe('Inventory Drive bridge', () => {
   it('keeps every operation inside the Inventory folder', () => {
     // Anything that takes an id goes through itemFolder/itemFile, so even a
     // leaked secret can't reach the rest of the Drive.
-    for (const op of ['list', 'upload', 'scan', 'preview', 'trash', 'readDoc', 'writeDoc']) {
+    for (const op of ['list', 'upload', 'preview', 'trash', 'readDoc', 'writeDoc']) {
       const start = source.indexOf(`\n  ${op}: function`)
       const end = source.indexOf('\n  },', start)
       expect(source.slice(start, end), op).toMatch(/item(Folder|File)\(/)

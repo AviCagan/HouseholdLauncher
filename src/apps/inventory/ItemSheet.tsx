@@ -6,7 +6,10 @@ import { useProfile } from '@/store/useProfile'
 import { formatPrice } from '@/lib/money'
 import { openExternal } from '@/apps/things/routing/deeplink'
 import type { InventoryFile, InventoryFileKind, InventoryItem } from '@/data/types'
-import { addFiles, removeFile, removeItem, scanPages, setCover, setKind, syncItem, updateItem, useInventoryBusy } from './actions'
+import { addFiles, ensureItemFolder, removeFile, removeItem, scanIntoItem, setCover, setKind, syncItem, updateItem, useInventoryBusy } from './actions'
+import { hasGoogleScanner } from './scanner'
+import { useDesktop } from '@/lib/useDesktop'
+import { toast } from 'sonner'
 import { useDrive } from './drive'
 import { DetailsForm } from './forms'
 import { draftOf, inputOf, priceProblem, type Draft } from './draft'
@@ -50,12 +53,13 @@ function ItemBody({ item, onClose, onPrintLabel }: { item: InventoryItem; onClos
   const connected = useDrive((s) => s.status?.connected === true)
   const busy = useInventoryBusy((s) => s.busy[item.id])
   const [fileId, setFileId] = useState<string | null>(null)
-  const [scanning, setScanning] = useState(false)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<Draft>(() => draftOf(item))
   const [notes, setNotes] = useState(item.notes ?? '')
   const [confirmRemove, setConfirmRemove] = useState(false)
   const hero = usePreview(item.cover_file_id, 1000, item.cover_thumb)
+  const desktop = useDesktop()
+  const googleScanner = hasGoogleScanner()
 
   // Opening an item checks its folder once, so anything added in Drive
   // directly — or by the other phone — is here without a manual refresh.
@@ -65,6 +69,43 @@ function ItemBody({ item, onClose, onPrintLabel }: { item: InventoryItem; onClos
     synced.current = true
     void syncItem(item.id, true)
   }, [connected, item.id, item.drive_folder_id])
+
+  /*
+    Coming back to the app — from the Drive app after scanning there, or from
+    anywhere — checks the folder again, so the new scan is on the page by the
+    time you look.
+  */
+  useEffect(() => {
+    if (!connected || !item.drive_folder_id) return
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void syncItem(item.id, true)
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [connected, item.id, item.drive_folder_id])
+
+  /**
+   * Scan paperwork with Google's scanner. In the Android app it opens right
+   * here; anywhere else it opens the item's folder in the Drive app, where
+   * the same scanner is behind + → Scan and the PDF lands in this folder.
+   */
+  function scan() {
+    if (googleScanner) {
+      void scanIntoItem(item.id)
+      return
+    }
+    const howTo = { description: 'In Drive, tap + then Scan. It saves into this item’s folder, and shows up here when you come back.', duration: 9000 }
+    if (item.drive_folder_url) {
+      // Opened within the tap, or iPhone treats it as a pop-up and blocks it.
+      openExternal(item.drive_folder_url)
+      toast('Opening the item’s folder in Google Drive', howTo)
+      return
+    }
+    void ensureItemFolder(item.id).then(() => {
+      const url = useData.getState().inventory_items.find((i) => i.id === item.id)?.drive_folder_url
+      if (url) toast('The item’s Drive folder is ready', { ...howTo, action: { label: 'Open Drive', onClick: () => openExternal(url) } })
+    })
+  }
 
   // Someone else's edit to the notes shows up, unless you're mid-sentence.
   const typing = useRef(false)
@@ -133,14 +174,16 @@ function ItemBody({ item, onClose, onPrintLabel }: { item: InventoryItem; onClos
       <Tiles files={parts} coverId={item.cover_file_id} onOpen={setFileId} empty="Spares, accessories, the bits in the bag — so you know what you have and what it looks like." />
 
       <SectionHead title="Paperwork" count={docs.length}>
-        <button
-          onClick={() => setScanning(true)}
-          disabled={!connected}
-          className="inv-btn inv-btn--quiet !px-2.5 !py-1.5 !text-[12.5px]"
-          title="Photograph the pages of a warranty or manual and keep them as one PDF"
-        >
-          <Icon name="camera" size={14} strokeWidth={2.4} /> Scan
-        </button>
+        {!desktop && (
+          <button
+            onClick={scan}
+            disabled={!connected}
+            className="inv-btn inv-btn--quiet !px-2.5 !py-1.5 !text-[12.5px]"
+            title={googleScanner ? "Google's document scanner — the one in Google Drive" : 'Scan in the Google Drive app'}
+          >
+            <Icon name="camera" size={14} strokeWidth={2.4} /> {googleScanner ? 'Scan' : 'Scan in Drive'}
+          </button>
+        )}
         <PickButton icon="file" label="Add file" accept="application/pdf,image/*" multiple disabled={!connected} onPick={(f) => void addFiles(item.id, f, 'doc')} />
       </SectionHead>
       <Tiles files={docs} coverId={null} onOpen={setFileId} empty="The manual, the warranty, the receipt — scan the paper ones, add PDFs as they are." />
@@ -203,7 +246,6 @@ function ItemBody({ item, onClose, onPrintLabel }: { item: InventoryItem; onClos
         }}
         onBlur={saveNotes}
         rows={5}
-        placeholder="Anything worth remembering — what's in the box, where the spare is, who installed it, what the support line said…"
         aria-label="Notes"
         className="inv-field resize-y leading-snug"
       />
@@ -239,7 +281,6 @@ function ItemBody({ item, onClose, onPrintLabel }: { item: InventoryItem; onClos
       </div>
 
       <FileSheet item={item} file={open} onClose={() => setFileId(null)} />
-      <ScanSheet open={scanning} onClose={() => setScanning(false)} onScan={(pages, name) => void scanPages(item.id, pages, name)} />
     </div>
   )
 }
@@ -368,106 +409,6 @@ function FileSheet({ item, file, onClose }: { item: InventoryItem; file: Invento
           </p>
         </div>
       )}
-    </Sheet>
-  )
-}
-
-const SCAN_NAMES = ['Warranty', 'Manual', 'Receipt', 'Registration']
-
-/**
- * Photograph the pages of a paper warranty or manual, one by one, and keep
- * them as a single PDF. One photo at a time because that is what a phone's
- * camera gives back; the pages collect here until it's done.
- */
-function ScanSheet({ open, onClose, onScan }: { open: boolean; onClose: () => void; onScan: (pages: File[], name: string) => void }) {
-  const [pages, setPages] = useState<{ file: File; url: string }[]>([])
-  const [name, setName] = useState('Warranty')
-
-  useEffect(() => {
-    if (open) return
-    setPages((current) => {
-      current.forEach((p) => URL.revokeObjectURL(p.url))
-      return []
-    })
-    setName('Warranty')
-  }, [open])
-
-  const add = (files: File[]) => setPages((p) => [...p, ...files.map((file) => ({ file, url: URL.createObjectURL(file) }))])
-
-  return (
-    <Sheet open={open} onClose={onClose} title={<span className="inv-stencil text-[15px]">Scan paperwork</span>}>
-      <div className="flex flex-col gap-4 pb-4">
-        <div className="flex flex-wrap gap-1.5">
-          {SCAN_NAMES.map((n) => (
-            <button
-              key={n}
-              onClick={() => setName(n)}
-              aria-pressed={name === n}
-              className="inv-btn !px-3 !py-1.5 !text-[12.5px]"
-              style={name === n ? undefined : { background: 'var(--surface)', boxShadow: 'none', borderColor: 'var(--border)' }}
-            >
-              {n}
-            </button>
-          ))}
-          <input value={name} onChange={(e) => setName(e.target.value)} aria-label="What it is" className="inv-field !w-auto min-w-[140px] flex-1 !py-1.5" />
-        </div>
-
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-          {pages.map((p, i) => (
-            <div key={p.url} className="inv-tile">
-              <img src={p.url} alt={`Page ${i + 1}`} />
-              <span className="absolute left-1.5 top-1.5 rounded-full px-1.5 text-[10px] font-black text-white" style={{ background: 'rgb(0 0 0 / 0.6)' }}>
-                {i + 1}
-              </span>
-              <button
-                onClick={() =>
-                  setPages((all) => {
-                    URL.revokeObjectURL(p.url)
-                    return all.filter((x) => x !== p)
-                  })
-                }
-                aria-label={`Remove page ${i + 1}`}
-                className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full text-white"
-                style={{ background: 'rgb(0 0 0 / 0.6)' }}
-              >
-                <Icon name="close" size={12} strokeWidth={2.6} />
-              </button>
-            </div>
-          ))}
-          <label className="inv-tile grid cursor-pointer place-items-center" title="Photograph a page">
-            <span className="flex flex-col items-center gap-1 text-[11.5px] font-bold" style={{ color: 'var(--text-faint)' }}>
-              <Icon name="camera" size={22} />
-              {pages.length ? 'Next page' : 'First page'}
-            </span>
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="sr-only"
-              onChange={(e) => {
-                add([...(e.target.files ?? [])])
-                e.target.value = ''
-              }}
-            />
-          </label>
-        </div>
-
-        <PickButton icon="file" label="Or choose photos of the pages" accept="image/*" multiple onPick={add} />
-
-        <button
-          onClick={() => {
-            onScan(
-              pages.map((p) => p.file),
-              name,
-            )
-            onClose()
-          }}
-          disabled={pages.length === 0}
-          className="inv-btn inv-btn--orange w-full !py-3"
-        >
-          <Icon name="file" size={16} /> Make a {pages.length || ''}{pages.length ? '-page ' : ''}PDF in Drive
-        </button>
-      </div>
     </Sheet>
   )
 }
