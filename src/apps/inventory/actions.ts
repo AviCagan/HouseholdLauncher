@@ -13,12 +13,14 @@ import {
   readDoc,
   trashFile,
   uploadFile,
+  useDrive,
   writeDoc,
   type DriveFolder,
 } from './drive'
 import { classifyFolder, describeKind, detailsDocText, factsFromNotes, isImage, notesFromDoc, reconcile } from './model'
-import { blobFromBase64, prepareFile, thumbFromBlob } from './photos'
-import { scanWithGoogle } from './scanner'
+import { MAX_FILE_BYTES, blobFromBase64, prepareFile, thumbFromBlob } from './photos'
+import { readScan, scanWithGoogle, type ScannedPdf } from './scanner'
+import { openExternal } from '@/apps/things/routing/deeplink'
 
 /**
  * Writes for Inventory.
@@ -327,23 +329,60 @@ export async function scanIntoItem(id: string): Promise<void> {
   }
   const folderId = latest(id)?.drive_folder_id ?? (await ensureItemFolder(id))
   if (!folderId) return
+
+  let scan: ScannedPdf | null
   try {
-    const pdf = await scanWithGoogle(() => busy(id, 'Getting Google’s scanner ready — a one-time download…'))
-    if (!pdf) return
-    busy(id, 'Sending the scan to Drive…')
+    scan = await scanWithGoogle(id, () => busy(id, 'Getting Google’s scanner ready — a one-time download…'))
+  } catch (err) {
+    fire('error')
+    toast.error("Couldn't open Google's scanner", { description: errorText(err) })
+    return
+  } finally {
+    busy(id, null)
+  }
+
+  if (!scan) {
+    // Backed out — or the scanner gave up. The Drive app has the very same
+    // scanner, and anything scanned from the item's folder there turns up here.
+    const url = latest(id)?.drive_folder_url
+    toast('Nothing was scanned', {
+      description: 'You can also scan in the Drive app: open this item’s folder, tap +, then Scan.',
+      duration: 8000,
+      action: url ? { label: 'Open Drive', onClick: () => openExternal(url) } : undefined,
+    })
+    return
+  }
+  await fileScan(id, scan)
+}
+
+/**
+ * Put a finished scan in the item's folder and on its page — straight after
+ * scanning, or when the app comes back after Android shut it down mid-scan.
+ */
+export async function fileScan(id: string, scan: ScannedPdf): Promise<void> {
+  busy(id, 'Sending the scan to Drive…')
+  try {
+    if (!useDrive.getState().status) await useDrive.getState().refresh()
+    if (!driveConnected()) throw new Error('Google Drive isn’t connected')
+    const folderId = latest(id)?.drive_folder_id ?? (await ensureItemFolder(id))
+    if (!folderId) throw new Error('The item has no Drive folder')
+    const data = await readScan(scan)
+    if ((data.length * 3) / 4 > MAX_FILE_BYTES) {
+      throw new Error(`It’s over ${Math.round(MAX_FILE_BYTES / 1024 / 1024)} MB — scan it in two parts`)
+    }
     const item = latest(id)
     const when = new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
     const uploaded = await uploadFile(
       folderId,
-      { name: `${item?.name ?? 'Scan'} — scan ${when}.pdf`, mime: 'application/pdf', data: pdf.data },
+      { name: `${item?.name ?? 'Scan'} — scan ${when}.pdf`, mime: 'application/pdf', data },
       describeKind('doc'),
     )
     await attach(id, asFile(uploaded, 'doc'))
     fire('success')
-    toast.success(`${pdf.pages}-page scan is in Drive`)
+    toast.success(scan.pages === 1 ? 'The scan is in Drive' : `${scan.pages}-page scan is in Drive`)
   } catch (err) {
     fire('error')
-    toast.error("Couldn't scan that", { description: errorText(err) })
+    toast.error("Couldn't save the scan", { description: errorText(err) })
   } finally {
     busy(id, null)
   }
@@ -408,11 +447,14 @@ export async function syncItem(id: string, quiet = false): Promise<void> {
   const item = latest(id)
   if (!item?.drive_folder_id) return
   busy(id, 'Checking Drive…')
+  const before = new Set(item.files.map((f) => f.id))
   try {
     const { files, folder } = await listFolder(item.drive_folder_id)
     const now = latest(id)
     if (!now) return
-    const next = reconcile(now, files)
+    // Coming back from the camera or the scanner starts this check while the
+    // new file is still uploading; one attached since the listing began stays.
+    const next = reconcile(now, files, new Set(now.files.filter((f) => !before.has(f.id)).map((f) => f.id)))
     const patch: Partial<InventoryItem> = {
       files: next.files,
       cover_file_id: next.cover_file_id,

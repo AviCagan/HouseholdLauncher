@@ -31,6 +31,7 @@ import { errorMessage, withRetry } from './lib/errors'
 import { isNative } from './lib/platform'
 import { useDesktop } from './lib/useDesktop'
 import { itemIdFromUrl } from './apps/inventory/links'
+import { listenForRestoredScan, type ScannedPdf } from './apps/inventory/scanner'
 
 /** Swap the local adapter for Supabase and replay anything queued offline. */
 async function goLive() {
@@ -181,6 +182,23 @@ export default function App() {
       void listener.then((l) => l.remove())
     }
   }, [])
+  /*
+    A paperwork scan that finished after Android shut the app down behind
+    Google's scanner (it does, to free memory for the camera). The app has
+    just started again; once it's signed in, Inventory opens on the item and
+    files the scan.
+  */
+  const [restoredScan, setRestoredScan] = useState<{ itemId: string; scan: ScannedPdf } | null>(null)
+  useEffect(() => {
+    if (!isNative()) return
+    return listenForRestoredScan((itemId, scan) => setRestoredScan({ itemId, scan }))
+  }, [])
+  useEffect(() => {
+    if (!restoredScan || boot !== 'ready' || !profileId) return
+    useLauncher.getState().openApp('inventory', { id: restoredScan.itemId, scan: restoredScan.scan })
+    setRestoredScan(null)
+  }, [restoredScan, boot, profileId])
+
   useEffect(() => {
     if (!linkedItem || boot !== 'ready' || !profileId) return
     useLauncher.getState().openApp('inventory', { id: linkedItem })

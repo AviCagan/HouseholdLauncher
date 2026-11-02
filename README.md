@@ -296,6 +296,14 @@ It's ML Kit's document scanner from Google Play services
 the item and puts the PDF in the item's folder. Play services downloads it
 the first time it's asked for; the app says so while it waits.
 
+While the scanner is open, Android may shut the app down behind it to free
+memory for the camera. The scan survives that: the item being scanned is
+written down before the scanner opens, and when the app starts again the
+plugin hands the finished PDF over (Capacitor's `appRestoredResult`, from
+`@capacitor-mlkit/document-scanner` 8.2.2 on — 8.2.1 dropped it), so
+Inventory opens on the item and files it. If the scanner closes with nothing,
+the app offers the Drive app's own scanner instead.
+
 A web page can't open it (and an iPhone has no Play services), so on a phone
 browser the button is **Scan in Drive**: it opens the item's folder in the
 Drive app, where the same scanner is behind **+ → Scan** and saves into that

@@ -8,7 +8,8 @@ import { useIsOwner } from '@/store/useMember'
 import { useDesktop } from '@/lib/useDesktop'
 import { isConfigured } from '@/lib/env'
 import { fire } from '@/lib/haptics'
-import { useInventoryBusy } from './actions'
+import { fileScan, useInventoryBusy } from './actions'
+import type { ScannedPdf } from './scanner'
 import { useDrive } from './drive'
 import { DriveSetupSheet, ImportSheet } from './DriveSheets'
 import { useUnlinkedFolders } from './hooks'
@@ -72,8 +73,12 @@ export function InventoryApp() {
     const link = consumeDeepLink()
     const id = typeof link?.id === 'string' ? link.id : null
     if (!id) return
-    if (useData.getState().inventory_items.some((i) => i.id === id)) setOpenId(id)
-    else toast("That item isn't in Inventory any more", { description: 'It may have been removed. Its folder would still be in Drive.' })
+    if (useData.getState().inventory_items.some((i) => i.id === id)) {
+      setOpenId(id)
+      // A scan that came back after the app was restarted under it.
+      const scan = link?.scan as ScannedPdf | undefined
+      if (scan?.uri) void fileScan(id, scan)
+    } else toast("That item isn't in Inventory any more", { description: 'It may have been removed. Its folder would still be in Drive.' })
   }, [pending, consumeDeepLink])
 
   const cats = useMemo(() => categories(items), [items])

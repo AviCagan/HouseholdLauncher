@@ -183,14 +183,23 @@ export function classifyFolder(folderName: string, driveFiles: DriveFile[], exis
  * The folder is the truth about which files exist — something added or
  * deleted in Drive directly should show up here — but the row is the truth
  * about what each is for, so a file the app already knows keeps its kind.
+ *
+ * `keep` is files the app attached while the folder was being listed — an
+ * upload that finished after Drive answered. The listing is simply too old
+ * to have them, so they stay.
  */
-export function reconcile(item: Pick<InventoryItem, 'files' | 'cover_file_id' | 'notes_doc_id' | 'name'>, driveFiles: DriveFile[]) {
+export function reconcile(
+  item: Pick<InventoryItem, 'files' | 'cover_file_id' | 'notes_doc_id' | 'name'>,
+  driveFiles: DriveFile[],
+  keep: ReadonlySet<string> = new Set(),
+) {
   const known = new Map(item.files.map((f) => [f.id, f]))
   const fresh = classifyFolder(item.name, driveFiles, item.notes_doc_id)
-  const files = fresh.files.map((f) => {
+  const listed = fresh.files.map((f) => {
     const had = known.get(f.id)
     return had ? { ...f, kind: had.kind, added_at: had.added_at } : f
   })
+  const files = [...listed, ...item.files.filter((f) => keep.has(f.id) && !listed.some((x) => x.id === f.id))]
   const coverStillThere = files.some((f) => f.id === item.cover_file_id)
   return {
     files,

@@ -15,7 +15,7 @@
     "verify:route": "vite-node scripts/verify-route.ts"
   },
   "dependencies": {
-    "@capacitor-mlkit/document-scanner": "8.2.1",
+    "@capacitor-mlkit/document-scanner": "8.2.2",
     "@capacitor/app": "^8.1.1",
     "@capacitor/core": "^8.5.0",
     "@capacitor/filesystem": "^8.1.3",

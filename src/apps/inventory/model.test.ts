@@ -164,6 +164,16 @@ describe('reconcile', () => {
     expect(next.removed).toBe(1)
     expect(next.cover_file_id).toBe('whole')
   })
+  it('keeps a file attached while the folder was being listed', () => {
+    // Back from the scanner: the check starts, the upload lands, then Drive's
+    // answer — from before the upload — arrives.
+    const scan = { id: 'scan', kind: 'doc' as const, name: 'Scan.pdf', mime: 'application/pdf', url: 'u', size: 1, added_at: 'x' }
+    const known = item({ name: VEVOR, files: [scan] })
+    const next = reconcile(known, vevorFiles, new Set(['scan']))
+    expect(next.files.find((f) => f.id === 'scan')?.kind).toBe('doc')
+    expect(next.removed).toBe(0)
+    expect(reconcile(known, vevorFiles).removed).toBe(1)
+  })
 })
 
 describe('warranty', () => {
