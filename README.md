@@ -304,6 +304,12 @@ plugin hands the finished PDF over (Capacitor's `appRestoredResult`, from
 Inventory opens on the item and files it. If the scanner closes with nothing,
 the app offers the Drive app's own scanner instead.
 
+In Google's scanner the big **Next** button finishes the scan; another page
+is the small **+** above it, and there's no option to relabel either. So the
+item says so beside **Scan**, and every saved scan comes with **Add pages**,
+which scans more and joins them onto the end of the same PDF (pdf-lib, on the
+phone). The longer PDF replaces the shorter one, which goes to Drive's trash.
+
 A web page can't open it (and an iPhone has no Play services), so on a phone
 browser the button is **Scan in Drive**: it opens the item's folder in the
 Drive app, where the same scanner is behind **+ → Scan** and saves into that

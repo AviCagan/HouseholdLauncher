@@ -20,6 +20,7 @@ import {
 import { classifyFolder, describeKind, detailsDocText, factsFromNotes, isImage, notesFromDoc, reconcile } from './model'
 import { MAX_FILE_BYTES, blobFromBase64, prepareFile, thumbFromBlob } from './photos'
 import { readScan, scanWithGoogle, type ScannedPdf } from './scanner'
+import { appendPdf } from './pdfMerge'
 import { openExternal } from '@/apps/things/routing/deeplink'
 
 /**
@@ -355,34 +356,84 @@ export async function scanIntoItem(id: string): Promise<void> {
   await fileScan(id, scan)
 }
 
+/*
+  The scan most recently filed, so "Add pages" can grow it.
+
+  Google's scanner finishes on its big Next button; another page is the small
+  + above it, which is easy to miss. So every saved scan comes with an
+  Add pages button: it opens the scanner again and the new pages go on the
+  end of the same PDF, which replaces the old one in the folder. Only the
+  latest is kept, in memory — it's for the moment right after a scan.
+*/
+interface LastScan {
+  itemId: string
+  fileId: string
+  name: string
+  data: string
+  pages: number
+}
+let lastScan: LastScan | null = null
+
 /**
  * Put a finished scan in the item's folder and on its page — straight after
  * scanning, or when the app comes back after Android shut it down mid-scan.
  */
-export async function fileScan(id: string, scan: ScannedPdf): Promise<void> {
-  busy(id, 'Sending the scan to Drive…')
+export function fileScan(id: string, scan: ScannedPdf): Promise<void> {
+  return saveScan(id, scan, null)
+}
+
+/** Scan more pages onto the end of the scan just saved for this item. */
+export async function addPagesToScan(id: string): Promise<void> {
+  const into = lastScan?.itemId === id ? lastScan : null
+  if (!into) return scanIntoItem(id)
+  let scan: ScannedPdf | null
+  try {
+    scan = await scanWithGoogle(id)
+  } catch (err) {
+    fire('error')
+    toast.error("Couldn't open Google's scanner", { description: errorText(err) })
+    return
+  }
+  if (scan) await saveScan(id, scan, into)
+}
+
+async function saveScan(id: string, scan: ScannedPdf, into: LastScan | null): Promise<void> {
+  busy(id, into ? 'Adding the pages to the scan…' : 'Sending the scan to Drive…')
   try {
     if (!useDrive.getState().status) await useDrive.getState().refresh()
     if (!driveConnected()) throw new Error('Google Drive isn’t connected')
     const folderId = latest(id)?.drive_folder_id ?? (await ensureItemFolder(id))
     if (!folderId) throw new Error('The item has no Drive folder')
-    const data = await readScan(scan)
+
+    let data = await readScan(scan)
+    let pages = scan.pages
+    if (into) ({ data, pages } = await appendPdf(into.data, data))
     if ((data.length * 3) / 4 > MAX_FILE_BYTES) {
-      throw new Error(`It’s over ${Math.round(MAX_FILE_BYTES / 1024 / 1024)} MB — scan it in two parts`)
+      throw new Error(`It’s over ${Math.round(MAX_FILE_BYTES / 1024 / 1024)} MB — scan the rest as a separate document`)
     }
-    const item = latest(id)
+
     const when = new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
-    const uploaded = await uploadFile(
-      folderId,
-      { name: `${item?.name ?? 'Scan'} — scan ${when}.pdf`, mime: 'application/pdf', data },
-      describeKind('doc'),
-    )
+    const name = into?.name ?? `${latest(id)?.name ?? 'Scan'} — scan ${when}.pdf`
+    const uploaded = await uploadFile(folderId, { name, mime: 'application/pdf', data }, describeKind('doc'))
     await attach(id, asFile(uploaded, 'doc'))
+    if (into) {
+      // The longer PDF is in; the shorter one goes to Drive's trash, where
+      // it can still be got back for 30 days.
+      await trashFile(into.fileId).catch(() => undefined)
+      const now = latest(id)
+      if (now) await patchRow(id, { files: now.files.filter((f) => f.id !== into.fileId) })
+    }
+    lastScan = { itemId: id, fileId: uploaded.id, name, data, pages }
+
     fire('success')
-    toast.success(scan.pages === 1 ? 'The scan is in Drive' : `${scan.pages}-page scan is in Drive`)
+    toast.success(pages === 1 ? 'The scan is in Drive' : `${pages}-page scan is in Drive`, {
+      description: 'Missed a page? Add it to the same PDF.',
+      duration: 12000,
+      action: { label: 'Add pages', onClick: () => void addPagesToScan(id) },
+    })
   } catch (err) {
     fire('error')
-    toast.error("Couldn't save the scan", { description: errorText(err) })
+    toast.error(into ? "Couldn't add the pages" : "Couldn't save the scan", { description: errorText(err) })
   } finally {
     busy(id, null)
   }

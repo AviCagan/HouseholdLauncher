@@ -74,14 +74,27 @@ function ItemBody({ item, onClose, onPrintLabel }: { item: InventoryItem; onClos
     Coming back to the app — from the Drive app after scanning there, or from
     anywhere — checks the folder again, so the new scan is on the page by the
     time you look.
+
+    Not straight away, and not over a job already running: coming back from
+    Google's scanner or the camera, the app is about to send that file
+    itself, and a listing taken mid-upload would be out of date by the time
+    it landed.
   */
   useEffect(() => {
     if (!connected || !item.drive_folder_id) return
+    let timer: ReturnType<typeof setTimeout> | undefined
     const onVisible = () => {
-      if (document.visibilityState === 'visible') void syncItem(item.id, true)
+      clearTimeout(timer)
+      if (document.visibilityState !== 'visible') return
+      timer = setTimeout(() => {
+        if (!useInventoryBusy.getState().busy[item.id]) void syncItem(item.id, true)
+      }, 1500)
     }
     document.addEventListener('visibilitychange', onVisible)
-    return () => document.removeEventListener('visibilitychange', onVisible)
+    return () => {
+      clearTimeout(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [connected, item.id, item.drive_folder_id])
 
   /**
@@ -186,6 +199,13 @@ function ItemBody({ item, onClose, onPrintLabel }: { item: InventoryItem; onClos
         )}
         <PickButton icon="file" label="Add file" accept="application/pdf,image/*" multiple disabled={!connected} onPick={(f) => void addFiles(item.id, f, 'doc')} />
       </SectionHead>
+      {googleScanner && (
+        // Google's scanner ends on its big Next button; the next page is the
+        // small + above it. Easy to miss, and nothing here can relabel it.
+        <p className="-mt-1 pb-2 text-[12px] leading-snug" style={{ color: 'var(--text-faint)' }}>
+          Several pages? In the scanner, tap <b style={{ color: 'var(--text-dim)' }}>+</b> for each new page — <b style={{ color: 'var(--text-dim)' }}>Next</b> finishes the scan.
+        </p>
+      )}
       <Tiles files={docs} coverId={null} onOpen={setFileId} empty="The manual, the warranty, the receipt — scan the paper ones, add PDFs as they are." />
 
       <SectionHead title="Label">
