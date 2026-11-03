@@ -26,6 +26,8 @@ export type NotifyEvent =
   | 'show_added'
   | 'season_finished'
   | 'show_finished'
+  // Med School 2028
+  | 'deadline_due'
 
 export interface Push {
   title: string
@@ -514,4 +516,37 @@ function prettyDate(iso: string): string {
 function formatCents(cents: number): string {
   const dollars = cents / 100
   return cents % 100 === 0 ? `$${dollars.toLocaleString('en-US')}` : `$${dollars.toFixed(2)}`
+}
+
+// --- Med School deadlines ---------------------------------------------------
+
+/**
+ * Calendar arithmetic on a `YYYY-MM-DD`. UTC is used only as a calendar here —
+ * the day goes in and comes out as the same three numbers — so no time zone
+ * can move it.
+ */
+export function addCalendarDays(day: string, n: number): string {
+  const [y, m, d] = day.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10)
+}
+
+/** "Fri, May 7". */
+export function showCalendarDay(day: string): string {
+  const [y, m, d] = day.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })
+}
+
+/**
+ * Which reminder a hard deadline is owed today, if any: 'early' three days
+ * before, 'day' on the day — each once per due date, so moving the date
+ * earns it new ones.
+ */
+export function deadlineReminder(
+  task: { due_on: string | null; reminded_early_for: string | null; reminded_day_for: string | null },
+  today: string,
+): 'early' | 'day' | null {
+  if (!task.due_on) return null
+  if (task.due_on === today) return task.reminded_day_for === task.due_on ? null : 'day'
+  if (task.due_on === addCalendarDays(today, 3)) return task.reminded_early_for === task.due_on ? null : 'early'
+  return null
 }

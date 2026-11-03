@@ -54,10 +54,28 @@ export function useHasApp(appId: string): boolean {
   const member = useCurrentMember()
   const access = useData((s) => s.app_access)
   if (!member) return false
-  if (member.role === undefined || member.role === 'owner') return true
+  return memberCanUse(member, appId, access)
+}
+
+/**
+ * The rule behind useHasApp, for code that has the member and the grants in
+ * hand already (the home grid, the people list).
+ *
+ * An app marked `explicitGrant` is the exception to owners being
+ * unconditional: it is one person's own, so it shows only where a grant row
+ * says so — owners included.
+ */
+export function memberCanUse(
+  member: Pick<Member, 'id' | 'role'>,
+  appId: string,
+  access: { profile_id: string; app_id: string; granted: boolean }[],
+): boolean {
+  const app = APPS.find((a) => a.id === appId)
   const row = access.find((a) => a.profile_id === member.id && a.app_id === appId)
+  if (app?.explicitGrant) return row?.granted === true
+  if (member.role === undefined || member.role === 'owner') return true
   if (row) return row.granted
-  return APPS.find((a) => a.id === appId)?.defaultForEveryone === true
+  return app?.defaultForEveryone === true
 }
 
 /** Whether this app can do anything at all on the device it's running on. */
@@ -88,18 +106,13 @@ export function useTiles(): LauncherTile[] {
   return useMemo(() => {
     if (!member) return []
 
-    const unrestricted = member.role === undefined || member.role === 'owner'
     const unread = new Map<string, number>()
     for (const n of notifications) {
       if (n.profile_id !== member.id || n.read_at) continue
       unread.set(n.app_id, (unread.get(n.app_id) ?? 0) + 1)
     }
 
-    return APPS.filter((app) => {
-      if (unrestricted) return true
-      const row = access.find((a) => a.profile_id === member.id && a.app_id === app.id)
-      return row ? row.granted : app.defaultForEveryone === true
-    })
+    return APPS.filter((app) => memberCanUse(member, app.id, access))
       .map((app) => {
         const pref = prefs.find((p) => p.profile_id === member.id && p.app_id === app.id)
         return {

@@ -29,6 +29,14 @@ const BluetoothApp = lazy(() =>
   import('@/apps/bluetooth/BluetoothApp').then((m) => ({ default: m.BluetoothApp })),
 )
 
+/*
+  Med School is lazy too: it brings three typefaces of its own and is one
+  person's app, so nobody else should pay for it in the first load.
+*/
+const MedSchoolApp = lazy(() =>
+  import('@/apps/medschool/MedSchoolApp').then((m) => ({ default: m.MedSchoolApp })),
+)
+
 export function AppHost({ appId }: { appId: string }) {
   const app = appById(appId)
   const allowed = useHasApp(appId)
@@ -80,6 +88,12 @@ export function AppHost({ appId }: { appId: string }) {
       {appId === 'watched' && <WatchedApp />}
       {/* Inventory's header is its own: a stockroom sign, not the plain frame. */}
       {appId === 'inventory' && <InventoryApp />}
+      {/* Med School draws its own world, header and all. */}
+      {appId === 'medschool' && (
+        <Suspense fallback={<div className="h-full" style={{ background: '#02060c' }} />}>
+          <MedSchoolApp />
+        </Suspense>
+      )}
       {appId === 'owe' && (
         <AppFrame name={app.name} color={app.color} onBack={goHome}>
           <OweApp />

@@ -12,6 +12,15 @@ import type {
   LexiconEntry,
   Meal,
   MealTemplate,
+  MsCounter,
+  MsCounterLog,
+  MsCourse,
+  MsEligibility,
+  MsLetter,
+  MsPractice,
+  MsQuestion,
+  MsSettings,
+  MsTask,
   Profile,
   ProfileSettings,
   ShoppingItem,
@@ -59,6 +68,16 @@ export const TABLES = [
   'watch_views',
   // Inventory.
   'inventory_items',
+  // Med School 2028.
+  'ms_settings',
+  'ms_tasks',
+  'ms_counters',
+  'ms_counter_logs',
+  'ms_eligibility',
+  'ms_letters',
+  'ms_courses',
+  'ms_practice',
+  'ms_questions',
 ] as const
 
 export type TableName = (typeof TABLES)[number]
@@ -89,6 +108,15 @@ export interface TableMap {
   watch_settings: WatchSettings
   watch_views: WatchView
   inventory_items: InventoryItem
+  ms_settings: MsSettings
+  ms_tasks: MsTask
+  ms_counters: MsCounter
+  ms_counter_logs: MsCounterLog
+  ms_eligibility: MsEligibility
+  ms_letters: MsLetter
+  ms_courses: MsCourse
+  ms_practice: MsPractice
+  ms_questions: MsQuestion
 }
 
 export type ChangeEvent<T extends TableName = TableName> =
@@ -184,7 +212,7 @@ export function rowKey(table: TableName, row: unknown): string {
 }
 
 /** One-row tables, keyed on a `singleton boolean` column that is always true. */
-export const SINGLETON_TABLES = ['household_settings', 'watch_settings'] as const
+export const SINGLETON_TABLES = ['household_settings', 'watch_settings', 'ms_settings'] as const
 
 export const isSingleton = (table: TableName): boolean =>
   (SINGLETON_TABLES as readonly string[]).includes(table)

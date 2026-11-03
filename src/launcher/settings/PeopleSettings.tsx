@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { Icon } from '@/components/primitives/Icon'
 import { SettingsGroup, SettingsRow, Toggle, PrimaryButton, Notice } from './SettingsSheet'
 import { APPS } from '@/launcher/registry'
-import { useCurrentMember, type Member } from '@/store/useMember'
+import { memberCanUse, useCurrentMember, type Member } from '@/store/useMember'
 import { useData } from '@/store/useData'
 import {
   createMember,
@@ -114,11 +114,9 @@ function PersonRow({
   const [confirmRemove, setConfirmRemove] = useState(false)
 
   const role: MemberRole = person.role ?? 'owner'
-  const grantedApps = APPS.filter((app) => {
-    if (role === 'owner') return true
-    const row = access.find((a) => a.profile_id === person.id && a.app_id === app.id)
-    return row ? row.granted : app.defaultForEveryone === true
-  })
+  const grantedApps = APPS.filter((app) => memberCanUse({ id: person.id, role }, app.id, access))
+  // The personal apps an owner has, which "everything" doesn't cover.
+  const personal = APPS.filter((app) => app.explicitGrant && grantedApps.includes(app))
 
   return (
     <div style={{ borderBottom: '1px solid var(--border)' }}>
@@ -141,7 +139,7 @@ function PersonRow({
           </span>
           <span className="mt-0.5 block text-[12px]" style={{ color: 'var(--text-faint)' }}>
             {role === 'owner'
-              ? 'Owner · everything'
+              ? `Owner · everything${personal.length ? ` · ${personal.map((a) => a.name).join(', ')}` : ''}`
               : grantedApps.length === 0
                 ? 'No apps yet'
                 : grantedApps.map((a) => a.name).join(', ')}
@@ -170,9 +168,13 @@ function PersonRow({
               </p>
 
               {APPS.map((app) => {
-                const row = access.find((a) => a.profile_id === person.id && a.app_id === app.id)
-                const granted =
-                  role === 'owner' ? true : (row?.granted ?? app.defaultForEveryone === true)
+                const granted = memberCanUse({ id: person.id, role }, app.id, access)
+                // An owner's access is not a grant to revoke — the server
+                // returns true for them unconditionally, so a switch here
+                // would flip back on the next render and read as a bug. A
+                // personal app is the exception: for it the grant is the
+                // whole question, owner or not.
+                const fixed = role === 'owner' && !app.explicitGrant
                 return (
                   <div key={app.id} className="flex items-center gap-3 py-1.5">
                     <span style={{ color: app.color }}>
@@ -182,10 +184,7 @@ function PersonRow({
                     <Toggle
                       on={granted}
                       label={`${app.name} access for ${person.display_name}`}
-                      // An owner's access is not a grant to revoke — the server
-                      // returns true for them unconditionally, so a switch here
-                      // would flip back on the next render and read as a bug.
-                      disabled={role === 'owner'}
+                      disabled={fixed}
                       onChange={(next) => void setAppAccess(person.id, app.id, next)}
                     />
                   </div>

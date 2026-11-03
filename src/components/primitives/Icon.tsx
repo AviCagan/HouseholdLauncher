@@ -41,6 +41,7 @@ export type IconName =
   | 'image'
   | 'camera'
   | 'file'
+  | 'cap'
 
 const PATHS: Record<IconName, string> = {
   check: 'M4 12.5 9 17.5 20 6.5',
@@ -91,6 +92,7 @@ const PATHS: Record<IconName, string> = {
   camera: 'M4 8h3l1.6-2.2h6.8L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z M12 16.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z',
   file: 'M6.5 3h7l4 4v13a1 1 0 0 1-1 1h-10a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z M13.5 3v4h4 M8.5 12.5h7 M8.5 16h7',
   arrowRight: 'M4 12h15m0 0-5-5m5 5-5 5',
+  cap: 'M2.5 9.5 12 5l9.5 4.5L12 14 2.5 9.5Z M6.5 11.6v4.1c0 1.4 2.5 2.8 5.5 2.8s5.5-1.4 5.5-2.8v-4.1 M21.5 9.5v5.5',
   checkCircle: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z M8 12.2l2.7 2.8L16 9.5',
   history:
     'M3.5 12a8.5 8.5 0 1 0 2.6-6.1M3.5 5v4.5H8 M12 7.5V12l3 1.8',

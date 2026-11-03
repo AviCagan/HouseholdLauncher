@@ -62,6 +62,7 @@ in one go, and it's safe to re-run.
 > | `022_watch_views.sql` | Watched: each episode logged with when, so the pace learns as you go |
 > | `023_inventory.sql` | Inventory — what the household bought, with its Drive folder of photos and paperwork |
 > | `024_inventory_lifetime.sql` | Inventory: lifetime warranties |
+> | `025_medschool.sql` | Med School 2028 — the plan's tasks, hours, letters, courses and practice scores. Schema only: the plan goes in through the app's Import. Grant it to its owner under **Settings → People**; it isn't shown to anyone without a grant, owners included |
 >
 > Without `007`, setting a chore to repeat *yearly* fails; without `009`,
 > picking specific weekdays fails; without `006`, changing a profile photo

@@ -19,7 +19,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import webpush from 'npm:web-push@3.6.7'
 import { JWT } from 'npm:google-auth-library@9'
-import { classify, type NotifyEvent, type Push, type WebhookBody } from './classify.ts'
+import { addCalendarDays, classify, deadlineReminder, showCalendarDay, type NotifyEvent, type Push, type WebhookBody } from './classify.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -377,6 +377,95 @@ async function sweepCooldowns() {
   return total
 }
 
+// --- Med School deadlines ---------------------------------------------------
+
+/** The hour, New York time, before which no reminder goes out. */
+const MS_REMIND_HOUR = 9
+
+/** Today's date and the hour in New York, where the plan's dates are kept. */
+function newYorkNow(): { day: string; hour: number } {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date())
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? ''
+  return { day: `${get('year')}-${get('month')}-${get('day')}`, hour: Number(get('hour')) }
+}
+
+/**
+ * Med School's hard deadlines: a reminder three days before and one on the
+ * day, from 9 a.m. New York time.
+ *
+ * Rides the cooldown sweep's five-minute schedule rather than one of its
+ * own, so there's nothing extra to set up. The app keeps `due_on` current
+ * (dates move with the MCAT date), and `reminded_*_for` records which date a
+ * reminder went out for: once per date, and again if the date moves.
+ *
+ * Sent only to members granted the app explicitly. It is one person's plan
+ * (`explicitGrant` in the registry), so `recipients()`, which counts every
+ * owner in, would tell the wrong person.
+ */
+async function sweepMedSchool() {
+  const { day: today, hour } = newYorkNow()
+  if (hour < MS_REMIND_HOUR) return 0
+  const soon = addCalendarDays(today, 3)
+
+  const { data: due, error } = await db
+    .from('ms_tasks')
+    .select('id, title, due_on, reminded_early_for, reminded_day_for')
+    .eq('hard', true)
+    .eq('hidden', false)
+    .is('done_at', null)
+    .in('due_on', [today, soon])
+  // A project without 025_medschool.sql simply has nothing to remind about.
+  if (error || !due || due.length === 0) return 0
+
+  const { data: grants } = await db.from('app_access').select('profile_id').eq('app_id', 'medschool').eq('granted', true)
+  const granted = (grants ?? []).map((g) => g.profile_id as string)
+  if (granted.length === 0) return 0
+  const { data: active } = await db.from('profiles').select('id, is_active').in('id', granted)
+  const ids = (active ?? []).filter((p) => p.is_active !== false).map((p) => p.id as string)
+  if (ids.length === 0) return 0
+
+  let total = 0
+  for (const task of due) {
+    const which = deadlineReminder(task, today)
+    if (!which) continue
+    const early = which === 'early'
+    const column = early ? 'reminded_early_for' : 'reminded_day_for'
+
+    // Claimed before sending, conditionally, as with cooldowns: an overlapping
+    // run gets nothing back and skips.
+    const { data: claimed } = await db
+      .from('ms_tasks')
+      .update({ [column]: task.due_on })
+      .eq('id', task.id)
+      .eq('due_on', task.due_on)
+      .or(`${column}.is.null,${column}.neq.${task.due_on}`)
+      .select('id')
+    if (!claimed || claimed.length === 0) continue
+
+    const { sent } = await deliver(
+      ids,
+      'deadline_due',
+      {
+        title: early ? `In 3 days: ${task.title}` : `Today: ${task.title}`,
+        body: early ? `Hard deadline, ${showCalendarDay(task.due_on)}.` : 'Hard deadline today.',
+        tab: 'timeline',
+        itemId: task.id,
+        tag: `ms-${task.id}-${early ? 'early' : 'day'}`,
+      },
+      'medschool',
+    )
+    total += sent
+  }
+  return total
+}
+
 // --- entrypoint -------------------------------------------------------------
 
 /*
@@ -409,7 +498,14 @@ Deno.serve(async (req) => {
 
     if (body.mode === 'sweep_cooldowns') {
       const sent = await sweepCooldowns()
-      return reply({ ok: true, mode: 'sweep', sent })
+      // Its own try: a Med School problem must never stop chores' reminders.
+      let medschool = 0
+      try {
+        medschool = await sweepMedSchool()
+      } catch (err) {
+        console.error('[notify] medschool sweep', err)
+      }
+      return reply({ ok: true, mode: 'sweep', sent, medschool })
     }
 
     /*

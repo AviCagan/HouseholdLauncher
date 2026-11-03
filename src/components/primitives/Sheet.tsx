@@ -27,6 +27,7 @@ export function Sheet({
   children,
   maxHeight = '86vh',
   height,
+  className,
 }: {
   open: boolean
   onClose: () => void
@@ -42,6 +43,11 @@ export function Sheet({
    * scroll area, where it belongs.
    */
   height?: string
+  /**
+   * On the panel itself, for an app that draws its sheets in its own style
+   * (Med School's chamfered, dark ones). Everyone else gets the default.
+   */
+  className?: string
 }) {
   const dragControls = useDragControls()
   const desktop = useDesktop()
@@ -104,7 +110,7 @@ export function Sheet({
             <motion.div
               role="dialog"
               aria-modal="true"
-              className="fixed left-1/2 top-1/2 z-[81] flex w-[min(640px,calc(100vw-48px))] flex-col overflow-hidden"
+              className={`fixed left-1/2 top-1/2 z-[81] flex w-[min(640px,calc(100vw-48px))] flex-col overflow-hidden ${className ?? ''}`}
               initial={{ opacity: 0, scale: 0.96, x: '-50%', y: '-48%' }}
               animate={{ opacity: 1, scale: 1, x: '-50%', y: '-50%' }}
               exit={{ opacity: 0, scale: 0.97, x: '-50%', y: '-49%' }}
@@ -130,7 +136,7 @@ export function Sheet({
             </motion.div>
           ) : (
             <motion.div
-              className="fixed inset-x-0 bottom-0 z-[81] flex flex-col safe-bottom"
+              className={`fixed inset-x-0 bottom-0 z-[81] flex flex-col safe-bottom ${className ?? ''}`}
               initial={{ y: '100%' }}
               animate={{ y: 0 }}
               exit={{ y: '100%' }}

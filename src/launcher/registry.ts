@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
 import type { IconName } from '@/components/primitives/Icon'
 import { WatchedLogo } from '@/apps/watched/Logo'
+import { MedSchoolLogo } from '@/apps/medschool/Logo'
 
 /**
  * Every app the launcher knows about.
@@ -47,6 +48,16 @@ export interface AppDef {
    * the Owe list by default.
    */
   defaultForEveryone?: boolean
+  /**
+   * Shown only to members with an explicit grant — owners included, who
+   * otherwise see everything.
+   *
+   * For an app that belongs to one person rather than the household. It is a
+   * display rule: the database still answers to `has_app()`, which lets
+   * owners and the shared household sign-in read the rows. It keeps the tile
+   * and the alerts where they belong, not the data from someone determined.
+   */
+  explicitGrant?: boolean
 }
 
 export const APPS: AppDef[] = [
@@ -108,6 +119,18 @@ export const APPS: AppDef[] = [
     platforms: ['android', 'web'],
     // Not for everyone by default: what the household owns and what it paid
     // is the owners' to share.
+  },
+  {
+    id: 'medschool',
+    name: 'Med School 2028',
+    blurb: 'MCAT, the committee file and every deadline to 2028',
+    icon: 'cap',
+    logo: MedSchoolLogo,
+    color: '#2a7dff',
+    platforms: ['android', 'web'],
+    // One person's plan: granted to them, and shown to nobody else — not
+    // even the other owner — unless they're granted it too.
+    explicitGrant: true,
   },
   {
     id: 'bluetooth',

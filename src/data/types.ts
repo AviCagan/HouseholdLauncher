@@ -737,3 +737,221 @@ export interface InventoryItem {
   created_at: string
   updated_at: string
 }
+
+// ---------------------------------------------------------------------------
+// Med School 2028
+// ---------------------------------------------------------------------------
+
+/**
+ * One person's medical school plan. See supabase/025_medschool.sql. Every
+ * row comes in through the app's Import; nothing personal is in the code.
+ *
+ * Dates are calendar days, `YYYY-MM-DD`, read in the phone's own time zone.
+ */
+
+/** Where an anchored task's date comes from. See apps/medschool/dates.ts. */
+export type MsAnchor =
+  | 'T'
+  | 'score'
+  | 'd60'
+  | 'd30'
+  | 'd10'
+  | 'contentStart'
+  | 'practice'
+  | 'fl'
+  | 'taper'
+  | 'csiFile'
+  | 'csiInterview'
+  | 'csiLetter'
+  | 'studyBlock1End'
+  | 'studyBlock2End'
+  | 'studyBlock3End'
+  | 'studyBlock4End'
+
+export interface MsCalendarRow {
+  testDate: string
+  scoreRelease: string
+  deadline60: string
+  deadline30: string
+  deadline10: string
+  selectCentersOnly?: boolean
+}
+
+export interface MsContact {
+  name: string
+  role?: string
+  room?: string
+  phone?: string
+  email?: string
+}
+
+/**
+ * The parts of the plan that are read and never edited in the app, kept as
+ * the plan had them so an Export gives back what an Import was given. All
+ * optional: the app shows what's there.
+ */
+export interface MsReference {
+  snapshotDate?: string
+  about?: string
+  /** Day study proper begins; anchors `contentStart`. */
+  contentStart?: string
+  testCenter?: string | null
+  commencement?: { date: string; time?: string; place?: string; note?: string }
+  schedulingPreference?: string
+  mcatCalendar2027?: MsCalendarRow[]
+  mcatFees?: {
+    registration?: number
+    feeAssistanceRegistration?: number
+    reschedule?: Record<string, number | string>
+    cancelRefund?: Record<string, number>
+  }
+  letterStatuses?: string[]
+  committee?: { rules?: string[]; requirements?: string[]; contacts?: MsContact[] }
+  record?: {
+    source?: string
+    notes?: string[]
+    openRequirement?: string
+    gpaRules?: {
+      scale?: Record<string, number>
+      excluded?: string[]
+      amcasScience?: string
+      aacomasScience?: string
+      ambiguous?: string
+    }
+    [key: string]: unknown
+  }
+  decisions?: string[]
+  studyMethod?: string[]
+  studyBlocks?: { id: string; title: string; focus?: string }[]
+  resources?: string[]
+  testDayRules?: string[]
+  people?: { name: string; role?: string }[]
+  links?: Record<string, unknown>
+  [key: string]: unknown
+}
+
+export interface MsSettings {
+  singleton: true
+  test_date: string | null
+  booked: boolean
+  order_number: string | null
+  target_score: number | null
+  show_estimated: boolean
+  reference: MsReference
+  updated_by: string | null
+  updated_at: string
+}
+
+export interface MsTask {
+  id: string
+  title: string
+  area: string
+  due_fixed: string | null
+  due_anchor: MsAnchor | null
+  due_offset: number
+  /** Resolved for the current test date, kept current by the app. */
+  due_on: string | null
+  hard: boolean
+  estimated: boolean
+  note: string | null
+  builtin: boolean
+  hidden: boolean
+  done_at: string | null
+  done_by: string | null
+  reminded_early_for: string | null
+  reminded_day_for: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface MsCounter {
+  id: string
+  label: string
+  unit: string
+  target: number
+  undated: number
+  note: string | null
+  cap: number | null
+  cap_note: string | null
+  sort: number
+  updated_at: string
+}
+
+export interface MsCounterLog {
+  id: string
+  counter_id: string
+  on_date: string
+  amount: number
+  note: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface MsEligibility {
+  id: string
+  title: string
+  note: string | null
+  met: boolean
+  /** The same thing as this task; its done state is the answer. */
+  task_id: string | null
+  sort: number
+  updated_at: string
+}
+
+export type MsLetterStatus = 'not_asked' | 'asked' | 'agreed' | 'received'
+
+export interface MsLetter {
+  id: string
+  title: string
+  note: string | null
+  status: MsLetterStatus
+  asked_on: string | null
+  agreed_on: string | null
+  received_on: string | null
+  sort: number
+  updated_at: string
+}
+
+export type MsCategory = 'bio' | 'chem' | 'phys' | 'math' | 'other'
+
+export interface MsCourse {
+  id: string
+  term: string
+  code: string
+  title: string | null
+  grade: string | null
+  credits: number
+  category: MsCategory
+  category_note: string | null
+  /** Counted as science here, but the application service might not. */
+  maybe_nonscience: boolean
+  imported: boolean
+  sort: number
+  updated_at: string
+}
+
+export interface MsPractice {
+  id: string
+  taken_on: string
+  source: string | null
+  total: number | null
+  cp: number | null
+  cars: number | null
+  bb: number | null
+  ps: number | null
+  note: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface MsQuestion {
+  id: string
+  text: string
+  done: boolean
+  done_at: string | null
+  sort: number
+  updated_at: string
+}

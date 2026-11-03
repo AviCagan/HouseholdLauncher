@@ -1,0 +1,724 @@
+/*
+  Med School 2028 — the light grid.
+
+  Every other app in the launcher is soft and friendly. This one is a dark,
+  precise world drawn in light: blue-white traces on near-black, a grid
+  floor running to a glowing horizon, panels with their corners cut off
+  rather than rounded, progress that moves like a light trail. The contrast
+  with the rest of the launcher is the point.
+
+  Dark only, whatever the launcher's theme: it's a world, not a skin. Every
+  colour is set here, and the launcher's own tokens are re-pointed inside
+  `.lgrid` so the shared sheets and controls land on the right surfaces.
+
+  Scoped under `.lgrid`, like `.lex` and `.inv`, so nothing leaks out.
+
+  Motion budget: only transform and opacity animate. Glows are static
+  shadows on a few things that are live or can be pressed — never on plain
+  text — so they read as signal rather than decoration.
+*/
+
+@layer theme, base, components, utilities;
+
+.lgrid {
+  --lg-void: #02060c;
+  --lg-deep: #061222;
+  --lg-raise: #0b1d33;
+  --lg-trace: #123a5e;
+  --lg-cyan: #41e3ff;
+  --lg-blue: #2a7dff;
+  --lg-ice: #e6fbff;
+  --lg-dim: #86a8c4;
+  --lg-warn: #ff7a1f;
+
+  --lg-panel: rgb(6 18 34 / 0.85);
+  --lg-cut: 10px;
+  --lg-display: 'Oxanium', 'Rajdhani', 'Arial Narrow', system-ui, sans-serif;
+  --lg-body: 'Exo 2', system-ui, sans-serif;
+  --lg-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --lg-glow: 0 0 6px rgb(65 227 255 / 0.55), 0 0 18px rgb(42 125 255 / 0.3);
+  --lg-glow-warn: 0 0 6px rgb(255 122 31 / 0.6), 0 0 16px rgb(255 122 31 / 0.25);
+
+  /* The launcher's tokens, for the shared Sheet and anything else borrowed. */
+  --bg: var(--lg-void);
+  --bg-elevated: var(--lg-deep);
+  --surface: var(--lg-deep);
+  --surface-2: var(--lg-raise);
+  --surface-3: #0e2440;
+  --border: var(--lg-trace);
+  --border-strong: #1e5585;
+  --text: var(--lg-ice);
+  --text-dim: var(--lg-dim);
+  --text-faint: var(--lg-dim);
+  --accent: var(--lg-blue);
+  --ok: var(--lg-cyan);
+  --shadow-lg: 0 -1px 0 var(--lg-cyan), 0 -12px 40px rgb(0 0 0 / 0.6);
+  /* SwipeRow's card: square, no shadow, the row draws its own rule. */
+  --radius: 0px;
+  --card-border: 0;
+  --card-shadow: none;
+
+  color: var(--lg-ice);
+  background: var(--lg-void);
+  font-family: var(--lg-body);
+  font-weight: 400;
+  line-height: 1.45;
+  color-scheme: dark;
+}
+
+/* --- type ------------------------------------------------------------------------ */
+
+.lgrid .lg-display {
+  font-family: var(--lg-display);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.lgrid .lg-label {
+  font-family: var(--lg-display);
+  font-weight: 600;
+  font-size: 11.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--lg-dim);
+}
+.lgrid .lg-num {
+  font-family: var(--lg-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+.lgrid .lg-dim {
+  color: var(--lg-dim);
+}
+.lgrid .lg-live {
+  color: var(--lg-cyan);
+  text-shadow: var(--lg-glow);
+}
+.lgrid .lg-warn-text {
+  color: var(--lg-warn);
+}
+
+/* Focus is light, like everything else here. */
+.lgrid :focus-visible {
+  outline: 2px solid var(--lg-cyan);
+  outline-offset: 2px;
+}
+
+/* --- panels ---------------------------------------------------------------------- */
+
+/*
+  Two opposite corners cut off. The clip takes the border with it, so each
+  cut gets its own hairline drawn back in by a pseudo-element.
+*/
+.lgrid .lg-panel {
+  position: relative;
+  background: var(--lg-panel);
+  border: 1px solid var(--lg-trace);
+  border-radius: 0;
+  clip-path: polygon(
+    var(--lg-cut) 0,
+    100% 0,
+    100% calc(100% - var(--lg-cut)),
+    calc(100% - var(--lg-cut)) 100%,
+    0 100%,
+    0 var(--lg-cut)
+  );
+}
+.lgrid .lg-panel::before,
+.lgrid .lg-panel::after {
+  content: '';
+  position: absolute;
+  height: 1px;
+  width: calc(var(--lg-cut) * 1.4142);
+  background: var(--lg-trace);
+  transform-origin: left center;
+  transform: rotate(-45deg);
+  pointer-events: none;
+}
+.lgrid .lg-panel::before {
+  left: -1px;
+  top: calc(var(--lg-cut) - 1.5px);
+}
+.lgrid .lg-panel::after {
+  left: calc(100% - var(--lg-cut) - 0.5px);
+  top: calc(100% - 0.5px);
+}
+/* The edge you can press, lit. */
+.lgrid .lg-panel[data-edge='live'] {
+  border-top-color: var(--lg-cyan);
+}
+.lgrid .lg-panel[data-edge='live']::before {
+  background: var(--lg-cyan);
+}
+.lgrid .lg-panel[data-edge='warn'] {
+  border-left-color: var(--lg-warn);
+}
+
+/* --- the grid floor ---------------------------------------------------------------- */
+
+.lgrid .lg-floor {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+/*
+  The floor is a strip along the bottom of the countdowns, so the gauges
+  stand on it and nothing written above runs into its lines.
+*/
+.lgrid .lg-floor {
+  --horizon: 64px;
+}
+/* The glow where the floor meets the sky. */
+.lgrid .lg-floor::before {
+  content: '';
+  position: absolute;
+  left: -10%;
+  right: -10%;
+  bottom: calc(var(--horizon) - 44px);
+  height: 90px;
+  background: radial-gradient(60% 50% at 50% 50%, rgb(65 227 255 / 0.32), rgb(42 125 255 / 0.12) 45%, transparent 75%);
+}
+.lgrid .lg-floor::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: var(--horizon);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--lg-cyan) 30%, var(--lg-ice) 50%, var(--lg-cyan) 70%, transparent);
+  opacity: 0.75;
+}
+.lgrid .lg-plane-wrap {
+  position: absolute;
+  left: -60%;
+  right: -60%;
+  bottom: 0;
+  height: calc(var(--horizon) - 1px);
+  perspective: 160px;
+  perspective-origin: 50% 0;
+  -webkit-mask-image: linear-gradient(180deg, transparent, #000 30%);
+  mask-image: linear-gradient(180deg, transparent, #000 30%);
+}
+.lgrid .lg-plane {
+  position: absolute;
+  inset: -40px 0 -200px 0;
+  transform-origin: 50% 0;
+  transform: rotateX(62deg);
+  background-image:
+    linear-gradient(90deg, rgb(65 227 255 / 0.55) 1px, transparent 1px),
+    linear-gradient(0deg, rgb(65 227 255 / 0.45) 1px, transparent 1px);
+  background-size: 22px 22px;
+  background-position: 50% 0;
+  animation: lg-drift 5s linear infinite;
+}
+/* One cell's worth of travel, then round again: a seamless loop that only
+   moves a transform. */
+@keyframes lg-drift {
+  from {
+    transform: rotateX(62deg) translateY(0);
+  }
+  to {
+    transform: rotateX(62deg) translateY(22px);
+  }
+}
+
+/* --- controls ---------------------------------------------------------------------- */
+
+.lgrid .lg-btn {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 16px;
+  border: 1px solid var(--lg-trace);
+  background: var(--lg-raise);
+  color: var(--lg-ice);
+  font-family: var(--lg-display);
+  font-weight: 600;
+  font-size: 13.5px;
+  letter-spacing: 0.04em;
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+  transition: transform 120ms ease, opacity 120ms ease;
+}
+.lgrid .lg-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.lgrid .lg-btn:disabled {
+  opacity: 0.4;
+}
+.lgrid .lg-btn--primary {
+  background: var(--lg-blue);
+  border-color: var(--lg-cyan);
+  color: #fff;
+}
+.lgrid .lg-btn--ghost {
+  background: transparent;
+}
+.lgrid .lg-btn--warn {
+  border-color: var(--lg-warn);
+  color: var(--lg-warn);
+  background: transparent;
+}
+.lgrid .lg-btn--small {
+  min-height: 36px;
+  padding: 0 12px;
+  font-size: 12.5px;
+}
+
+.lgrid .lg-icon-btn {
+  display: grid;
+  height: 44px;
+  width: 44px;
+  place-items: center;
+  color: var(--lg-dim);
+}
+
+.lgrid .lg-field {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--lg-trace);
+  border-radius: 2px;
+  background: var(--lg-void);
+  color: var(--lg-ice);
+  font-family: var(--lg-body);
+  font-size: 15px;
+  outline: none;
+}
+.lgrid .lg-field:focus {
+  border-color: var(--lg-cyan);
+  box-shadow: 0 0 0 1px var(--lg-cyan), var(--lg-glow);
+}
+.lgrid textarea.lg-field {
+  line-height: 1.45;
+}
+.lgrid .lg-field--mono {
+  font-family: var(--lg-mono);
+  font-variant-numeric: tabular-nums;
+}
+.lgrid select.lg-field {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--lg-cyan) 50%), linear-gradient(135deg, var(--lg-cyan) 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) 50%,
+    calc(100% - 13px) 50%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 32px;
+}
+.lgrid input[type='date'].lg-field::-webkit-calendar-picker-indicator {
+  filter: invert(0.85) sepia(1) hue-rotate(160deg) saturate(4);
+}
+
+/* A two-state switch. */
+.lgrid .lg-switch {
+  position: relative;
+  display: inline-block;
+  height: 26px;
+  width: 46px;
+  flex-shrink: 0;
+  border: 1px solid var(--lg-trace);
+  background: var(--lg-void);
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+}
+.lgrid .lg-switch > span {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  height: 16px;
+  width: 16px;
+  background: var(--lg-dim);
+  transition: transform 160ms ease, background-color 160ms ease;
+}
+.lgrid .lg-switch[aria-checked='true'] {
+  border-color: var(--lg-cyan);
+}
+.lgrid .lg-switch[aria-checked='true'] > span {
+  transform: translateX(20px);
+  background: var(--lg-cyan);
+  box-shadow: var(--lg-glow);
+}
+
+/* Small tags: status, area, flags. */
+.lgrid .lg-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border: 1px solid var(--lg-trace);
+  font-family: var(--lg-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  line-height: 18px;
+  color: var(--lg-dim);
+  white-space: nowrap;
+}
+.lgrid .lg-chip[data-tone='live'] {
+  border-color: var(--lg-cyan);
+  color: var(--lg-cyan);
+}
+.lgrid .lg-chip[data-tone='warn'] {
+  border-color: var(--lg-warn);
+  color: var(--lg-warn);
+}
+.lgrid .lg-chip[data-tone='ok'] {
+  border-color: var(--lg-blue);
+  color: var(--lg-ice);
+  background: rgb(42 125 255 / 0.18);
+}
+.lgrid .lg-chip[data-tone='solid'] {
+  border-color: var(--lg-cyan);
+  background: var(--lg-cyan);
+  color: var(--lg-void);
+}
+
+/* A filter chip you can press. */
+.lgrid .lg-filter {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--lg-trace);
+  font-family: var(--lg-display);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--lg-dim);
+  white-space: nowrap;
+}
+.lgrid .lg-filter[aria-pressed='true'] {
+  border-color: var(--lg-cyan);
+  color: var(--lg-ice);
+  background: rgb(65 227 255 / 0.12);
+}
+
+/* --- light-trail progress ---------------------------------------------------------- */
+
+/*
+  A thin track; the filled part fades in from behind like the trail of
+  something moving fast, with a white-hot head at the leading edge.
+*/
+.lgrid .lg-trail {
+  position: relative;
+  height: 3px;
+  background: var(--lg-trace);
+}
+.lgrid .lg-trail-fill {
+  position: absolute;
+  inset: 0;
+  transform-origin: left center;
+  background: linear-gradient(90deg, transparent, rgb(42 125 255 / 0.55) 55%, var(--lg-cyan));
+  transition: transform 400ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.lgrid .lg-trail-head {
+  position: absolute;
+  top: 50%;
+  height: 7px;
+  width: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  background: var(--lg-ice);
+  box-shadow: var(--lg-glow);
+}
+.lgrid .lg-trail-mark {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 1px;
+  background: var(--lg-warn);
+}
+
+/* --- circuit timeline ------------------------------------------------------------ */
+
+/*
+  Each row carries its own stretch of the trace down the left, so the line
+  is continuous however the rows are drawn over it, and the stretch running
+  into a node lights up when that task is done.
+*/
+.lgrid .lg-step {
+  position: relative;
+  display: flex;
+}
+.lgrid .lg-step-col {
+  position: relative;
+  display: flex;
+  width: 44px;
+  flex-shrink: 0;
+  justify-content: center;
+  align-self: stretch;
+  padding-top: 2px;
+}
+.lgrid .lg-step-col::before {
+  content: '';
+  position: absolute;
+  left: 21.5px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--lg-trace);
+}
+.lgrid .lg-step[data-first='true'] .lg-step-col::before {
+  top: 24px;
+}
+.lgrid .lg-step[data-last='true'] .lg-step-col::before {
+  bottom: auto;
+  height: 24px;
+}
+.lgrid .lg-step-lit {
+  position: absolute;
+  left: 21.5px;
+  top: 0;
+  height: 24px;
+  width: 1px;
+  background: var(--lg-cyan);
+  box-shadow: 0 0 4px var(--lg-cyan);
+  transform-origin: top center;
+  transform: scaleY(0);
+  transition: transform 200ms ease-out;
+}
+.lgrid .lg-step[data-done='true'] .lg-step-lit {
+  transform: scaleY(1);
+}
+
+.lgrid .lg-node {
+  position: relative;
+  display: grid;
+  height: 44px;
+  width: 44px;
+  flex-shrink: 0;
+  place-items: center;
+}
+.lgrid .lg-node > span {
+  position: relative;
+  height: 13px;
+  width: 13px;
+  border: 1.5px solid var(--lg-cyan);
+  border-radius: 50%;
+  background: var(--lg-void);
+  transition: background-color 200ms ease, transform 200ms ease;
+}
+.lgrid .lg-node[data-hard='true'] > span {
+  box-shadow:
+    0 0 0 2.5px var(--lg-void),
+    0 0 0 4px var(--lg-cyan);
+}
+.lgrid .lg-node[data-done='true'] > span {
+  background: var(--lg-cyan);
+  box-shadow: var(--lg-glow);
+}
+.lgrid .lg-node[data-done='true'][data-hard='true'] > span {
+  box-shadow:
+    0 0 0 2.5px var(--lg-void),
+    0 0 0 4px var(--lg-cyan),
+    var(--lg-glow);
+}
+.lgrid .lg-node[data-late='true'] > span {
+  border-color: var(--lg-warn);
+  background: var(--lg-warn);
+  box-shadow: var(--lg-glow-warn);
+}
+.lgrid .lg-node[data-late='true'][data-hard='true'] > span {
+  box-shadow:
+    0 0 0 2.5px var(--lg-void),
+    0 0 0 4px var(--lg-warn),
+    var(--lg-glow-warn);
+}
+/* Overdue pulses, slowly: a ring that grows and fades. */
+.lgrid .lg-node[data-late='true'] > span::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border: 1px solid var(--lg-warn);
+  border-radius: 50%;
+  animation: lg-pulse 2.4s ease-out infinite;
+}
+@keyframes lg-pulse {
+  from {
+    transform: scale(0.7);
+    opacity: 0.9;
+  }
+  to {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+/* --- the dock ---------------------------------------------------------------------- */
+
+.lgrid .lg-dock {
+  position: relative;
+  border-top: 1px solid var(--lg-trace);
+  background: rgb(2 6 12 / 0.94);
+}
+.lgrid .lg-tab {
+  position: relative;
+  display: flex;
+  min-height: 56px;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  color: var(--lg-dim);
+  font-family: var(--lg-display);
+  font-weight: 600;
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.lgrid .lg-tab[aria-current='page'] {
+  color: var(--lg-ice);
+}
+.lgrid .lg-tab[aria-current='page']::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 22%;
+  right: 22%;
+  height: 2px;
+  background: var(--lg-cyan);
+  box-shadow: var(--lg-glow);
+}
+.lgrid .lg-tab[aria-current='page'] svg {
+  color: var(--lg-cyan);
+  filter: drop-shadow(0 0 4px rgb(65 227 255 / 0.7));
+}
+
+/* --- sheets ------------------------------------------------------------------------ */
+
+.lgrid .lg-sheet {
+  border-radius: 0 !important;
+  background: var(--lg-deep) !important;
+  border: 1px solid var(--lg-trace) !important;
+  border-top-color: var(--lg-cyan) !important;
+  clip-path: polygon(14px 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%, 0 14px);
+}
+.lgrid .lg-sheet h2 {
+  font-family: var(--lg-display);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-size: 15px;
+}
+.lgrid .lg-sheet button[aria-label='Close'] {
+  border-radius: 0 !important;
+  height: 44px !important;
+  width: 44px !important;
+  background: transparent !important;
+}
+
+/* --- rez-in --------------------------------------------------------------------------- */
+
+/*
+  The first open of a session: the grid draws in, then the panels resolve
+  behind a quick scanline. Never again that session, and never at all with
+  reduced motion.
+*/
+.lgrid[data-rez='true'] .lg-plane-wrap {
+  animation: lg-grid-in 520ms ease-out both;
+}
+.lgrid[data-rez='true'] .lg-rez {
+  animation: lg-panel-in 380ms ease-out both;
+  animation-delay: calc(240ms + var(--rez-i, 0) * 45ms);
+}
+.lgrid[data-rez='true'] .lg-scan {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  overflow: hidden;
+}
+.lgrid[data-rez='true'] .lg-scan::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  background: var(--lg-ice);
+  box-shadow: var(--lg-glow);
+  animation: lg-scan 620ms ease-in-out both;
+}
+@keyframes lg-grid-in {
+  from {
+    opacity: 0;
+    transform: scaleY(0.2);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+@keyframes lg-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes lg-scan {
+  from {
+    transform: translateX(-4px);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100vw);
+    opacity: 0.2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lgrid .lg-plane,
+  .lgrid .lg-node > span::after {
+    animation: none !important;
+  }
+  .lgrid[data-rez='true'] .lg-rez,
+  .lgrid[data-rez='true'] .lg-plane-wrap {
+    animation: none !important;
+  }
+  .lgrid .lg-scan {
+    display: none;
+  }
+}
+:root[data-reduce-motion='true'] .lgrid .lg-plane,
+:root[data-reduce-motion='true'] .lgrid .lg-node > span::after,
+:root[data-reduce-motion='true'] .lgrid[data-rez='true'] .lg-rez {
+  animation: none !important;
+}
+:root[data-reduce-motion='true'] .lgrid .lg-scan {
+  display: none;
+}
+
+/*
+  The launcher's toasts live outside the app, so they're dressed for the
+  grid only while it's on screen — and go back to normal when it isn't.
+*/
+body:has(.lgrid) [data-sonner-toast] {
+  border-radius: 0 !important;
+  background: #061222 !important;
+  color: #e6fbff !important;
+  border: 1px solid #123a5e !important;
+  border-top-color: #41e3ff !important;
+  font-family: 'Exo 2', system-ui, sans-serif !important;
+}
+body:has(.lgrid) [data-sonner-toast] [data-description] {
+  color: #86a8c4 !important;
+}
+body:has(.lgrid) [data-sonner-toast] [data-button] {
+  border-radius: 0 !important;
+  background: #2a7dff !important;
+  color: #fff !important;
+  font-family: 'Oxanium', system-ui, sans-serif !important;
+  font-weight: 600 !important;
+}
+body:has(.lgrid) [data-sonner-toast][data-type='error'] {
+  border-top-color: #ff7a1f !important;
+}
+
+/* Small hairline rule between rows. */
+.lgrid .lg-rule {
+  border-top: 1px solid var(--lg-trace);
+}
