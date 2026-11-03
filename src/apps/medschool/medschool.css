@@ -308,7 +308,8 @@
   background-repeat: no-repeat;
   padding-right: 32px;
 }
-.lgrid input[type='date'].lg-field::-webkit-calendar-picker-indicator {
+.lgrid input[type='date'].lg-field::-webkit-calendar-picker-indicator,
+.lgrid input[type='time'].lg-field::-webkit-calendar-picker-indicator {
   filter: invert(0.85) sepia(1) hue-rotate(160deg) saturate(4);
 }
 

@@ -38,7 +38,7 @@ import {
 import { CATEGORIES, CATEGORY_LABEL, defaultCategory, DEFAULT_SCALE, isOverridden, NON_GPA_GRADES } from './gpa'
 import { LETTER_STATUSES } from './plan'
 import { useMs, useMsUI } from './store'
-import { AREAS, amount, LETTER_LABEL } from './labels'
+import { AREAS, amount, hoursBetween, LETTER_LABEL, timeRange } from './labels'
 import { Chip, Field, SwitchRow } from './ui'
 
 /** Every sheet is the launcher's own, dressed for the grid. */
@@ -299,17 +299,48 @@ export function DateSheet() {
 
 // --- counters --------------------------------------------------------------------
 
+/** How hours were last entered, so the sheet opens the way you use it. */
+const LOG_MODE_KEY = 'ms:log-mode'
+type LogMode = 'times' | 'hours'
+
+function savedLogMode(): LogMode {
+  try {
+    return localStorage.getItem(LOG_MODE_KEY) === 'hours' ? 'hours' : 'times'
+  } catch {
+    return 'times'
+  }
+}
+
+/**
+ * Log hours, or a meeting. Hours can be typed in, or worked out from when
+ * you got there and when you left — and then the times go in the note, the
+ * way the log has always recorded them.
+ */
 export function LogSheet({ counterId }: { counterId: string }) {
   const close = useMsUI((s) => s.close)
   const counter = useData((s) => s.ms_counters.find((c) => c.id === counterId))
   const today = todayDay()
   const meetings = counter?.unit !== 'h'
   const [date, setDate] = useState(meetings ? lastTuesday(today) : today)
+  const [mode, setMode] = useState<LogMode>(savedLogMode)
   const [hours, setHours] = useState('')
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
   const [note, setNote] = useState('')
   if (!counter) return null
-  const value = meetings ? 1 : Number(hours)
+  const fromTimes = hoursBetween(from, to)
+  const value = meetings ? 1 : mode === 'times' ? (fromTimes ?? 0) : Number(hours)
   const valid = isDay(date) && value > 0 && value <= 24
+  const overnight = mode === 'times' && from && to && to < from
+  const choose = (next: LogMode) => {
+    setMode(next)
+    try {
+      localStorage.setItem(LOG_MODE_KEY, next)
+    } catch {
+      // Private storage off: it just opens on the default next time.
+    }
+  }
+  const noteToSave = !meetings && mode === 'times' && fromTimes ? [note.trim(), timeRange(from, to)].filter(Boolean).join(', ') : note
 
   return (
     <MsSheet title={meetings ? 'Log a meeting' : `Log ${counter.label.toLowerCase()}`} onClose={close}>
@@ -318,9 +349,42 @@ export function LogSheet({ counterId }: { counterId: string }) {
           <input type="date" className="lg-field lg-field--mono" value={date} max={today} onChange={(e) => setDate(e.target.value)} />
         </Field>
         {!meetings && (
-          <Field label="Hours">
-            <input className="lg-field lg-field--mono" inputMode="decimal" value={hours} onChange={(e) => setHours(e.target.value)} />
-          </Field>
+          <div>
+            <div className="mb-3 flex gap-1.5" role="group" aria-label="How to enter the hours">
+              <button type="button" className="lg-filter flex-1" aria-pressed={mode === 'times'} onClick={() => choose('times')}>
+                From – to
+              </button>
+              <button type="button" className="lg-filter flex-1" aria-pressed={mode === 'hours'} onClick={() => choose('hours')}>
+                Hours
+              </button>
+            </div>
+            {mode === 'times' ? (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  <Field label="From">
+                    <input type="time" className="lg-field lg-field--mono" value={from} onChange={(e) => setFrom(e.target.value)} />
+                  </Field>
+                  <Field label="To">
+                    <input type="time" className="lg-field lg-field--mono" value={to} onChange={(e) => setTo(e.target.value)} />
+                  </Field>
+                </div>
+                <p className="mt-2 text-[13.5px]" aria-live="polite">
+                  {fromTimes ? (
+                    <>
+                      <span className="lg-num lg-live text-[16px]">{amount(fromTimes, 'h')}</span>
+                      {overnight && <span className="lg-dim"> · past midnight</span>}
+                    </>
+                  ) : (
+                    <span className="lg-dim">Pick when you got there and when you left.</span>
+                  )}
+                </p>
+              </>
+            ) : (
+              <Field label="Hours">
+                <input className="lg-field lg-field--mono" inputMode="decimal" value={hours} onChange={(e) => setHours(e.target.value)} />
+              </Field>
+            )}
+          </div>
         )}
         <Field label="Note">
           <input className="lg-field" value={note} onChange={(e) => setNote(e.target.value)} />
@@ -332,7 +396,7 @@ export function LogSheet({ counterId }: { counterId: string }) {
           className="lg-btn lg-btn--primary"
           disabled={!valid}
           onClick={() => {
-            void addLog(counter, date, value, note).then((ok) => {
+            void addLog(counter, date, value, noteToSave).then((ok) => {
               if (ok) {
                 toast.success(meetings ? 'Meeting logged' : `${amount(value, 'h')} logged`)
                 close()
