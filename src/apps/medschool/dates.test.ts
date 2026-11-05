@@ -180,6 +180,14 @@ describe('study phases', () => {
   const a = computeAnchors(row('2027-05-07'))
   const phases = studyPhases(a, '2026-11-02', [{ id: 'm-b2', title: 'Biochem & orgo', focus: 'Enzymes' }])
 
+  it('gives the light start its own words and hours when the plan has them', () => {
+    const withLight = studyPhases(a, '2026-11-05', [{ id: 'm-light', title: 'Light start', focus: 'A few questions a day', hoursPerWeek: '6–8' }])
+    expect(withLight[0]).toMatchObject({ id: 'light', start: '2026-11-05', end: '2027-01-03', focus: 'A few questions a day', hoursPerWeek: '6–8' })
+    // Without an entry it is as before: no focus, no hours.
+    expect(phases[0].focus).toBeUndefined()
+    expect(phases[0].hoursPerWeek).toBeUndefined()
+  })
+
   it('runs from the light start to test day with no gaps', () => {
     expect(phases.map((p) => p.id)).toEqual(['light', 'block1', 'block2', 'block3', 'block4', 'practice', 'fl', 'taper', 'test'])
     for (let i = 1; i < phases.length; i++) expect(phases[i].start).toBe(addDays(phases[i - 1].end, 1))

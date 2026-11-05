@@ -212,6 +212,9 @@ function ExportSection() {
       courses: s.ms_courses,
       practice: s.ms_practice,
       questions: s.ms_questions,
+      experiences: s.ms_experiences,
+      expLogs: s.ms_experience_logs,
+      expSteps: s.ms_experience_steps,
     })
   }
   return (

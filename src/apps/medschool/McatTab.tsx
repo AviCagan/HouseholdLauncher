@@ -85,6 +85,12 @@ export function McatTab() {
                       <Trail value={phaseProgress(p, today)} max={1} label={`Through ${p.label}`} />
                     </div>
                   )}
+                  {p.hoursPerWeek && (
+                    <p className="lg-num mt-1 text-[12px]">
+                      <span className={on ? 'lg-live' : ''}>{p.hoursPerWeek} h</span>
+                      <span className="lg-dim"> a week</span>
+                    </p>
+                  )}
                   {p.focus && <p className="lg-dim mt-1 text-[12.5px] leading-snug">{p.focus}</p>}
                 </li>
               )

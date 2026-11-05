@@ -4,7 +4,9 @@ import { fire } from '@/lib/haptics'
 import type { MsCounter } from '@/data/types'
 import { shortDay } from './dates'
 import { addQuestion, advanceLetter, loggedFor, removeLog, removeQuestion, toggleEligibility, toggleQuestion } from './actions'
-import { useCounters, useMs, useMsUI } from './store'
+import { useCounters, useExperiences, useExperiencesLive, useMs, useMsUI } from './store'
+import { TargetsPanel } from './ExperiencesTab'
+import { targetTotals } from './experiences'
 import { Chip, CopyText, Lines, Panel, Trail } from './ui'
 import { amount, LETTER_LABEL } from './labels'
 
@@ -14,14 +16,19 @@ export function FileTab() {
   const { settings } = useMs()
   const ref = settings?.reference ?? {}
   const committee = ref.committee ?? {}
+  const live = useExperiencesLive()
 
   return (
     <div className="flex flex-col gap-3 pb-6">
-      <div className="grid gap-3 lg:grid-cols-3">
-        {counters.map((c, i) => (
-          <CounterPanel key={c.id} counter={c} rez={i} />
-        ))}
-      </div>
+      {live ? (
+        <ExperienceTargets />
+      ) : (
+        <div className="grid gap-3 lg:grid-cols-3">
+          {counters.map((c, i) => (
+            <CounterPanel key={c.id} counter={c} rez={i} />
+          ))}
+        </div>
+      )}
       <div className="grid gap-3 lg:grid-cols-2">
         <EligibilityPanel />
         <LettersPanel />
@@ -78,6 +85,30 @@ export function FileTab() {
           </details>
         </Panel>
       )}
+    </div>
+  )
+}
+
+/** The committee's targets, filled from the experiences counting towards them. */
+function ExperienceTargets() {
+  const counters = useCounters()
+  const experiences = useExperiences()
+  const logs = useData((s) => s.ms_experience_logs)
+  const setTab = useMsUI((s) => s.setTab)
+  const targets = useMemo(() => targetTotals(counters, experiences, logs), [counters, experiences, logs])
+  return (
+    <div className="flex flex-col gap-2">
+      <TargetsPanel targets={targets} title="Hours and meetings" />
+      <button
+        type="button"
+        className="lg-btn lg-btn--small lg-btn--ghost self-start"
+        onClick={() => {
+          fire('snap')
+          setTab('exp')
+        }}
+      >
+        Every experience, its log and its letter →
+      </button>
     </div>
   )
 }

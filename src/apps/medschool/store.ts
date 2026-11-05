@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import { create } from 'zustand'
 import { useData } from '@/store/useData'
-import type { MsCounter, MsCourse, MsPractice, MsSettings, MsTask } from '@/data/types'
+import type { MsCounter, MsCourse, MsExperience, MsExperienceKind, MsPractice, MsSettings, MsTask } from '@/data/types'
 import { anchorsFor, dueStatus, resolveDue, todayDay, type Anchors, type Day, type DueStatus } from './dates'
+import { sortExperiences } from './experiences'
 
 /**
  * Which tab is showing and which sheet is up. Sheets stack — the settings
  * sheet can open a task on top of itself — and only the top one is drawn.
  */
 
-export type MsTab = 'hud' | 'timeline' | 'file' | 'mcat' | 'record'
+export type MsTab = 'hud' | 'timeline' | 'exp' | 'file' | 'mcat' | 'record'
 
 export type MsSheet =
   | { kind: 'task'; taskId: string | null }
@@ -20,6 +21,15 @@ export type MsSheet =
   | { kind: 'course'; courseId: string | null; term?: string }
   | { kind: 'practice'; practiceId: string | null }
   | { kind: 'letter'; letterId: string }
+  /** An experience: its log, checklist and details. */
+  | { kind: 'experience'; experienceId: string }
+  /** Add one (experienceId null, starting as `preset`) or edit its details. */
+  | { kind: 'experience-edit'; experienceId: string | null; preset?: MsExperienceKind }
+  /**
+   * Log to an experience, or edit an entry. With no experience the sheet
+   * picks the one logged to last — the HUD's quick log.
+   */
+  | { kind: 'explog'; experienceId: string | null; logId?: string | null }
 
 interface MsUI {
   tab: MsTab
@@ -108,4 +118,20 @@ export const useCourses = (): MsCourse[] => useData((s) => s.ms_courses)
 export function usePractice(): MsPractice[] {
   const practice = useData((s) => s.ms_practice)
   return useMemo(() => [...practice].sort((a, b) => a.taken_on.localeCompare(b.taken_on)), [practice])
+}
+
+/** Every experience, going ones first. */
+export function useExperiences(): MsExperience[] {
+  const list = useData((s) => s.ms_experiences)
+  return useMemo(() => sortExperiences(list), [list])
+}
+
+/**
+ * Whether the experiences tables are there and in use. Until they are, the
+ * File tab and the HUD keep showing the old counters.
+ */
+export function useExperiencesLive(): boolean {
+  const missing = useData((s) => s.missingTables.includes('ms_experiences'))
+  const any = useData((s) => s.ms_experiences.length > 0)
+  return !missing && any
 }

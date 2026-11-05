@@ -19,6 +19,9 @@ import type {
   MsLetter,
   MsPractice,
   MsQuestion,
+  MsExperience,
+  MsExperienceLog,
+  MsExperienceStep,
   MsSettings,
   MsTask,
   Profile,
@@ -78,6 +81,10 @@ export const TABLES = [
   'ms_courses',
   'ms_practice',
   'ms_questions',
+  // Med School experiences (026).
+  'ms_experiences',
+  'ms_experience_logs',
+  'ms_experience_steps',
 ] as const
 
 export type TableName = (typeof TABLES)[number]
@@ -117,6 +124,9 @@ export interface TableMap {
   ms_courses: MsCourse
   ms_practice: MsPractice
   ms_questions: MsQuestion
+  ms_experiences: MsExperience
+  ms_experience_logs: MsExperienceLog
+  ms_experience_steps: MsExperienceStep
 }
 
 export type ChangeEvent<T extends TableName = TableName> =

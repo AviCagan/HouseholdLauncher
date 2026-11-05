@@ -16,6 +16,8 @@ import { useMsUI, type MsTab } from './store'
 import { HudTab } from './HudTab'
 import { TimelineTab } from './TimelineTab'
 import { FileTab } from './FileTab'
+import { ExperiencesTab } from './ExperiencesTab'
+import { ExperienceEditSheet, ExperienceSheet, ExpLogSheet } from './expSheets'
 import { McatTab } from './McatTab'
 import { RecordTab } from './RecordTab'
 import { SettingsSheet } from './SettingsSheet'
@@ -28,9 +30,11 @@ import { Panel, TabGlyph } from './ui'
  * and supabase/025_medschool.sql for the tables.
  */
 
-const TABS: { id: MsTab; label: string }[] = [
+const TABS: { id: MsTab; label: string; short?: string }[] = [
   { id: 'hud', label: 'HUD' },
   { id: 'timeline', label: 'Timeline' },
+  // Too long for a sixth of a phone's width; the glyph carries it there.
+  { id: 'exp', label: 'Experiences', short: 'Exp' },
   { id: 'file', label: 'File' },
   { id: 'mcat', label: 'MCAT' },
   { id: 'record', label: 'Record' },
@@ -149,6 +153,7 @@ export function MedSchoolApp() {
             <>
               {tab === 'hud' && <HudTab />}
               {tab === 'timeline' && <TimelineTab />}
+              {tab === 'exp' && <ExperiencesTab />}
               {tab === 'file' && <FileTab />}
               {tab === 'mcat' && <McatTab />}
               {tab === 'record' && <RecordTab />}
@@ -162,7 +167,14 @@ export function MedSchoolApp() {
           {TABS.map((t) => (
             <button key={t.id} type="button" className="lg-tab" aria-current={tab === t.id ? 'page' : undefined} onClick={() => go(t.id)}>
               <TabGlyph tab={t.id} />
-              {t.label}
+              {t.short ? (
+                <>
+                  <span className="sm:hidden">{t.short}</span>
+                  <span className="hidden sm:inline">{t.label}</span>
+                </>
+              ) : (
+                t.label
+              )}
             </button>
           ))}
         </div>
@@ -176,6 +188,11 @@ export function MedSchoolApp() {
       {top?.kind === 'course' && <CourseSheet key={`${stack.length}:${top.courseId}`} courseId={top.courseId} term={top.term} />}
       {top?.kind === 'practice' && <PracticeSheet key={`${stack.length}:${top.practiceId}`} practiceId={top.practiceId} />}
       {top?.kind === 'letter' && <LetterSheet key={`${stack.length}:${top.letterId}`} letterId={top.letterId} />}
+      {top?.kind === 'experience' && <ExperienceSheet key={`${stack.length}:${top.experienceId}`} experienceId={top.experienceId} />}
+      {top?.kind === 'experience-edit' && (
+        <ExperienceEditSheet key={`${stack.length}:${top.experienceId}`} experienceId={top.experienceId} preset={top.preset} />
+      )}
+      {top?.kind === 'explog' && <ExpLogSheet key={`${stack.length}:${top.experienceId}:${top.logId}`} experienceId={top.experienceId} logId={top.logId} />}
     </div>
   )
 }

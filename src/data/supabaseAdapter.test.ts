@@ -66,14 +66,18 @@ describe('supabase adapter: realtime', () => {
     const watched = channels.find((c) => c.name === 'household-watched')!
     const views = channels.find((c) => c.name === 'household-watched-views')!
     const medschool = channels.find((c) => c.name === 'household-medschool')!
+    const experiences = channels.find((c) => c.name === 'household-medschool-experiences')!
     expect(views.tables).toEqual(VIEWS)
     expect(watched.tables.sort()).toEqual([...WATCH].sort())
     expect(main.tables.some((t) => WATCH.includes(t) || VIEWS.includes(t))).toBe(false)
     // Med School too: its tables arrive with a migration of their own.
     expect(medschool.tables.every((t) => t.startsWith('ms_'))).toBe(true)
     expect(main.tables.some((t) => t.startsWith('ms_'))).toBe(false)
+    // And its experiences (026) apart from the rest of it.
+    expect(experiences.tables.sort()).toEqual(['ms_experience_logs', 'ms_experience_steps', 'ms_experiences'])
+    expect(medschool.tables.some((t) => t.startsWith('ms_experience'))).toBe(false)
     // Every table is listened to exactly once.
-    expect([...main.tables, ...watched.tables, ...views.tables, ...medschool.tables].sort()).toEqual([...TABLES].sort())
+    expect([...main.tables, ...watched.tables, ...views.tables, ...medschool.tables, ...experiences.tables].sort()).toEqual([...TABLES].sort())
     stop()
   })
 

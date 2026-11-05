@@ -37,6 +37,8 @@ const OWN_CHANNEL: Record<string, readonly TableName[]> = {
     'ms_practice',
     'ms_questions',
   ],
+  // A later migration (026) than the rest of Med School, so its own channel.
+  'medschool-experiences': ['ms_experiences', 'ms_experience_logs', 'ms_experience_steps'],
 }
 
 function realtimeChannels(): [name: string, tables: readonly TableName[]][] {

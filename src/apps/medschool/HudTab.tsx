@@ -3,7 +3,9 @@ import { useData } from '@/store/useData'
 import { fire } from '@/lib/haptics'
 import { addDays, isDay, nextCountdown, weekdayDay, type CountdownStep } from './dates'
 import { loggedFor } from './actions'
-import { useCounters, useMs, useMsUI, type MsModel } from './store'
+import { useCounters, useExperiences, useExperiencesLive, useMs, useMsUI, type MsModel } from './store'
+import { TargetsPanel } from './ExperiencesTab'
+import { targetTotals } from './experiences'
 import { TaskRow } from './TaskRow'
 import { Chip, Gauge, Lines, Panel, Trail } from './ui'
 import { amount } from './labels'
@@ -92,6 +94,20 @@ function KeyDate({ label, value, children }: { label: string; value: string | nu
 }
 
 function HoursPanel() {
+  const live = useExperiencesLive()
+  return live ? <ExperienceHours /> : <CounterHours />
+}
+
+/** The targets from the experiences, and the quick log on the last one logged to. */
+function ExperienceHours() {
+  const counters = useCounters()
+  const experiences = useExperiences()
+  const logs = useData((s) => s.ms_experience_logs)
+  const targets = useMemo(() => targetTotals(counters, experiences, logs), [counters, experiences, logs])
+  return <TargetsPanel targets={targets} title="Committee file" compact />
+}
+
+function CounterHours() {
   const counters = useCounters()
   const logs = useData((s) => s.ms_counter_logs)
   const setTab = useMsUI((s) => s.setTab)

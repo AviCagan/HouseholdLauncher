@@ -244,10 +244,12 @@ export function Lines({ items }: { items: string[] }) {
 }
 
 /** The dock's glyphs — thin line drawings, lit when their tab is on. */
-export function TabGlyph({ tab }: { tab: 'hud' | 'timeline' | 'file' | 'mcat' | 'record' }) {
+export function TabGlyph({ tab }: { tab: 'hud' | 'timeline' | 'exp' | 'file' | 'mcat' | 'record' }) {
   const paths: Record<typeof tab, string> = {
     hud: 'M4 15a8 8 0 1 1 16 0 M12 15l4-5 M7 15h-1 M18 15h-1',
     timeline: 'M6 3v18 M6 6h12 M6 12h9 M6 18h11 M4.5 6h3 M4.5 12h3 M4.5 18h3',
+    // A clock face with a tick: hours that counted.
+    exp: 'M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18Z M12 7v5l3.5 2',
     file: 'M4 6.5h6l2 2h8v10H4Z M8 13.5h8',
     mcat: 'M12 3v4 M12 17v4 M3 12h4 M17 12h4 M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z',
     record: 'M4 20h16 M6.5 20v-6 M11 20V9 M15.5 20v-8 M20 20V5',

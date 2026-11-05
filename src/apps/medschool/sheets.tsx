@@ -42,7 +42,7 @@ import { AREAS, amount, hoursBetween, LETTER_LABEL, timeRange } from './labels'
 import { Chip, Field, SwitchRow } from './ui'
 
 /** Every sheet is the launcher's own, dressed for the grid. */
-function MsSheet({ title, onClose, children }: { title: ReactNode; onClose: () => void; children: ReactNode }) {
+export function MsSheet({ title, onClose, children }: { title: ReactNode; onClose: () => void; children: ReactNode }) {
   return (
     <Sheet open onClose={onClose} title={title} className="lg-sheet" maxHeight="88vh">
       {children}
@@ -50,7 +50,7 @@ function MsSheet({ title, onClose, children }: { title: ReactNode; onClose: () =
   )
 }
 
-function Actions({ children }: { children: ReactNode }) {
+export function Actions({ children }: { children: ReactNode }) {
   return <div className="mt-5 flex flex-wrap gap-2">{children}</div>
 }
 

@@ -8,6 +8,9 @@ import type {
   MsCounterLog,
   MsCourse,
   MsEligibility,
+  MsExperience,
+  MsExperienceLog,
+  MsExperienceStep,
   MsLetter,
   MsLetterStatus,
   MsPractice,
@@ -17,6 +20,7 @@ import type {
 } from '@/data/types'
 import { anchorsFor, resolveDue, todayDay, type Day } from './dates'
 import { LETTER_STATUSES, type PlanRows } from './plan'
+import { blankExperience, defaultSteps, KIND_META } from './experiences'
 
 /**
  * Every write Med School makes.
@@ -36,6 +40,9 @@ type MsTable =
   | 'ms_courses'
   | 'ms_practice'
   | 'ms_questions'
+  | 'ms_experiences'
+  | 'ms_experience_logs'
+  | 'ms_experience_steps'
 
 type RowOf<T extends MsTable> = T extends 'ms_settings'
   ? MsSettings
@@ -53,7 +60,13 @@ type RowOf<T extends MsTable> = T extends 'ms_settings'
               ? MsCourse
               : T extends 'ms_practice'
                 ? MsPractice
-                : MsQuestion
+                : T extends 'ms_experiences'
+                  ? MsExperience
+                  : T extends 'ms_experience_logs'
+                    ? MsExperienceLog
+                    : T extends 'ms_experience_steps'
+                      ? MsExperienceStep
+                      : MsQuestion
 
 const keyOf = (table: MsTable, row: unknown): string => (table === 'ms_settings' ? 'singleton' : (row as { id: string }).id)
 
@@ -414,6 +427,107 @@ export async function removePractice(p: MsPractice): Promise<void> {
   toast('Practice test removed', { action: { label: 'Undo', onClick: () => void insertRow('ms_practice', p) } })
 }
 
+// --- experiences ----------------------------------------------------------------------
+
+export type ExperienceInput = Omit<MsExperience, 'id' | 'sort' | 'created_by' | 'created_at' | 'updated_at'>
+
+/**
+ * Add an experience. A new shadowing record starts with the usual
+ * onboarding checklist, which can then be edited like any other.
+ */
+export async function addExperience(input: ExperienceInput): Promise<MsExperience | null> {
+  const stamp = nowIso()
+  const sort = Math.max(0, ...rows('ms_experiences').map((e) => e.sort)) + 1
+  const row: MsExperience = { ...blankExperience(input.kind, newId(), stamp, me()), ...input, name: input.name.trim(), sort }
+  if (!(await insertRow('ms_experiences', row))) return null
+  const steps = defaultSteps(row.kind)
+  await Promise.all(
+    steps.map((title, i) =>
+      insertRow('ms_experience_steps', { id: newId(), experience_id: row.id, title, due_on: null, done_at: null, done_by: null, sort: i, updated_at: stamp }),
+    ),
+  )
+  fire('success')
+  return row
+}
+
+export async function updateExperience(exp: MsExperience, patch: Partial<ExperienceInput>): Promise<boolean> {
+  const before = latest('ms_experiences', exp.id) ?? exp
+  return updateRow('ms_experiences', before, patch)
+}
+
+/**
+ * Remove an experience, its log and its checklist. The database cascades;
+ * the undo puts all three back.
+ */
+export async function removeExperience(exp: MsExperience): Promise<void> {
+  const logs = rows('ms_experience_logs').filter((l) => l.experience_id === exp.id)
+  const steps = rows('ms_experience_steps').filter((s) => s.experience_id === exp.id)
+  if (!(await removeRow('ms_experiences', exp))) return
+  useData.setState({
+    ms_experience_logs: rows('ms_experience_logs').filter((l) => l.experience_id !== exp.id),
+    ms_experience_steps: rows('ms_experience_steps').filter((s) => s.experience_id !== exp.id),
+  })
+  fire('delete')
+  toast('Experience removed', {
+    description: logs.length ? `${exp.name}, with ${logs.length} ${logs.length === 1 ? 'entry' : 'entries'}` : exp.name,
+    duration: 10_000,
+    action: {
+      label: 'Undo',
+      onClick: () => {
+        void (async () => {
+          if (!(await insertRow('ms_experiences', exp))) return
+          await Promise.all([...logs.map((l) => insertRow('ms_experience_logs', l)), ...steps.map((st) => insertRow('ms_experience_steps', st))])
+        })()
+      },
+    },
+  })
+}
+
+export type ExpLogInput = Pick<MsExperienceLog, 'on_date' | 'start_time' | 'end_time' | 'hours' | 'note'>
+
+export async function addExpLog(exp: MsExperience, input: ExpLogInput): Promise<boolean> {
+  if (KIND_META[exp.kind].tracks === 'estimate' && !input.hours) return false
+  const stamp = nowIso()
+  const row: MsExperienceLog = { id: newId(), experience_id: exp.id, ...input, note: input.note?.trim() || null, created_by: me(), created_at: stamp, updated_at: stamp }
+  const ok = await insertRow('ms_experience_logs', row)
+  if (ok) fire('success')
+  return ok
+}
+
+/** Edit an entry, or move it to another experience. */
+export async function updateExpLog(entry: MsExperienceLog, patch: Partial<ExpLogInput> & { experience_id?: string }): Promise<boolean> {
+  const before = latest('ms_experience_logs', entry.id) ?? entry
+  return updateRow('ms_experience_logs', before, { ...patch, ...(patch.note !== undefined ? { note: patch.note?.trim() || null } : {}) })
+}
+
+export async function removeExpLog(entry: MsExperienceLog): Promise<void> {
+  if (!(await removeRow('ms_experience_logs', entry))) return
+  fire('delete')
+  toast('Entry removed', { action: { label: 'Undo', onClick: () => void insertRow('ms_experience_logs', entry) } })
+}
+
+export async function addStep(exp: MsExperience, title: string, due_on: Day | null = null): Promise<boolean> {
+  const sort = Math.max(-1, ...rows('ms_experience_steps').filter((st) => st.experience_id === exp.id).map((st) => st.sort)) + 1
+  return insertRow('ms_experience_steps', { id: newId(), experience_id: exp.id, title: title.trim(), due_on, done_at: null, done_by: null, sort, updated_at: nowIso() })
+}
+
+export async function updateStep(step: MsExperienceStep, patch: Partial<Pick<MsExperienceStep, 'title' | 'due_on'>>): Promise<boolean> {
+  return updateRow('ms_experience_steps', latest('ms_experience_steps', step.id) ?? step, patch)
+}
+
+export async function toggleStep(step: MsExperienceStep): Promise<void> {
+  const before = latest('ms_experience_steps', step.id) ?? step
+  const doneNow = !before.done_at
+  fire(doneNow ? 'complete' : 'toggleOff')
+  await updateRow('ms_experience_steps', before, doneNow ? { done_at: nowIso(), done_by: me() } : { done_at: null, done_by: null })
+}
+
+export async function removeStep(step: MsExperienceStep): Promise<void> {
+  if (!(await removeRow('ms_experience_steps', step))) return
+  fire('delete')
+  toast('Step removed', { description: step.title, action: { label: 'Undo', onClick: () => void insertRow('ms_experience_steps', step) } })
+}
+
 // --- import ---------------------------------------------------------------------------
 
 /** Insert or update every row of an imported plan. Nothing is deleted. */
@@ -448,7 +562,9 @@ export async function importRows(plan: PlanRows, onProgress?: (done: number, tot
   // Tasks before eligibility, which can point at them; counters before logs.
   plan.tasks.forEach((r) => upsert('ms_tasks', r))
   plan.counters.forEach((r) => upsert('ms_counters', r))
-  const total = () => jobs.length + plan.logs.length + plan.eligibility.length + plan.letters.length + plan.courses.length + plan.practice.length + plan.questions.length + 1
+  const total = () =>
+    jobs.length + plan.logs.length + plan.eligibility.length + plan.letters.length + plan.courses.length + plan.practice.length + plan.questions.length +
+    plan.experiences.length + plan.expLogs.length + plan.expSteps.length + 1
 
   const all = total()
   let done = 0
@@ -475,6 +591,12 @@ export async function importRows(plan: PlanRows, onProgress?: (done: number, tot
   plan.courses.forEach((r) => upsert('ms_courses', r))
   plan.practice.forEach((r) => upsert('ms_practice', r))
   plan.questions.forEach((r) => upsert('ms_questions', r))
+  await run(jobs.splice(0))
+  // Experiences point at counters and letters; their logs and steps at them.
+  plan.experiences.forEach((r) => upsert('ms_experiences', r))
+  await run(jobs.splice(0))
+  plan.expLogs.forEach((r) => upsert('ms_experience_logs', r))
+  plan.expSteps.forEach((r) => upsert('ms_experience_steps', r))
   await run(jobs.splice(0))
 
   return { written, failed: failedCount }

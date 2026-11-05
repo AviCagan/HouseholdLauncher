@@ -274,11 +274,18 @@ export interface Phase {
   start: Day | null
   end: Day
   focus?: string
+  /** "6–8": how much of the week it asks for, as the plan says it. */
+  hoursPerWeek?: string
 }
 
 /**
  * The run-up to test day, in order: a light start, four content blocks,
  * practice, the AAMC full-lengths, the taper, and the day itself.
+ *
+ * The words come from the plan's `studyBlocks`: `m-b1`…`m-b4` for the
+ * blocks and `m-light` for the light start. The light start begins on
+ * `lightStart` — the light-start task's date — and runs to the day before
+ * study proper.
  */
 export function studyPhases(
   anchors: Anchors,
@@ -287,10 +294,18 @@ export function studyPhases(
 ): Phase[] {
   const block = (n: 1 | 2 | 3 | 4, start: Day, end: Day): Phase => {
     const info = blocks?.find((b) => b.id === `m-b${n}`)
-    return { id: `block${n}`, label: info?.title ? `Block ${n}: ${info.title}` : `Content block ${n}`, start, end, focus: info?.focus }
+    return { id: `block${n}`, label: info?.title ? `Block ${n}: ${info.title}` : `Content block ${n}`, start, end, focus: info?.focus, hoursPerWeek: info?.hoursPerWeek }
   }
+  const light = blocks?.find((b) => b.id === 'm-light')
   return [
-    { id: 'light', label: 'Light start', start: lightStart, end: addDays(anchors.contentStart, -1) },
+    {
+      id: 'light',
+      label: light?.title || 'Light start',
+      start: lightStart,
+      end: addDays(anchors.contentStart, -1),
+      focus: light?.focus,
+      hoursPerWeek: light?.hoursPerWeek,
+    },
     block(1, anchors.contentStart, anchors.studyBlock1End),
     block(2, addDays(anchors.studyBlock1End, 1), anchors.studyBlock2End),
     block(3, addDays(anchors.studyBlock2End, 1), anchors.studyBlock3End),

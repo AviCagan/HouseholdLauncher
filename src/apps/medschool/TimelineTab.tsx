@@ -1,8 +1,11 @@
 import { useMemo, useState } from 'react'
+import { useData } from '@/store/useData'
 import { fire } from '@/lib/haptics'
 import { monthKey, monthLabel, weekdayDay } from './dates'
 import { setHidden } from './actions'
 import { useMs, useMsUI, type TaskView } from './store'
+import { datedSteps, type StepView } from './experiences'
+import { StepRow } from './ExperiencesTab'
 import { TaskRow } from './TaskRow'
 import { Chip, Panel, Switch } from './ui'
 import { AREAS } from './labels'
@@ -11,34 +14,44 @@ import { AREAS } from './labels'
  * Every task by month on one circuit, with a done/total count for each
  * month. Area chips narrow it down; done tasks can be shown or not.
  */
+/** A row on the circuit: a task, or a dated onboarding step from an experience. */
+type Item = { kind: 'task'; view: TaskView; due: string | null; done: boolean } | { kind: 'step'; view: StepView; due: string | null; done: boolean }
+
 export function TimelineTab() {
-  const { visible, views, anchors } = useMs()
+  const { visible, views, anchors, today } = useMs()
+  const steps = useData((s) => s.ms_experience_steps)
+  const experiences = useData((s) => s.ms_experiences)
+  const stepViews = useMemo(() => datedSteps(steps, experiences, today), [steps, experiences, today])
   const open = useMsUI((s) => s.open)
   const [areas, setAreas] = useState<string[]>([])
   const [showDone, setShowDone] = useState(true)
 
   const present = useMemo(() => {
     const seen = new Set(views.map((v) => v.task.area))
+    if (stepViews.length) seen.add('Hours')
     return [...AREAS.filter((a) => seen.has(a)), ...[...seen].filter((a) => !AREAS.includes(a)).sort()]
-  }, [views])
+  }, [views, stepViews])
 
   const months = useMemo(() => {
-    const inArea = visible.filter((v) => areas.length === 0 || areas.includes(v.task.area))
-    const groups = new Map<string, TaskView[]>()
-    for (const v of inArea) {
-      const key = v.due ? monthKey(v.due) : 'undated'
-      groups.set(key, [...(groups.get(key) ?? []), v])
+    const items: Item[] = [
+      ...visible.filter((v) => areas.length === 0 || areas.includes(v.task.area)).map((v): Item => ({ kind: 'task', view: v, due: v.due, done: Boolean(v.task.done_at) })),
+      ...(areas.length === 0 || areas.includes('Hours') ? stepViews : []).map((v): Item => ({ kind: 'step', view: v, due: v.step.due_on, done: Boolean(v.step.done_at) })),
+    ].sort((a, b) => (a.due ?? '9999').localeCompare(b.due ?? '9999'))
+    const groups = new Map<string, Item[]>()
+    for (const item of items) {
+      const key = item.due ? monthKey(item.due) : 'undated'
+      groups.set(key, [...(groups.get(key) ?? []), item])
     }
     return [...groups.entries()]
       .sort(([a], [b]) => (a === 'undated' ? 1 : b === 'undated' ? -1 : a.localeCompare(b)))
       .map(([key, all]) => ({
         key,
         label: key === 'undated' ? 'No date yet' : monthLabel(`${key}-01`),
-        done: all.filter((v) => v.task.done_at).length,
+        done: all.filter((i) => i.done).length,
         total: all.length,
-        shown: showDone ? all : all.filter((v) => !v.task.done_at),
+        shown: showDone ? all : all.filter((i) => !i.done),
       }))
-  }, [visible, areas, showDone])
+  }, [visible, stepViews, areas, showDone])
 
   const hidden = views.filter((v) => v.task.hidden)
 
@@ -93,9 +106,13 @@ export function TimelineTab() {
             <p className="lg-dim text-[13px]">All done this month.</p>
           ) : (
             <div className="-mx-2">
-              {m.shown.map((v, j) => (
-                <TaskRow key={v.task.id} view={v} anchors={anchors} first={j === 0} last={j === m.shown.length - 1} />
-              ))}
+              {m.shown.map((item, j) =>
+                item.kind === 'task' ? (
+                  <TaskRow key={item.view.task.id} view={item.view} anchors={anchors} first={j === 0} last={j === m.shown.length - 1} />
+                ) : (
+                  <StepRow key={`step-${item.view.step.id}`} view={item.view} first={j === 0} last={j === m.shown.length - 1} />
+                ),
+              )}
             </div>
           )}
         </Panel>

@@ -50,6 +50,23 @@ function samplePlan() {
       ],
     },
     decisions: ['Apply to both.'],
+    experiences: [
+      {
+        id: 'x-clinic',
+        kind: 'shadowing',
+        name: 'A Clinic',
+        status: 'active',
+        start: '2026-09',
+        capHours: 60,
+        capUntil: '2026-12-29',
+        countsToward: 'hours',
+        letterId: 'l-one',
+        log: [{ id: 'xl-1', date: '2026-09-29', start: '07:30', end: '14:00', hours: 6.5 }],
+        steps: [{ id: 'xs-1', title: 'Forms', due: '2026-09-20', done: true, doneAt: '2026-09-18' }, { id: 'xs-2', title: 'Badge' }],
+      },
+      { id: 'x-club', kind: 'club', name: 'A Club', countsToward: 'meetings', prior: 3, log: [{ date: '2026-10-27' }] },
+      { id: 'x-job', kind: 'clinical_paid', name: 'A Job', role: 'EMT-B', start: '2021', status: 'active', prior: 1200, priorAsOf: '2026-11-03' },
+    ],
   }
 }
 
@@ -63,7 +80,7 @@ describe('parsePlan', () => {
   it('counts what it found', () => {
     const { counts } = parse()
     expect(describeCounts(counts)).toBe(
-      '4 tasks (1 done), 2 counters, 3 eligibility items (1 met), 2 letters, 5 courses (3 graded, 1 in progress, 1 withdrawal), 1 open question',
+      '4 tasks (1 done), 2 counters, 3 eligibility items (1 met), 2 letters, 5 courses (3 graded, 1 in progress, 1 withdrawal), 3 experiences (2 log entries), 1 open question',
     )
   })
 
@@ -112,6 +129,33 @@ describe('parsePlan', () => {
     expect(ref).not.toHaveProperty('tasks')
   })
 
+  it('reads experiences with their logs and checklists', () => {
+    const { rows } = parse()
+    expect(rows.experiences.map((x) => [x.id, x.kind, x.counts_toward, x.letter_id, x.prior])).toEqual([
+      ['x-clinic', 'shadowing', 'hours', 'l-one', 0],
+      ['x-club', 'club', 'meetings', null, 3],
+      ['x-job', 'clinical_paid', null, null, 1200],
+    ])
+    expect(rows.expLogs.find((l) => l.id === 'xl-1')).toMatchObject({ experience_id: 'x-clinic', start_time: '07:30', end_time: '14:00', hours: 6.5 })
+    // A club meeting needs no hours.
+    expect(rows.expLogs.find((l) => l.experience_id === 'x-club')).toMatchObject({ on_date: '2026-10-27', hours: null })
+    expect(rows.expSteps.map((st) => [st.id, Boolean(st.done_at), st.due_on])).toEqual([
+      ['xs-1', true, '2026-09-20'],
+      ['xs-2', false, null],
+    ])
+  })
+
+  it('refuses an experience it cannot place', () => {
+    const blob = samplePlan()
+    blob.experiences.push({ id: 'x-bad', kind: 'hobby', name: 'Knitting' } as never)
+    blob.experiences.push({ id: 'x-date', kind: 'service', name: 'A Pantry', start: 'March 2021' } as never)
+    const r = parsePlan(JSON.stringify(blob))
+    expect(r.ok).toBe(false)
+    if (r.ok) return
+    expect(r.errors.join('\n')).toMatch(/x-bad.*kind/)
+    expect(r.errors.join('\n')).toMatch(/x-date.*start/)
+  })
+
   it('says what is wrong, item by item, and writes nothing', () => {
     const bad = samplePlan() as Record<string, unknown>
     bad.tasks = [
@@ -153,6 +197,9 @@ describe('exportPlan', () => {
     expect(strip(again.eligibility)).toEqual(strip(first.eligibility))
     expect(strip(again.letters)).toEqual(strip(first.letters))
     expect(strip(again.courses)).toEqual(strip(first.courses))
+    expect(strip(again.experiences)).toEqual(strip(first.experiences))
+    expect(strip(again.expLogs)).toEqual(strip(first.expLogs))
+    expect(strip(again.expSteps.map((st) => ({ ...st, done_at: st.done_at ? 'x' : null })))).toEqual(strip(first.expSteps.map((st) => ({ ...st, done_at: st.done_at ? 'x' : null }))))
     expect(again.questions.map((q) => q.text)).toEqual(first.questions.map((q) => q.text))
     expect(again.settings).toEqual(first.settings)
     expect(countPlan(again)).toEqual(countPlan(first))

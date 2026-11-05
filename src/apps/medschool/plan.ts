@@ -6,6 +6,9 @@ import type {
   MsCounterLog,
   MsCourse,
   MsEligibility,
+  MsExperience,
+  MsExperienceLog,
+  MsExperienceStep,
   MsLetter,
   MsLetterStatus,
   MsPractice,
@@ -16,6 +19,8 @@ import type {
 } from '@/data/types'
 import { anchorsFor, isAnchor, isDay, resolveDue, todayDay } from './dates'
 import { CATEGORIES, DEFAULT_SCALE, defaultCategory, gpaSummary, NON_GPA_GRADES, type Scale } from './gpa'
+import { MS_EXPERIENCE_KINDS, MS_EXPERIENCE_STATUSES } from '@/data/types'
+import { isPartialDate, KIND_META } from './experiences'
 
 /**
  * The plan as JSON: what Import reads and Export writes.
@@ -40,6 +45,9 @@ export interface PlanRows {
   courses: MsCourse[]
   practice: MsPractice[]
   questions: MsQuestion[]
+  experiences: MsExperience[]
+  expLogs: MsExperienceLog[]
+  expSteps: MsExperienceStep[]
 }
 
 export interface PlanCounts {
@@ -56,6 +64,8 @@ export interface PlanCounts {
   withdrawals: number
   practice: number
   questions: number
+  experiences: number
+  expLogs: number
 }
 
 export type ParseResult =
@@ -134,7 +144,7 @@ export function parsePlan(input: string | unknown, now: Date = new Date()): Pars
   const recordIn = isObj(blob.record) ? blob.record : {}
   const reference: MsReference = {}
   for (const [k, v] of Object.entries(blob)) {
-    if (['tasks', 'eligibility', 'counters', 'letters', 'settings', 'committee', 'record', 'practiceTests'].includes(k)) continue
+    if (['tasks', 'eligibility', 'counters', 'letters', 'settings', 'committee', 'record', 'practiceTests', 'experiences'].includes(k)) continue
     reference[k] = v
   }
   for (const k of ['testCenter', 'commencement', 'schedulingPreference', 'contentStart'] as const) {
@@ -372,9 +382,92 @@ export function parsePlan(input: string | unknown, now: Date = new Date()): Pars
     questions.push({ id, text, done, done_at: done ? stamp : null, sort: i, updated_at: stamp })
   })
 
+  // --- experiences ---------------------------------------------------------------------
+  const experiences: MsExperience[] = []
+  const expLogs: MsExperienceLog[] = []
+  const expSteps: MsExperienceStep[] = []
+  const counterIds = new Set(counters.map((c) => c.id))
+  const letterIds = new Set(letters.map((l) => l.id))
+  const time = (v: unknown): string | null => (typeof v === 'string' && /^\d{2}:\d{2}(:\d{2})?$/.test(v) ? v.slice(0, 5) : null)
+  list('experiences', blob.experiences).forEach((x, i) => {
+    const where = `experiences[${i}]${isObj(x) && typeof x.id === 'string' ? ` (${x.id})` : ''}`
+    if (!isObj(x)) return fail(`${where}: not an object.`)
+    const id = str(x.id)
+    const name = str(x.name)
+    if (!id || !name) return fail(`${where}: needs an id and a name.`)
+    const kind = x.kind as MsExperience['kind']
+    if (!MS_EXPERIENCE_KINDS.includes(kind)) return fail(`${where}: kind should be one of ${MS_EXPERIENCE_KINDS.join(', ')}.`)
+    const status = (x.status ?? 'active') as MsExperience['status']
+    if (!MS_EXPERIENCE_STATUSES.includes(status)) return fail(`${where}: status should be one of ${MS_EXPERIENCE_STATUSES.join(', ')}.`)
+    for (const k of ['start', 'end'] as const) {
+      if (x[k] !== undefined && x[k] !== null && !isPartialDate(x[k])) return fail(`${where}: ${k} should be YYYY, YYYY-MM or YYYY-MM-DD.`)
+    }
+    const countsToward = str(x.countsToward)
+    if (countsToward && !counterIds.has(countsToward)) warnings.push(`${where} counts towards "${countsToward}", which isn't one of the counters, so it counts towards nothing.`)
+    const letterId = str(x.letterId)
+    if (letterId && !letterIds.has(letterId)) warnings.push(`${where} links to the letter "${letterId}", which isn't in the plan, so the link is dropped.`)
+    const physician = x.physicianType === 'MD' || x.physicianType === 'DO' ? x.physicianType : null
+    experiences.push({
+      id,
+      kind,
+      name,
+      role: str(x.role),
+      contact: str(x.contact),
+      location: str(x.location),
+      start_on: str(x.start),
+      end_on: str(x.end),
+      status,
+      notes: str(x.notes),
+      description: str(x.description),
+      specialty: str(x.specialty),
+      physician_type: physician,
+      cap_hours: num(x.capHours),
+      cap_until: isDay(x.capUntil) ? x.capUntil : null,
+      prior: Math.max(0, num(x.prior) ?? 0),
+      prior_as_of: isDay(x.priorAsOf) ? x.priorAsOf : null,
+      counts_toward: countsToward && counterIds.has(countsToward) ? countsToward : null,
+      letter_id: letterId && letterIds.has(letterId) ? letterId : null,
+      sort: i,
+      created_by: null,
+      created_at: stamp,
+      updated_at: stamp,
+    })
+    const meetings = KIND_META[kind].tracks === 'meetings'
+    list(`${where}.log`, x.log).forEach((l, j) => {
+      if (!isObj(l) || !isDay(l.date)) return fail(`${where}.log[${j}]: needs a date as YYYY-MM-DD.`)
+      const hours = num(l.hours)
+      if (!meetings && (hours === null || hours <= 0)) return fail(`${where}.log[${j}]: needs hours above 0.`)
+      expLogs.push({
+        id: str(l.id) ?? `${id}-${l.date}-${j + 1}`,
+        experience_id: id,
+        on_date: l.date,
+        start_time: time(l.start),
+        end_time: time(l.end),
+        hours: hours !== null && hours > 0 ? hours : null,
+        note: str(l.note),
+        created_by: null,
+        created_at: stamp,
+        updated_at: stamp,
+      })
+    })
+    list(`${where}.steps`, x.steps).forEach((st, j) => {
+      if (!isObj(st) || !str(st.title)) return fail(`${where}.steps[${j}]: needs a title.`)
+      expSteps.push({
+        id: str(st.id) ?? `${id}-step-${j + 1}`,
+        experience_id: id,
+        title: str(st.title)!,
+        due_on: isDay(st.due) ? st.due : null,
+        done_at: st.done === true ? (doneAtIso(st.doneAt) ?? stamp) : null,
+        done_by: uuid(st.doneBy),
+        sort: j,
+        updated_at: stamp,
+      })
+    })
+  })
+
   if (errors.length) return { ok: false, errors, warnings }
 
-  const rows: PlanRows = { settings, tasks, counters, logs, eligibility, letters, courses, practice, questions }
+  const rows: PlanRows = { settings, tasks, counters, logs, eligibility, letters, courses, practice, questions, experiences, expLogs, expSteps }
   return { ok: true, rows, counts: countPlan(rows), warnings }
 }
 
@@ -395,6 +488,8 @@ export function countPlan(rows: PlanRows): PlanCounts {
     withdrawals: rows.courses.filter((c) => c.grade === 'W').length,
     practice: rows.practice.length,
     questions: rows.questions.length,
+    experiences: rows.experiences.length,
+    expLogs: rows.expLogs.length,
   }
 }
 
@@ -409,6 +504,7 @@ export function describeCounts(c: PlanCounts): string {
     plural(c.letters, 'letter'),
     `${plural(c.courses, 'course')} (${c.graded} graded, ${c.inProgress} in progress, ${plural(c.withdrawals, 'withdrawal')})`,
   ]
+  if (c.experiences) parts.push(`${plural(c.experiences, 'experience')} (${plural(c.expLogs, 'log entry', 'log entries')})`)
   if (c.practice) parts.push(plural(c.practice, 'practice test'))
   if (c.questions) parts.push(plural(c.questions, 'open question'))
   return parts.join(', ')
@@ -426,6 +522,9 @@ export interface PlanState {
   courses: MsCourse[]
   practice: MsPractice[]
   questions: MsQuestion[]
+  experiences?: MsExperience[]
+  expLogs?: MsExperienceLog[]
+  expSteps?: MsExperienceStep[]
 }
 
 const drop = <T extends Obj>(o: T): T =>
@@ -528,5 +627,36 @@ export function exportPlan(state: PlanState, now: Date = new Date()): Obj {
     practiceTests: [...state.practice]
       .sort((a, b) => a.taken_on.localeCompare(b.taken_on))
       .map((p) => drop({ id: p.id, date: p.taken_on, source: p.source, total: p.total, cp: p.cp, cars: p.cars, bb: p.bb, ps: p.ps, note: p.note })),
+    experiences: bySort(state.experiences ?? []).map((x) =>
+      drop({
+        id: x.id,
+        kind: x.kind,
+        name: x.name,
+        role: x.role,
+        contact: x.contact,
+        location: x.location,
+        start: x.start_on,
+        end: x.end_on,
+        status: x.status,
+        notes: x.notes,
+        description: x.description,
+        specialty: x.specialty,
+        physicianType: x.physician_type,
+        capHours: x.cap_hours,
+        capUntil: x.cap_until,
+        prior: x.prior || null,
+        priorAsOf: x.prior_as_of,
+        countsToward: x.counts_toward,
+        letterId: x.letter_id,
+        log: (state.expLogs ?? [])
+          .filter((l) => l.experience_id === x.id)
+          .sort((a, b) => a.on_date.localeCompare(b.on_date))
+          .map((l) => drop({ id: l.id, date: l.on_date, start: l.start_time?.slice(0, 5), end: l.end_time?.slice(0, 5), hours: l.hours, note: l.note })),
+        steps: (state.expSteps ?? [])
+          .filter((st) => st.experience_id === x.id)
+          .sort((a, b) => a.sort - b.sort)
+          .map((st) => drop({ id: st.id, title: st.title, due: st.due_on, done: Boolean(st.done_at), doneAt: st.done_at, doneBy: st.done_by })),
+      }),
+    ),
   }
 }

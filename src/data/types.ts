@@ -822,7 +822,11 @@ export interface MsReference {
   }
   decisions?: string[]
   studyMethod?: string[]
-  studyBlocks?: { id: string; title: string; focus?: string }[]
+  /**
+   * The study phases' words. `m-b1`…`m-b4` are the four content blocks;
+   * `m-light` is the light start before them.
+   */
+  studyBlocks?: { id: string; title: string; focus?: string; hoursPerWeek?: string }[]
   resources?: string[]
   testDayRules?: string[]
   people?: { name: string; role?: string }[]
@@ -952,6 +956,80 @@ export interface MsQuestion {
   text: string
   done: boolean
   done_at: string | null
+  sort: number
+  updated_at: string
+}
+
+/** See supabase/026_medschool_experiences.sql. */
+export const MS_EXPERIENCE_KINDS = [
+  'shadowing',
+  'service',
+  'clinical_volunteer',
+  'clinical_paid',
+  'research',
+  'club',
+  'employment',
+  'leadership',
+  'other',
+] as const
+export type MsExperienceKind = (typeof MS_EXPERIENCE_KINDS)[number]
+
+export const MS_EXPERIENCE_STATUSES = ['prospect', 'reached_out', 'onboarding', 'active', 'done', 'declined'] as const
+export type MsExperienceStatus = (typeof MS_EXPERIENCE_STATUSES)[number]
+
+export interface MsExperience {
+  id: string
+  kind: MsExperienceKind
+  /** The organization, or the person or program's name. */
+  name: string
+  role: string | null
+  contact: string | null
+  location: string | null
+  /** "2021", "2021-03" or "2021-03-05". */
+  start_on: string | null
+  /** Same shape; null while it's still going. */
+  end_on: string | null
+  status: MsExperienceStatus
+  notes: string | null
+  description: string | null
+  specialty: string | null
+  physician_type: 'MD' | 'DO' | null
+  cap_hours: number | null
+  cap_until: string | null
+  /** Hours, or meetings for a club, that aren't in the log. */
+  prior: number
+  prior_as_of: string | null
+  /** An ms_counters id: the committee target this counts towards. */
+  counts_toward: string | null
+  letter_id: string | null
+  sort: number
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface MsExperienceLog {
+  id: string
+  experience_id: string
+  on_date: string
+  /** "07:30" or "07:30:00", as Postgres hands a time back. */
+  start_time: string | null
+  end_time: string | null
+  /** Null only for a club meeting, which counts as one. */
+  hours: number | null
+  note: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface MsExperienceStep {
+  id: string
+  experience_id: string
+  title: string
+  due_on: string | null
+  done_at: string | null
+  done_by: string | null
   sort: number
   updated_at: string
 }
