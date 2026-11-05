@@ -34,3 +34,10 @@ What this means for you:
   afterwards, or tell Avi, or Beaker Buddies loses its saves.
 - **Changes to `bb_*` belong in the LetThemCook repo**, applied here as a new migration whose name
   starts with `beaker_buddies_`. Keep household migrations free of `bb_` objects.
+
+## Med School 2028 has a coordination doc
+
+Avi's claude.ai chat and Claude Code coordinate on the Med School 2028 app in a Google Doc called
+**"Claude ↔ Claude Code"**, in Avi's Google Drive under *Avi's Stuff › Claude memory*. Read it before
+working on `src/apps/medschool` or the `ms_*` tables, and reply there. Nothing from that doc or from
+Avi's plan goes into this public repo.

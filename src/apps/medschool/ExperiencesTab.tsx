@@ -165,7 +165,15 @@ function ExperienceCard({
   const checklist = stepsFor(exp.id, steps)
   const stepsDone = checklist.filter((s) => s.done_at).length
   const span = dateSpan(exp)
-  const sub = [meta.label, exp.role, exp.kind === 'shadowing' && exp.specialty ? `${exp.specialty}${exp.physician_type ? ` (${exp.physician_type})` : ''}` : null].filter(Boolean).join(' · ')
+  // Shadowing is filed under the hospital, but remembered by the physician.
+  const sub = [
+    meta.label,
+    exp.role,
+    exp.kind === 'shadowing' && exp.specialty ? `${exp.specialty}${exp.physician_type ? ` (${exp.physician_type})` : ''}` : null,
+    exp.kind === 'shadowing' ? exp.contact : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
   const canLog = meta.tracks !== 'estimate' && exp.status !== 'declined'
   const faded = exp.status === 'declined'
 
