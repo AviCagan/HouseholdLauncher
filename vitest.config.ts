@@ -25,6 +25,7 @@ export default defineConfig({
     __BUILD_TIME__: JSON.stringify('2026-01-01T00:00:00.000Z'),
     __BUILD_RUN__: JSON.stringify(''),
     __FCM_CONFIGURED__: JSON.stringify(false),
+    __NATIVE_FINGERPRINT__: JSON.stringify('test'),
   },
   test: {
     environment: 'node',

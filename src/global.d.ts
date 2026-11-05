@@ -4,3 +4,4 @@ declare const __BUILD_SHA__: string
 declare const __BUILD_TIME__: string
 declare const __BUILD_RUN__: string
 declare const __FCM_CONFIGURED__: boolean
+declare const __NATIVE_FINGERPRINT__: string

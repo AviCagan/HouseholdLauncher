@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'node:path'
 import { existsSync } from 'node:fs'
+import { nativeFingerprint } from './scripts/native-fingerprint.mjs'
 
 // Capacitor serves from https://localhost/ inside the APK, GitHub Pages serves
 // from /Things/. Getting this wrong is a white screen on exactly one target.
@@ -45,6 +46,13 @@ const FCM_CONFIGURED = existsSync(
   path.resolve(import.meta.dirname, 'android/app/google-services.json'),
 )
 
+/*
+  Which native shell this bundle was built for — see
+  scripts/native-fingerprint.mjs. The APK's over-the-air updater only takes a
+  bundle whose fingerprint matches the one it was installed with.
+*/
+const NATIVE_FINGERPRINT = nativeFingerprint(import.meta.dirname)
+
 export default defineConfig({
   base,
   define: {
@@ -52,11 +60,27 @@ export default defineConfig({
     __BUILD_TIME__: JSON.stringify(BUILD_TIME),
     __BUILD_RUN__: JSON.stringify(BUILD_RUN),
     __FCM_CONFIGURED__: JSON.stringify(FCM_CONFIGURED),
+    __NATIVE_FINGERPRINT__: JSON.stringify(NATIVE_FINGERPRINT),
   },
   resolve: {
     alias: { '@': path.resolve(import.meta.dirname, 'src') },
   },
   plugins: [
+    /*
+      The same stamp as a file in the output, so CI can describe a bundle for
+      the over-the-air updater from the bundle itself rather than working the
+      numbers out a second time and hoping they agree.
+    */
+    {
+      name: 'build-stamp',
+      generateBundle() {
+        this.emitFile({
+          type: 'asset',
+          fileName: 'build.json',
+          source: JSON.stringify({ run: BUILD_RUN, sha: BUILD_SHA, builtAt: BUILD_TIME, native: NATIVE_FINGERPRINT }),
+        })
+      },
+    },
     react(),
     tailwindcss(),
     VitePWA({

@@ -6,6 +6,8 @@ import { isConfigured } from '@/lib/env'
 import { hapticBackend, HAPTIC_BACKEND_LABEL } from '@/lib/haptics'
 import { isNative } from '@/lib/platform'
 import { nativeVersion } from '@/lib/build'
+import { applyNow, checkForUpdate, downloadApk, useAppUpdate, type UpdateStatus } from '@/lib/appUpdate'
+import { fire } from '@/lib/haptics'
 
 /**
  * What's actually installed and what it's talking to.
@@ -61,6 +63,8 @@ export function AboutSettings() {
         </SettingsGroup>
       )}
 
+      {isNative() && <UpdatesGroup />}
+
       <SettingsGroup label="This build">
         <SettingsRow
           title="Version"
@@ -94,4 +98,77 @@ export function AboutSettings() {
       </SettingsGroup>
     </>
   )
+}
+
+/**
+ * Where the Android app stands against the newest build. Updates happen on
+ * their own (see lib/appUpdate.ts); this says what's going on and lets you
+ * hurry it along.
+ */
+function UpdatesGroup() {
+  const status = useAppUpdate((s) => s.status)
+  const [checking, setChecking] = useState(false)
+  const { title, subtitle } = describe(status)
+
+  const button = (label: string, onClick: () => void) => (
+    <button
+      onClick={() => {
+        fire('tap')
+        onClick()
+      }}
+      className="rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold text-white"
+      style={{ background: 'var(--accent)' }}
+    >
+      {label}
+    </button>
+  )
+
+  return (
+    <SettingsGroup label="Updates" hint="New versions arrive on their own: they download in the background and go in the next time you open the app, or when you come back to it after an hour away.">
+      <SettingsRow
+        icon="sparkle"
+        title={title}
+        subtitle={subtitle}
+        right={
+          status.kind === 'ready'
+            ? button('Restart now', () => void applyNow())
+            : status.kind === 'apk'
+              ? button('Download', () => void downloadApk())
+              : undefined
+        }
+      />
+      <SettingsRow
+        icon="repeat"
+        title={checking || status.kind === 'checking' ? 'Checking…' : 'Check now'}
+        onClick={() => {
+          if (checking) return
+          fire('tap')
+          setChecking(true)
+          void checkForUpdate({ manual: true }).finally(() => setChecking(false))
+        }}
+      />
+    </SettingsGroup>
+  )
+}
+
+function describe(status: UpdateStatus): { title: string; subtitle?: string } {
+  const at = (t: number) => new Date(t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+  switch (status.kind) {
+    case 'idle':
+    case 'checking':
+      return { title: 'Looking for updates…' }
+    case 'current':
+      return { title: 'Up to date', subtitle: `Checked at ${at(status.checkedAt)}` }
+    case 'downloading':
+      return { title: `Downloading build ${status.latest.versionCode}…`, subtitle: `${Math.round(status.percent)}%` }
+    case 'ready':
+      return { title: `Build ${status.latest.versionCode} is ready`, subtitle: 'It goes in the next time you open the app.' }
+    case 'apk':
+      return {
+        title: `Build ${status.latest.versionCode} needs a fresh install`,
+        subtitle: 'The app itself changed, so this one is a new APK. It installs over the top and keeps everything.',
+      }
+    case 'error':
+      return { title: "Couldn't check for updates", subtitle: `${status.message} · tried at ${at(status.checkedAt)}` }
+  }
 }

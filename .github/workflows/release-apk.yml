@@ -129,6 +129,18 @@ jobs:
           find android/app/build/outputs/apk -name '*.apk' -exec cp {} out/ \;
           ls -la out
 
+      # The over-the-air update for copies already installed: this same app's
+      # JavaScript as a zip, and version.json saying which build it is, which
+      # native shell it needs and what the zip's checksum is. The app reads
+      # version.json on launch (src/lib/appUpdate.ts) and swaps the bundle in
+      # by itself, or offers this APK when the native side changed. Only for
+      # the rolling build, which is the one installed copies follow.
+      - name: Package the over-the-air update
+        if: "!startsWith(github.ref, 'refs/tags/v')"
+        run: |
+          (cd dist && zip -q -r -X ../out/bundle.zip .)
+          node scripts/release-manifest.mjs dist out "${{ github.repository }}"
+
       - uses: actions/upload-artifact@v4
         with:
           name: household-apk
@@ -171,5 +183,13 @@ jobs:
 
             Signed with the household key, so this installs straight over an
             existing copy — no uninstall needed, and nothing is lost.
-          files: out/*.apk
+
+            Copies already installed update themselves from `bundle.zip` and
+            `version.json` here; this APK is only needed when the app's native
+            side changes, and the app says when.
+          # version.json last, so it never describes a zip that isn't up yet.
+          files: |
+            out/*.apk
+            out/bundle.zip
+            out/version.json
           make_latest: true

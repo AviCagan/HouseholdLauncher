@@ -17,6 +17,9 @@ export const BUILD_RUN = __BUILD_RUN__
  */
 export const FCM_CONFIGURED = __FCM_CONFIGURED__
 
+/** The native shell this bundle was built for — see scripts/native-fingerprint.mjs. */
+export const NATIVE_FINGERPRINT = __NATIVE_FINGERPRINT__
+
 /** "54c61f0 · run 42 · Aug 16, 3:41 PM" — short enough for a settings footer. */
 export function buildLabel(): string {
   const date = new Date(BUILD_TIME)
