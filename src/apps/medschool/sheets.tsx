@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { Sheet } from '@/components/primitives/Sheet'
 import { useData } from '@/store/useData'
 import { useMembers } from '@/store/useMember'
-import type { MsCategory, MsLetterStatus } from '@/data/types'
+import type { MsCategory, MsLetter, MsLetterStatus } from '@/data/types'
 import {
   ANCHOR_LABEL,
   ANCHORS,
@@ -33,6 +33,7 @@ import {
   setTestDate,
   toggleTask,
   updateCourse,
+  updateLetter,
   updateTask,
 } from './actions'
 import { CATEGORIES, CATEGORY_LABEL, defaultCategory, DEFAULT_SCALE, isOverridden, NON_GPA_GRADES } from './gpa'
@@ -445,6 +446,7 @@ export function TotalSheet({ counterId }: { counterId: string }) {
 export function LetterSheet({ letterId }: { letterId: string }) {
   const close = useMsUI((s) => s.close)
   const letter = useData((s) => s.ms_letters.find((l) => l.id === letterId))
+  const [editing, setEditing] = useState(false)
   if (!letter) return null
   const dateOf: Record<MsLetterStatus, string | null> = {
     not_asked: null,
@@ -452,10 +454,20 @@ export function LetterSheet({ letterId }: { letterId: string }) {
     agreed: letter.agreed_on,
     received: letter.received_on,
   }
+  if (editing) {
+    return (
+      <MsSheet title="Letter" onClose={close}>
+        <LetterForm key={letter.id} letter={letter} onDone={() => setEditing(false)} />
+      </MsSheet>
+    )
+  }
   return (
     <MsSheet title="Letter" onClose={close}>
       <p className="text-[15px] font-medium">{letter.title}</p>
-      {letter.note && <p className="lg-dim mt-1 text-[13px] leading-snug">{letter.note}</p>}
+      {letter.note && <p className="lg-dim mt-1 whitespace-pre-line text-[13px] leading-snug">{letter.note}</p>}
+      <button type="button" className="lg-btn lg-btn--small mt-3" onClick={() => setEditing(true)}>
+        Edit name and notes
+      </button>
       <ul className="mt-4">
         {LETTER_STATUSES.map((s) => (
           <li key={s} className="lg-rule first:border-t-0">
@@ -478,6 +490,46 @@ export function LetterSheet({ letterId }: { letterId: string }) {
         ))}
       </ul>
     </MsSheet>
+  )
+}
+
+/**
+ * The name and notes of a letter. A plan can start a letter as a slot
+ * ("Science professor"), and once someone says yes it becomes a person.
+ */
+function LetterForm({ letter, onDone }: { letter: MsLetter; onDone: () => void }) {
+  const [title, setTitle] = useState(letter.title)
+  const [note, setNote] = useState(letter.note ?? '')
+  const [saving, setSaving] = useState(false)
+  const valid = title.trim().length > 0
+
+  async function save() {
+    if (!valid || saving) return
+    const next = { title: title.trim(), note: note.trim() || null }
+    if (next.title === letter.title && next.note === letter.note) return onDone()
+    setSaving(true)
+    const ok = await updateLetter(letter, next)
+    setSaving(false)
+    if (ok) onDone()
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Field label="Who's writing it" hint="Their name, and the kind of letter if it helps: “Dr. Rivera, Biology (science)”.">
+        <input className="lg-field" value={title} onChange={(e) => setTitle(e.target.value)} autoComplete="off" />
+      </Field>
+      <Field label="Notes" hint="The course, how they know you, their email, the deadline you gave them.">
+        <textarea className="lg-field" rows={4} value={note} onChange={(e) => setNote(e.target.value)} />
+      </Field>
+      <Actions>
+        <button type="button" className="lg-btn lg-btn--primary" disabled={!valid || saving} onClick={() => void save()}>
+          Save
+        </button>
+        <button type="button" className="lg-btn" onClick={onDone}>
+          Cancel
+        </button>
+      </Actions>
+    </div>
   )
 }
 

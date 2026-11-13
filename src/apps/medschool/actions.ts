@@ -358,6 +358,11 @@ export async function setLetterStatus(letter: MsLetter, status: MsLetterStatus, 
   await updateRow('ms_letters', before, patch)
 }
 
+/** Who's writing it and the notes beside it. The status keeps its own path. */
+export async function updateLetter(letter: MsLetter, patch: Partial<Pick<MsLetter, 'title' | 'note'>>): Promise<boolean> {
+  return updateRow('ms_letters', latest('ms_letters', letter.id) ?? letter, patch)
+}
+
 /** The tap: one step on, and round to the start after "received" (with an undo). */
 export async function advanceLetter(letter: MsLetter): Promise<void> {
   const before = latest('ms_letters', letter.id) ?? letter

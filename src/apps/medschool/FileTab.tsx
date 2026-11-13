@@ -275,7 +275,9 @@ function LettersPanel() {
         </span>
       }
     >
-      <p className="lg-dim pb-1 text-[12px]">Tap a status to move it on: not asked → asked → agreed → received.</p>
+      <p className="lg-dim pb-1 text-[12px]">
+        Tap a letter to put in who's writing it. Tap its status to move it on: not asked → asked → agreed → received.
+      </p>
       <ul>
         {sorted.map((l) => {
           const dates = [
@@ -287,7 +289,7 @@ function LettersPanel() {
             <li key={l.id} className="lg-rule flex items-start gap-2 py-2 first:border-t-0">
               <button type="button" className="min-h-[44px] min-w-0 flex-1 text-left" onClick={() => open({ kind: 'letter', letterId: l.id })}>
                 <span className="block text-[13.5px] leading-snug">{l.title}</span>
-                {l.note && <span className="lg-dim block text-[12px] leading-snug">{l.note}</span>}
+                {l.note && <span className="lg-dim block whitespace-pre-line text-[12px] leading-snug">{l.note}</span>}
                 {dates.length > 0 && <span className="lg-num lg-dim mt-0.5 block text-[11px]">{dates.join(' · ')}</span>}
               </button>
               <button
