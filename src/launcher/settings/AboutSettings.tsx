@@ -124,7 +124,7 @@ function UpdatesGroup() {
   )
 
   return (
-    <SettingsGroup label="Updates" hint="New versions arrive on their own: they download in the background and go in the next time you open the app, or when you come back to it after an hour away.">
+    <SettingsGroup label="Updates" hint="New versions arrive on their own: they download in the background and ask for a restart. Left alone, they go in the next time the app starts, or when you come back to it after ten minutes away.">
       <SettingsRow
         icon="sparkle"
         title={title}
@@ -162,7 +162,7 @@ function describe(status: UpdateStatus): { title: string; subtitle?: string } {
     case 'downloading':
       return { title: `Downloading build ${status.latest.versionCode}…`, subtitle: `${Math.round(status.percent)}%` }
     case 'ready':
-      return { title: `Build ${status.latest.versionCode} is ready`, subtitle: 'It goes in the next time you open the app.' }
+      return { title: `Build ${status.latest.versionCode} is ready`, subtitle: 'Restart to use it now, or it goes in by itself next time.' }
     case 'apk':
       return {
         title: `Build ${status.latest.versionCode} needs a fresh install`,

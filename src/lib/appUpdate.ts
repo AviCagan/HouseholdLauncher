@@ -15,12 +15,14 @@ import { parseLatest, planUpdate, runningFrom, type LatestBuild } from './update
  * reads version.json:
  *
  *   - Only the JavaScript changed: the zip downloads in the background, and
- *     goes in the next time the app starts fresh, or when it comes back after
- *     an hour or more away. Never while you might be in the middle of
- *     something: not on every trip to the background (opening the document
- *     scanner is one), and not while a scan is out. If the new bundle can't
- *     even start, the updater puts the previous one back by itself — that's
- *     what notifyAppReady confirms — and that build isn't tried again.
+ *     a notice stays up with a Restart button until it's used or swiped
+ *     away. Left alone, it goes in the next time the app starts fresh, or
+ *     when it comes back after ten minutes or more away. Never while you
+ *     might be in the middle of something: not on every trip to the
+ *     background (opening the document scanner is one), and not while a scan
+ *     is out. If the new bundle can't even start, the updater puts the
+ *     previous one back by itself — that's what notifyAppReady confirms —
+ *     and that build isn't tried again.
  *   - The native app changed too (a new plugin, a new permission): a bundle
  *     can't bring that, so it says a new version is ready and the button
  *     opens the APK download. Installing it over the top keeps everything.
@@ -34,10 +36,17 @@ import { parseLatest, planUpdate, runningFrom, type LatestBuild } from './update
 const VERSION_URL = 'https://github.com/AviCagan/HouseholdLauncher/releases/download/latest/version.json'
 
 /** Coming back to the app after this long checks again. */
-const RECHECK_MS = 30 * 60 * 1000
+const RECHECK_MS = 15 * 60 * 1000
 
-/** Coming back after this long also swaps in a downloaded update. */
-const APPLY_AFTER_AWAY_MS = 60 * 60 * 1000
+/**
+ * Coming back after this long also swaps in a downloaded update. Android
+ * rarely starts the app fresh — opening it from recents is a return, not a
+ * start — so waiting for a fresh start alone could mean waiting for days.
+ */
+const APPLY_AFTER_AWAY_MS = 10 * 60 * 1000
+
+/** One notice at a time about updates; a newer one replaces it in place. */
+const PROMPT_ID = 'app-update'
 
 /** The first check waits for the app to be on screen, so its toast has somewhere to go. */
 const FIRST_CHECK_DELAY_MS = 5_000
@@ -185,17 +194,29 @@ export function startAppUpdates(): void {
   })().catch((err) => console.warn('[update] could not start', err))
 }
 
-const toldKey = (kind: string, code: number) => `update:told:${kind}:${code}`
+/*
+  The notices stay up until they're used or swiped away: a toast that left
+  after four seconds, once per build, was too easy to miss entirely. Each
+  check that finds the update still waiting puts it back up.
+*/
+function promptReady(latest: LatestBuild): void {
+  toast('Update ready', {
+    id: PROMPT_ID,
+    description: `Build ${latest.versionCode} has downloaded. Restart to use it; it takes a second.`,
+    duration: Infinity,
+    closeButton: true,
+    action: { label: 'Restart', onClick: () => void applyNow() },
+  })
+}
 
-/** Say something once per build, not on every check. */
-function once(kind: string, code: number): boolean {
-  try {
-    if (localStorage.getItem(toldKey(kind, code))) return false
-    localStorage.setItem(toldKey(kind, code), '1')
-  } catch {
-    // No storage: better to say it again than never.
-  }
-  return true
+function promptApk(latest: LatestBuild): void {
+  toast('A new version of the app is ready', {
+    id: PROMPT_ID,
+    description: `Build ${latest.versionCode} needs a fresh install. Your data stays.`,
+    duration: Infinity,
+    closeButton: true,
+    action: { label: 'Download', onClick: () => void downloadApk() },
+  })
 }
 
 /**
@@ -237,13 +258,7 @@ async function run(manual: boolean): Promise<void> {
 
     if (plan.kind === 'apk') {
       setStatus({ kind: 'apk', latest })
-      if (manual || once('apk', latest.versionCode)) {
-        toast('A new version of the app is ready', {
-          description: 'This one needs a fresh install. Your data stays.',
-          duration: 15_000,
-          action: { label: 'Download', onClick: () => void downloadApk() },
-        })
-      }
+      promptApk(latest)
       return
     }
 
@@ -258,18 +273,14 @@ async function run(manual: boolean): Promise<void> {
     }
     if (have && pending?.id === have.id) {
       setStatus({ kind: 'ready', latest, bundleId: have.id })
+      promptReady(latest)
       return
     }
     setStatus({ kind: 'downloading', latest, percent: 0 })
     const bundle = have ?? (await u.download({ url: latest.bundle.url, version, checksum: latest.bundle.checksum }))
     writePending({ id: bundle.id, version, tries: 0 })
     setStatus({ kind: 'ready', latest, bundleId: bundle.id })
-    if (manual || once('ready', latest.versionCode)) {
-      toast('Update downloaded', {
-        description: 'It goes in the next time you open the app.',
-        action: { label: 'Restart now', onClick: () => void applyNow() },
-      })
-    }
+    promptReady(latest)
   } catch (err) {
     console.warn('[update]', err)
     // A failed check is retried on the next launch or return; it only needs
