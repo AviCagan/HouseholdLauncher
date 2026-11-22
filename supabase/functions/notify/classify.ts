@@ -28,6 +28,8 @@ export type NotifyEvent =
   | 'show_finished'
   // Med School 2028
   | 'deadline_due'
+  // Mikvah Calendar
+  | 'mikvah_reminder'
 
 export interface Push {
   title: string
@@ -35,6 +37,25 @@ export interface Push {
   tab?: string
   itemId?: string
   tag?: string
+}
+
+/**
+ * One queued Mikvah Calendar reminder as the push to send.
+ *
+ * Her phone words the queue (027) — "Calendar reminder" unless she turned
+ * detail on — so this adds nothing of its own. The row's id is a readable key
+ * ("hefsek:…"), so the tag is a hash of it: what reaches the push service says
+ * no more than the text she chose.
+ */
+export function mikvahPush(r: { id: string; title: string | null; body: string | null }): Push {
+  let h = 0x811c9dc5
+  for (let i = 0; i < r.id.length; i++) h = Math.imul(h ^ r.id.charCodeAt(i), 0x01000193)
+  return {
+    title: r.title || 'Calendar reminder',
+    body: r.body ?? '',
+    tab: 'today',
+    tag: `cal-${(h >>> 0).toString(36)}`,
+  }
 }
 
 export const TAB_FOR: Record<string, string> = {

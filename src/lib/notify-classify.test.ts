@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { classify, URGENT_LEVEL } from '../../supabase/functions/notify/classify'
+import { classify, mikvahPush, URGENT_LEVEL } from '../../supabase/functions/notify/classify'
 import { URGENCY } from '@/data/types'
 
 /**
@@ -246,5 +246,21 @@ describe('classify: watched', () => {
     expect(classify({ type: 'INSERT', table: 'watch_seasons', record: done, old_record: null })?.event).toBe('season_finished')
     // Already finished: an edit.
     expect(classify({ type: 'UPDATE', table: 'watch_seasons', record: done, old_record: done })).toBeNull()
+  })
+})
+
+describe('mikvahPush', () => {
+  it('sends exactly the wording her phone chose, and a tag that says nothing', () => {
+    const push = mikvahPush({ id: 'hefsek:c1:2463000:plag@11111111-1111-1111-1111-111111111111', title: 'Calendar reminder', body: '' })
+    expect(push.title).toBe('Calendar reminder')
+    expect(push.body).toBe('')
+    expect(push.tag).toMatch(/^cal-[0-9a-z]+$/)
+    expect(JSON.stringify(push)).not.toMatch(/hefsek|mikvah|veset|bedikah/i)
+  })
+  it('is stable per row, distinct between rows, and neutral when the title is missing', () => {
+    const a = mikvahPush({ id: 'a', title: null, body: null })
+    expect(a.title).toBe('Calendar reminder')
+    expect(mikvahPush({ id: 'a', title: 'x', body: 'y' }).tag).toBe(a.tag)
+    expect(mikvahPush({ id: 'b', title: 'x', body: 'y' }).tag).not.toBe(a.tag)
   })
 })

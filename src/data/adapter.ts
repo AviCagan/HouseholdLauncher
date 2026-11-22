@@ -12,6 +12,15 @@ import type {
   LexiconEntry,
   Meal,
   MealTemplate,
+  MkContact,
+  MkEventRow,
+  MkMemo,
+  MkPartner,
+  MkReminder,
+  MkSettingsRow,
+  MkShared,
+  MkSourceNote,
+  MkTrip,
   MsCounter,
   MsCounterLog,
   MsCourse,
@@ -85,6 +94,17 @@ export const TABLES = [
   'ms_experiences',
   'ms_experience_logs',
   'ms_experience_steps',
+  // Mikvah Calendar (027). Each member receives only the rows the database
+  // lets them read: her records reach her phone alone.
+  'mk_shared',
+  'mk_events',
+  'mk_settings',
+  'mk_trips',
+  'mk_memos',
+  'mk_contacts',
+  'mk_source_notes',
+  'mk_partner',
+  'mk_reminders',
 ] as const
 
 export type TableName = (typeof TABLES)[number]
@@ -127,6 +147,15 @@ export interface TableMap {
   ms_experiences: MsExperience
   ms_experience_logs: MsExperienceLog
   ms_experience_steps: MsExperienceStep
+  mk_shared: MkShared
+  mk_events: MkEventRow
+  mk_settings: MkSettingsRow
+  mk_trips: MkTrip
+  mk_memos: MkMemo
+  mk_contacts: MkContact
+  mk_source_notes: MkSourceNote
+  mk_partner: MkPartner
+  mk_reminders: MkReminder
 }
 
 export type ChangeEvent<T extends TableName = TableName> =

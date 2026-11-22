@@ -1033,3 +1033,117 @@ export interface MsExperienceStep {
   sort: number
   updated_at: string
 }
+
+// ---------------------------------------------------------------------------
+// Mikvah Calendar (027). Her records are readable by her profile alone unless
+// she turns sharing on; the database enforces it, not this file. Nothing is
+// deleted: a mistaken entry is voided.
+// ---------------------------------------------------------------------------
+
+/** One raw event. Every status and date is recomputed from these. */
+export interface MkEventRow {
+  id: string
+  owner_id: string
+  kind:
+    | 'flow' | 'hefsek' | 'moch' | 'bedikah' | 'stain' | 'immersion' | 'pregnancy' | 'birth'
+    | 'miscarriage' | 'kallah' | 'medication' | 'symptom' | 'menopause' | 'seed' | 'kavua' | 'ruling'
+  at: string
+  result: 'clean' | 'not_clean' | 'question' | null
+  data: Record<string, unknown>
+  voided_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** One version of her settings. A change is a new row, never an edit. */
+export interface MkSettingsRow {
+  id: string
+  owner_id: string
+  settings: Record<string, unknown>
+  effective_from: string
+  created_at: string
+  updated_at: string
+}
+
+export interface MkTrip {
+  id: string
+  owner_id: string
+  name: string
+  lat: number
+  lng: number
+  tz: string
+  from_day: string
+  to_day: string
+  voided_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface MkMemo {
+  id: string
+  owner_id: string
+  day: string
+  body: string
+  voided_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface MkContact {
+  id: string
+  owner_id: string
+  name: string
+  phone: string | null
+  note: string | null
+  sort: number
+  voided_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** A correction to one citation in the rule registry. */
+export interface MkSourceNote {
+  id: string
+  owner_id: string
+  rule_id: string
+  idx: number
+  ref: string | null
+  checked: boolean | null
+  created_at: string
+  updated_at: string
+}
+
+/** What his phone shows, published by hers. id is her profile. */
+export interface MkShared {
+  id: string
+  partner_id: string | null
+  snapshot: unknown
+  share_details: boolean
+  published_at: string | null
+  updated_at: string
+}
+
+/** His inputs for her calendar. id is his profile. */
+export interface MkPartner {
+  id: string
+  owner_id: string
+  away: { from: string; to: string }[]
+  shiva: { from: string; to: string }[]
+  prefs: Record<string, unknown>
+  updated_at: string
+}
+
+/** One queued reminder for one person. */
+export interface MkReminder {
+  id: string
+  owner_id: string
+  target_id: string
+  fire_at: string
+  title: string
+  body: string
+  rule_id: string | null
+  cancelled: boolean
+  sent_at: string | null
+  created_at: string
+  updated_at: string
+}

@@ -10,6 +10,7 @@
 //      the client would send nothing when the acting person's app is closed.
 //   2. A pg_cron sweep for chores coming off cooldown, which no row change can
 //      announce because nothing is written when a cooldown expires.
+//   3. A per-minute pg_cron call for Mikvah Calendar reminders (027).
 //
 // Deploy:  supabase functions deploy notify --no-verify-jwt
 // Secrets: supabase secrets set VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=... \
@@ -19,7 +20,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import webpush from 'npm:web-push@3.6.7'
 import { JWT } from 'npm:google-auth-library@9'
-import { addCalendarDays, classify, deadlineReminder, showCalendarDay, type NotifyEvent, type Push, type WebhookBody } from './classify.ts'
+import { addCalendarDays, classify, deadlineReminder, mikvahPush, showCalendarDay, type NotifyEvent, type Push, type WebhookBody } from './classify.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -466,6 +467,60 @@ async function sweepMedSchool() {
   return total
 }
 
+// --- Mikvah Calendar --------------------------------------------------------
+
+/** A reminder this late is dropped, not sent: yesterday's mikvah night is worse than nothing. */
+const MK_STALE_MS = 2 * 3_600_000
+
+/**
+ * Mikvah Calendar reminders, to the minute.
+ *
+ * pg_cron calls this every minute, and only when a row is due (027). Her phone
+ * writes the queue after every recompute, one row per recipient, already
+ * worded; this only delivers. Each row is claimed before it is sent, so an
+ * overlapping run gets nothing back and skips it.
+ *
+ * Sent only to members granted the app explicitly — never the owner default
+ * — which the database also requires before anyone can be named partner.
+ */
+async function sweepMikvah() {
+  const now = Date.now()
+  const { data: due, error } = await db
+    .from('mk_reminders')
+    .select('id, target_id, title, body')
+    .is('sent_at', null)
+    .eq('cancelled', false)
+    .lte('fire_at', new Date(now).toISOString())
+    .gt('fire_at', new Date(now - MK_STALE_MS).toISOString())
+    .order('fire_at')
+    .limit(100)
+  // A project without 027_mikvah.sql simply has nothing to send.
+  if (error || !due || due.length === 0) return 0
+
+  const { data: grants } = await db.from('app_access').select('profile_id').eq('app_id', 'mikvah').eq('granted', true)
+  const granted = (grants ?? []).map((g) => g.profile_id as string)
+  const { data: active } = granted.length
+    ? await db.from('profiles').select('id, is_active').in('id', granted)
+    : { data: [] as { id: string; is_active: boolean | null }[] }
+  const allowed = new Set((active ?? []).filter((p) => p.is_active !== false).map((p) => p.id as string))
+
+  let total = 0
+  for (const r of due) {
+    const { data: claimed } = await db
+      .from('mk_reminders')
+      .update({ sent_at: new Date().toISOString() })
+      .eq('id', r.id)
+      .is('sent_at', null)
+      .eq('cancelled', false)
+      .select('id')
+    if (!claimed || claimed.length === 0) continue
+    if (!allowed.has(r.target_id as string)) continue
+    const { sent } = await deliver([r.target_id as string], 'mikvah_reminder', mikvahPush(r), 'mikvah')
+    total += sent
+  }
+  return total
+}
+
 // --- entrypoint -------------------------------------------------------------
 
 /*
@@ -506,6 +561,11 @@ Deno.serve(async (req) => {
         console.error('[notify] medschool sweep', err)
       }
       return reply({ ok: true, mode: 'sweep', sent, medschool })
+    }
+
+    if (body.mode === 'sweep_mikvah') {
+      const sent = await sweepMikvah()
+      return reply({ ok: true, mode: 'sweep_mikvah', sent })
     }
 
     /*

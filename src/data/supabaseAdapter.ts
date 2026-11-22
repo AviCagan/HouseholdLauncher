@@ -39,6 +39,17 @@ const OWN_CHANNEL: Record<string, readonly TableName[]> = {
   ],
   // A later migration (026) than the rest of Med School, so its own channel.
   'medschool-experiences': ['ms_experiences', 'ms_experience_logs', 'ms_experience_steps'],
+  mikvah: [
+    'mk_shared',
+    'mk_events',
+    'mk_settings',
+    'mk_trips',
+    'mk_memos',
+    'mk_contacts',
+    'mk_source_notes',
+    'mk_partner',
+    'mk_reminders',
+  ],
 }
 
 function realtimeChannels(): [name: string, tables: readonly TableName[]][] {
