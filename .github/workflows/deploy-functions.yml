@@ -47,33 +47,37 @@ jobs:
             exit 1
           fi
 
+      # --yes: the CLI now asks before deploying, and a CI run can't answer,
+      # so without it nothing deploys ("Confirmation required ... Nothing was
+      # changed").
+      #
       # Every one of these is fetched by something that cannot send an
       # Authorization header — Google Calendar polling the feed, Postgres
       # firing a webhook, the browser unfurling a link — so JWT verification
       # has to be off or the call is rejected before the code runs.
       - name: Deploy functions
         run: |
-          supabase functions deploy calendar  --project-ref "$PROJECT_REF" --no-verify-jwt
-          supabase functions deploy unfurl    --project-ref "$PROJECT_REF" --no-verify-jwt
-          supabase functions deploy notify    --project-ref "$PROJECT_REF" --no-verify-jwt
-          supabase functions deploy add       --project-ref "$PROJECT_REF" --no-verify-jwt
-          supabase functions deploy recipe    --project-ref "$PROJECT_REF" --no-verify-jwt
+          supabase functions deploy calendar  --project-ref "$PROJECT_REF" --no-verify-jwt --yes
+          supabase functions deploy unfurl    --project-ref "$PROJECT_REF" --no-verify-jwt --yes
+          supabase functions deploy notify    --project-ref "$PROJECT_REF" --no-verify-jwt --yes
+          supabase functions deploy add       --project-ref "$PROJECT_REF" --no-verify-jwt --yes
+          supabase functions deploy recipe    --project-ref "$PROJECT_REF" --no-verify-jwt --yes
           # `household` also runs without JWT verification, and has to: the
           # `redeem` action is called by someone with no session yet, which is
           # the entire point of it. Every other action authenticates the caller
           # itself — see the identify() function in its source.
-          supabase functions deploy household --project-ref "$PROJECT_REF" --no-verify-jwt
+          supabase functions deploy household --project-ref "$PROJECT_REF" --no-verify-jwt --yes
           # Inventory's link to Google Drive. No JWT verification for the same
           # reason: the browser's CORS preflight carries no token. Every real
           # request is checked against the caller's session in the function.
-          supabase functions deploy inventory --project-ref "$PROJECT_REF" --no-verify-jwt
+          supabase functions deploy inventory --project-ref "$PROJECT_REF" --no-verify-jwt --yes
 
       # Only the sender needs secrets, and only once they exist. Skipping this
       # leaves the other two functions perfectly usable.
       - name: Push notification secrets
         if: env.VAPID_PRIVATE_KEY != ''
         run: |
-          supabase secrets set --project-ref "$PROJECT_REF" \
+          supabase secrets set --yes --project-ref "$PROJECT_REF" \
             VAPID_PUBLIC_KEY="$VAPID_PUBLIC_KEY" \
             VAPID_PRIVATE_KEY="$VAPID_PRIVATE_KEY" \
             VAPID_SUBJECT="${VAPID_SUBJECT:-mailto:things@example.com}"
@@ -81,7 +85,7 @@ jobs:
       - name: Push Firebase service account
         if: env.FCM_SERVICE_ACCOUNT != ''
         run: |
-          supabase secrets set --project-ref "$PROJECT_REF" \
+          supabase secrets set --yes --project-ref "$PROJECT_REF" \
             FCM_SERVICE_ACCOUNT="$FCM_SERVICE_ACCOUNT"
 
       # The pepper mixed into every household-code hash. Without it the
@@ -93,6 +97,6 @@ jobs:
           if [ -z "$HOUSEHOLD_CODE_PEPPER" ]; then
             echo "::warning::HOUSEHOLD_CODE_PEPPER is not set — household codes are hashed with a public default. Set the repository secret."
           else
-            supabase secrets set --project-ref "$PROJECT_REF" \
+            supabase secrets set --yes --project-ref "$PROJECT_REF" \
               HOUSEHOLD_CODE_PEPPER="$HOUSEHOLD_CODE_PEPPER"
           fi
