@@ -489,7 +489,8 @@ export const RULES: Rule[] = [
     title: 'Harchakot',
     text:
       'While she is niddah, until she immerses, the harchakot — the restrictions on contact between them — apply. The calendar shows this as a one-line note and does not track them.',
-    sources: [MO()],
+    // Added for the status note; not read for this rule, so it reads "as cited by".
+    sources: [research('mikvah.org, "Taharas Hamishpacha Simplified" (harchakot)')],
     confidence: 'H',
     handling: 'feature',
   },
