@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Icon } from '@/components/primitives/Icon'
 import { addMemo, editMemo, enterRuling, saveSourceNote, voidMemo, withdrawRuling } from '../actions'
 import { citation, civilOf, GLOSSARY, hebrewLabel, onahSpan, place, rule, RULES, statusAt, vesetName, withNotes, type Half } from '../engine'
-import { civilLabel, time, tzAt, when } from '../format'
+import { cap, civilLabel, time, tzAt, when } from '../format'
 import { openSheet } from '../store'
 import { S } from '../strings'
 import { AskBadge, Btn, Card, Dot, Field, Section, Why, type Tone } from '../ui'
@@ -10,6 +10,7 @@ import { useCalendar, useHer } from '../useMikvah'
 import { describe, keysFor } from '../settingsUi'
 import { DEFAULT_STORED } from '../model'
 import { EventLine } from './log'
+import { KIND_LABEL } from '../strings'
 
 const HANDLING: Record<string, string> = {
   decides: 'The calendar works this out.',
@@ -209,8 +210,8 @@ export function DaySheet({ abs }: { abs: number }) {
           <Card key={half} tone={st.kind as Tone}>
             <div className="flex items-start gap-3">
               <div className="min-w-0 flex-1">
-                <p className="mk-label capitalize">
-                  {half} onah · {when(span.start, z)}
+                <p className="mk-label">
+                  {cap(half)} onah · {when(span.start, z)}
                 </p>
                 <p className="mt-0.5 text-[15px] font-semibold">{st.line.replace(/ — onat perishah.*$/, '')}</p>
               </div>
@@ -246,7 +247,7 @@ export function DaySheet({ abs }: { abs: number }) {
         <Section title="Logged">
           {dayEvents.map((e) => (
             <div key={e.id}>
-              <p className="mk-label mb-1 px-1 capitalize">{e.kind}</p>
+              <p className="mk-label mb-1 px-1">{KIND_LABEL[e.kind]}</p>
               <EventLine e={e} />
             </div>
           ))}

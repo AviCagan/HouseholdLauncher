@@ -1,3 +1,5 @@
+import type { MkEventRow } from '@/data/types'
+
 /**
  * The app's own words, in one place so another language can be added beside
  * them. Halachic text — rules, sources, what a flag holds — lives in the
@@ -134,3 +136,24 @@ export const S = {
     confirmed: 'Confirmed with our rav',
   },
 } as const
+
+/** What each kind of entry is called. */
+export const KIND_LABEL: Record<MkEventRow['kind'], string> = {
+  flow: 'Period started',
+  hefsek: 'Hefsek taharah',
+  moch: 'Moch dachuk',
+  bedikah: 'Bedikah',
+  stain: 'Stain',
+  immersion: 'Immersion',
+  pregnancy: 'Pregnancy',
+  birth: 'Birth',
+  miscarriage: 'Miscarriage',
+  kallah: 'Kallah',
+  medication: 'Hormonal treatment',
+  symptom: 'Body sign',
+  menopause: 'Menopause',
+  seed: 'Starting haflagah numbers',
+  kavua: 'Kavua set by your rav',
+  ruling: 'Rav’s answer',
+  nursing: 'Nursing',
+}

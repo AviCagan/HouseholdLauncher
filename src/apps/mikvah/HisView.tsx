@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { Icon } from '@/components/primitives/Icon'
 import { savePartner } from './actions'
 import { segmentAt, type Segment } from './engine'
-import { civilLabel, countdown, day, time } from './format'
+import { cap, civilLabel, countdown, day, time } from './format'
 import { S } from './strings'
-import { AskBadge, Btn, Card, cap, Dot, Field, Section, Toggle, Why, type Tone } from './ui'
+import { AskBadge, Btn, Card, Dot, Field, Section, Toggle, Why, type Tone } from './ui'
 import { useCalendar } from './useMikvah'
 
 /**

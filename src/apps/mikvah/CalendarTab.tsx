@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Icon } from '@/components/primitives/Icon'
-import { absOfCivil, civilOf, dayOfMonth, hebrewLabel, monthName, onahSpan, place, statusAt, type Half, type Result, type Settings, type Zmanim } from './engine'
+import { absOfCivil, civilOf, cycleAt, dayOfMonth, hebrewLabel, monthName, onahSpan, place, statusAt, type Half, type Result, type Settings, type Zmanim } from './engine'
 import { today } from './format'
 import { cycleRows, stats } from './history'
 import { openSheet } from './store'
@@ -21,10 +21,21 @@ interface HalfLook {
   veset: boolean
 }
 
-function halfLook(result: Result, z: Zmanim, s: Settings, abs: number, half: Half): HalfLook {
+function halfLook(result: Result, z: Zmanim, s: Settings, abs: number, half: Half, now: number): HalfLook {
   const span = onahSpan({ abs, half }, z, s, false)
-  const st = statusAt(result, (span.start + span.end) / 2, z, s)
+  const mid = (span.start + span.end) / 2
+  const st = statusAt(result, mid, z, s)
   const veset = result.vestot.some((v) => (v.kind !== 'or_zarua' || s.orZarua) && v.onot.some((o) => o.abs === abs && o.half === half))
+  // Before the first thing she logged, there is nothing to show.
+  if (result.cycles.length === 0 || mid < result.cycles[0].startAt) return { tone: 'unknown', veset }
+  // Ahead of now, beyond what the calendar can know yet: past the earliest
+  // hefsek with none logged, or past mikvah night with no immersion.
+  if (mid > now) {
+    const c = cycleAt(result, mid)
+    if (st.kind === 'after_seven' || (st.kind === 'waiting' && c && !c.hefsek && c.earliestHefsek !== null && abs > c.earliestHefsek)) {
+      return { tone: 'unknown', veset }
+    }
+  }
   return { tone: st.kind as Tone, veset }
 }
 
@@ -84,9 +95,9 @@ export function CalendarTab() {
       </div>
 
       {view === 'month' ? (
-        <Month y={cursor.y} m={cursor.m} result={result} z={z} s={s} todayAbs={todayAbs} marks={marks} />
+        <Month y={cursor.y} m={cursor.m} result={result} z={z} s={s} now={now} todayAbs={todayAbs} marks={marks} />
       ) : (
-        <Year y={cursor.y} result={result} z={z} s={s} todayAbs={todayAbs} onPick={(m) => (setCursor({ y: cursor.y, m }), setView('month'))} />
+        <Year y={cursor.y} result={result} z={z} s={s} now={now} todayAbs={todayAbs} onPick={(m) => (setCursor({ y: cursor.y, m }), setView('month'))} />
       )}
 
       <Legend ovulation={s.showOvulation} />
@@ -122,6 +133,7 @@ function Month({
   result,
   z,
   s,
+  now,
   todayAbs,
   marks,
 }: {
@@ -130,6 +142,7 @@ function Month({
   result: Result
   z: Zmanim
   s: Settings
+  now: number
   todayAbs: number
   marks: { mikvah: Set<number>; flows: Set<number>; sep: Set<number>; memo: Set<number>; ovulation: Set<number> }
 }) {
@@ -141,10 +154,10 @@ function Month({
     const total = Math.ceil((lead + count) / 7) * 7
     for (let i = 0; i < total; i++) {
       const abs = first - lead + i
-      out.push({ abs, inMonth: i >= lead && i < lead + count, night: halfLook(result, z, s, abs, 'night'), day: halfLook(result, z, s, abs, 'day') })
+      out.push({ abs, inMonth: i >= lead && i < lead + count, night: halfLook(result, z, s, abs, 'night', now), day: halfLook(result, z, s, abs, 'day', now) })
     }
     return out
-  }, [first, lead, count, result, z, s])
+  }, [first, lead, count, result, z, s, now])
 
   return (
     <div>
@@ -189,15 +202,15 @@ function Month({
   )
 }
 
-function Year({ y, result, z, s, todayAbs, onPick }: { y: number; result: Result; z: Zmanim; s: Settings; todayAbs: number; onPick: (m: number) => void }) {
+function Year({ y, result, z, s, now, todayAbs, onPick }: { y: number; result: Result; z: Zmanim; s: Settings; now: number; todayAbs: number; onPick: (m: number) => void }) {
   const months = useMemo(
     () =>
       MONTHS.map((_, m) => {
         const first = absOfCivil(civil(y, m, 1))
         const lead = new Date(Date.UTC(y, m, 1)).getUTCDay()
-        return { m, lead, days: Array.from({ length: daysIn(y, m) }, (_, i) => ({ abs: first + i, look: halfLook(result, z, s, first + i, 'day') })) }
+        return { m, lead, days: Array.from({ length: daysIn(y, m) }, (_, i) => ({ abs: first + i, look: halfLook(result, z, s, first + i, 'day', now) })) }
       }),
-    [y, result, z, s],
+    [y, result, z, s, now],
   )
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -248,6 +261,10 @@ function Legend({ ovulation }: { ovulation: boolean }) {
         <span className="flex items-center gap-1.5">
           <span className="inline-block h-2.5 w-4 rounded-sm" style={{ outline: '2px dashed var(--mk-sep)', outlineOffset: -2 }} />
           Separation day
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-2.5 w-4 rounded-sm" style={{ border: '1px solid var(--border-strong)' }} />
+          Not known yet
         </span>
       </div>
       <div className="flex items-center gap-2 px-1">

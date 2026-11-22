@@ -4,11 +4,8 @@ import { fire } from '@/lib/haptics'
 import { why } from './store'
 import { S } from './strings'
 
-/** "onah beinonit" → "Onah beinonit", for a name at the start of a line. */
-export const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
-
 /** A status or overlay: picks the colour from mikvah.css. */
-export type Tone = 'waiting' | 'counting' | 'after_seven' | 'mikvah' | 'tehorah' | 'none' | 'onah' | 'sep' | 'ask'
+export type Tone = 'waiting' | 'counting' | 'after_seven' | 'mikvah' | 'tehorah' | 'none' | 'onah' | 'sep' | 'ask' | 'unknown'
 
 export function Card({ children, tone, className = '', onClick }: { children: ReactNode; tone?: Tone; className?: string; onClick?: () => void }) {
   const cls = `mk-card ${tone ? `mk-tone-${tone} mk-toned` : ''} ${className}`

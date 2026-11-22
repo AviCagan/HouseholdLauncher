@@ -1,13 +1,12 @@
 import { useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Icon } from '@/components/primitives/Icon'
-import type { MkEventRow } from '@/data/types'
 import { addContact, addMemo, addTrip, editContact, logEvent, voidContact, voidEvent, voidTrip } from '../actions'
 import { absOfCivil, crossesDateLine, hebrewLabel, place, vesetName, type KavuaRuling } from '../engine'
-import { civilLabel, dateBoth, nightBoth, time, today, tzAt, when } from '../format'
+import { cap, civilLabel, dateBoth, nightBoth, time, today, tzAt, when } from '../format'
 import { cycleRows, stats } from '../history'
 import { openSheet } from '../store'
-import { S } from '../strings'
+import { KIND_LABEL, S } from '../strings'
 import { AskBadge, Btn, Card, Choice, Field, Section, Why } from '../ui'
 import { useHer } from '../useMikvah'
 import { TzSelect } from './settings'
@@ -146,25 +145,6 @@ export function MemosSheet() {
 
 // --- everything logged --------------------------------------------------------------------------
 
-const KIND_LABEL: Record<MkEventRow['kind'], string> = {
-  flow: 'Period started',
-  hefsek: 'Hefsek taharah',
-  moch: 'Moch dachuk',
-  bedikah: 'Bedikah',
-  stain: 'Stain',
-  immersion: 'Immersion',
-  pregnancy: 'Pregnancy',
-  birth: 'Birth',
-  miscarriage: 'Miscarriage',
-  kallah: 'Kallah',
-  medication: 'Hormonal treatment',
-  symptom: 'Body sign',
-  menopause: 'Menopause',
-  seed: 'Starting haflagah numbers',
-  kavua: 'Kavua set by your rav',
-  ruling: 'Rav’s answer',
-  nursing: 'Nursing',
-}
 
 export function EventsSheet() {
   const { events, zmanim: z, stored: s } = useHer()
@@ -507,7 +487,7 @@ export function PrintSheet({ mode }: { mode: 'rav' | 'calendar' }) {
                     <td>{v.onot.map((o) => hebrewLabel(o.abs)).filter((x, i, a) => a.indexOf(x) === i).join(', ')}</td>
                     <td>{v.onot.map((o) => o.half).join(' + ')}</td>
                     <td>
-                      {vesetName(v.kind)}
+                      {cap(vesetName(v.kind))}
                       {v.number ? ` (${v.number})` : ''}
                     </td>
                     <td>{when(v.start, z)}</td>

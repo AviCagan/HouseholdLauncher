@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { logEvent } from './actions'
 import { place, vesetName, type Veset } from './engine'
-import { dateBoth, day, hebrew, time, tzAt, when } from './format'
+import { cap, dateBoth, day, hebrew, time, tzAt, when } from './format'
 import { S } from './strings'
-import { Btn, Card, cap, Choice, Dot, Section, Why } from './ui'
+import { Btn, Card, Choice, Dot, Section, Why } from './ui'
 import { useHer } from './useMikvah'
 
 /**

@@ -55,6 +55,14 @@
 .mk-tone-onah { --tone: var(--mk-onah); }
 .mk-tone-sep { --tone: var(--mk-sep); }
 .mk-tone-ask { --tone: var(--mk-ask); }
+/* Ahead of what is known (no hefsek yet, mikvah night not yet past): no colour. */
+.mk-tone-unknown { --tone: transparent; }
+
+.mk-print-doc h1 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+.mk-print-doc h2 { font-size: 15px; font-weight: 700; margin: 14px 0 4px; }
+.mk-print-doc p { margin: 2px 0; }
+.mk-print-doc table { border-collapse: collapse; width: 100%; margin: 6px 0; }
+.mk-print-doc th, .mk-print-doc td { border: 1px solid #ccc; padding: 4px 6px; text-align: left; vertical-align: top; }
 
 .mk-card {
   background: var(--surface);

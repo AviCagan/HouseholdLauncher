@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { cycleAt, nextThing, place, statusAt, vesetName, type Cycle } from './engine'
-import { countdown, dateBoth, hebrew, nightBoth, time, tzAt, when } from './format'
+import { cap, countdown, dateBoth, hebrew, nightBoth, time, tzAt, when } from './format'
 import { openSheet, useMkUI } from './store'
 import { S } from './strings'
-import { AskBadge, Btn, Card, cap, Dot, Section, Why, type Tone } from './ui'
+import { AskBadge, Btn, Card, Dot, Section, Why, type Tone } from './ui'
 import { useHer } from './useMikvah'
 
 /**

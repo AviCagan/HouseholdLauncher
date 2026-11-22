@@ -208,6 +208,7 @@ function Publisher({ cal }: { cal: HerCalendar }) {
 const SHEET_TITLE: Partial<Record<MkSheet['kind'], string>> = {
   why: S.why,
   flag: S.askRav,
+  day: 'The day',
   flow: S.flow.title,
   hefsek: S.hefsek.title,
   bedikot: S.bedikot.title,

@@ -92,3 +92,6 @@ export function fromLocalInput(v: string, tz: string): number {
   }
   return t
 }
+
+/** "onah beinonit" → "Onah beinonit", for a name at the start of a line. */
+export const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1)
