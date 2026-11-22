@@ -1,4 +1,5 @@
 import { hebrewLabel, type Zmanim } from './calendar'
+import { vesetName } from './engine'
 import type { Settings } from './settings'
 import { timeline, type Segment } from './status'
 import type { Result } from './types'
@@ -17,7 +18,8 @@ export interface HisSnapshot {
   v: 1
   publishedAt: number
   segments: Segment[]
-  onot: { start: number; end: number; beinonit: boolean; done: boolean | null }[]
+  /** Each onah's name and rule, so his "Why?" works; never its source dates. */
+  onot: { start: number; end: number; name: string; ruleId: string; beinonit: boolean; done: boolean | null }[]
   mikvah: { at: number; label: string; onHold: boolean } | null
 }
 
@@ -32,7 +34,7 @@ export function hisView(result: Result, z: Zmanim, s: Settings, now: number, day
       .filter((v) => v.end > now - 86_400_000 && v.start < until && (v.kind !== 'or_zarua' || s.orZarua))
       .map((v) => {
         const beinonit = v.kind === 'beinonit' || v.kind === 'beinonit31'
-        return { start: v.start, end: v.end, beinonit, done: beinonit ? v.bedikahDone : null }
+        return { start: v.start, end: v.end, name: vesetName(v.kind), ruleId: v.ruleId, beinonit, done: beinonit ? v.bedikahDone : null }
       }),
     mikvah:
       current?.mikvah && !current.mikvah.withheld

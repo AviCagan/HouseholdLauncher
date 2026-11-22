@@ -1,0 +1,147 @@
+/*
+  Calendar — quiet on purpose. The launcher's own surfaces, with one colour
+  per status. Text colours are dark enough to read on white in light mode and
+  light enough on the dark surfaces, so a status is never told by colour
+  alone: every one also has its words.
+*/
+.mk {
+  --mk-wait: #c2416b;
+  --mk-count: #9a5b00;
+  --mk-mikvah: #3d5bd9;
+  --mk-tehorah: #17774e;
+  --mk-onah: #7c4dde;
+  --mk-sep: #64748b;
+  --mk-none: #6b7280;
+  --mk-ask: #b45309;
+  /* Chart bars: validated against the light and dark surfaces (dataviz). */
+  --mk-bar: #3d5bd9;
+  color: var(--text);
+}
+/* The app's own page; inside a sheet the sheet's surface shows through. */
+.mk-root { background: var(--bg); }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .mk {
+    --mk-wait: #f07aa0;
+    --mk-count: #f2b04a;
+    --mk-mikvah: #8aa2ff;
+    --mk-tehorah: #4fd19a;
+    --mk-onah: #b597ff;
+    --mk-sep: #a3b1c6;
+    --mk-none: #9ca3af;
+    --mk-ask: #fbbf24;
+    --mk-bar: #6f8cf6;
+  }
+}
+:root[data-theme='dark'] .mk,
+:root[data-theme='oled'] .mk {
+  --mk-wait: #f07aa0;
+  --mk-count: #f2b04a;
+  --mk-mikvah: #8aa2ff;
+  --mk-tehorah: #4fd19a;
+  --mk-onah: #b597ff;
+  --mk-sep: #a3b1c6;
+  --mk-none: #9ca3af;
+  --mk-ask: #fbbf24;
+  --mk-bar: #6f8cf6;
+}
+
+.mk-tone-waiting { --tone: var(--mk-wait); }
+.mk-tone-counting { --tone: var(--mk-count); }
+.mk-tone-after_seven { --tone: var(--mk-count); }
+.mk-tone-mikvah { --tone: var(--mk-mikvah); }
+.mk-tone-tehorah { --tone: var(--mk-tehorah); }
+.mk-tone-none { --tone: var(--mk-none); }
+.mk-tone-onah { --tone: var(--mk-onah); }
+.mk-tone-sep { --tone: var(--mk-sep); }
+.mk-tone-ask { --tone: var(--mk-ask); }
+
+.mk-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+}
+.mk-toned {
+  background: color-mix(in oklab, var(--tone) 9%, var(--surface));
+  border: 1px solid color-mix(in oklab, var(--tone) 30%, transparent);
+}
+.mk-tone-text { color: var(--tone); }
+.mk-tone-dot { background: var(--tone); }
+
+.mk-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 44px;
+  padding: 0 1rem;
+  border-radius: 14px;
+  font-weight: 600;
+  font-size: 14.5px;
+  background: var(--surface-2);
+  color: var(--text);
+}
+.mk-btn:disabled { opacity: 0.45; }
+.mk-btn-primary { background: var(--accent); color: white; }
+.mk-btn-toned { background: color-mix(in oklab, var(--tone) 16%, var(--surface)); color: var(--tone); }
+.mk-btn-danger { background: color-mix(in oklab, var(--danger) 14%, var(--surface)); color: var(--danger); }
+
+.mk-why {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: 28px;
+  padding: 0 0.55rem;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: var(--surface-2);
+}
+
+.mk-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 0.8rem;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 15px;
+}
+textarea.mk-input { padding: 0.6rem 0.8rem; min-height: 88px; }
+
+.mk-label { font-size: 12px; font-weight: 600; letter-spacing: 0.02em; color: var(--text-dim); }
+.mk-faint { color: var(--text-faint); }
+.mk-dim { color: var(--text-dim); }
+
+/* The calendar grid: each day is a night half over a day half. */
+.mk-cell {
+  position: relative;
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  border-radius: 10px;
+  overflow: hidden;
+  min-height: 52px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.mk-half { position: relative; }
+.mk-half.night { background: color-mix(in oklab, var(--tone, transparent) 26%, var(--surface-2)); }
+.mk-half.day { background: color-mix(in oklab, var(--tone, transparent) 16%, var(--surface)); }
+.mk-half.veset::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(135deg, color-mix(in oklab, var(--mk-onah) 55%, transparent) 0 3px, transparent 3px 7px);
+}
+.mk-cell.sep { outline: 2px dashed var(--mk-sep); outline-offset: -2px; }
+.mk-cell.today { box-shadow: 0 0 0 2px var(--accent); }
+.mk-cell.out { opacity: 0.38; }
+
+@media print {
+  .mk-noprint { display: none !important; }
+  body:has(.mk-print-doc) * { visibility: hidden !important; }
+  .mk-print-doc, .mk-print-doc * { visibility: visible !important; }
+  .mk-print-doc { position: absolute; inset: 0 auto auto 0; width: 100%; border: 0; }
+}

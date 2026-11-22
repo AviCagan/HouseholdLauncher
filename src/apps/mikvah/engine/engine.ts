@@ -1,5 +1,6 @@
 import {
   absOfCivil,
+  addCivilDays,
   civilDayIn,
   civilOf,
   dayOfMonth,
@@ -11,6 +12,7 @@ import {
   weekday,
   type Half,
   type Onah,
+  type Stay,
   type Zmanim,
 } from './calendar'
 import { detectKavua } from './kavua'
@@ -47,7 +49,12 @@ export interface Input {
   zmanim: Zmanim
   now: number
   partner?: PartnerInput
+  /** Her trips, as the zmanim provider also has them — for the date-line question (T1). */
+  trips?: (Stay & { id: string })[]
 }
+
+/** The short way between two longitudes crosses the 180th meridian. */
+export const crossesDateLine = (a: number, b: number): boolean => Math.abs(a - b) > 180
 
 /** Where an instant falls: the Hebrew date and onah, and how close it was to shkiah. */
 export interface Placed {
@@ -170,6 +177,26 @@ export function calculate(input: Input): Result {
     const ruling = rulings.get(f.key) ?? null
     flags.set(f.key, { ...f, ruling })
     return ruling
+  }
+
+  // T1: a trip across the date line is a question for a rav. Until it is
+  // answered, a mikvah night near the trip waits.
+  const tripHolds: { key: string; from: number; to: number }[] = []
+  for (const t of input.trips ?? []) {
+    const before = z.placeOn(addCivilDays(t.from, -1))
+    const after = z.placeOn(addCivilDays(t.to, 1))
+    if (!crossesDateLine(before.lng, t.place.lng) && !crossesDateLine(t.place.lng, after.lng)) continue
+    const key = `T1:${t.id}`
+    const r = raise({
+      key,
+      ruleId: 'T1',
+      title: 'A trip across the date line',
+      facts: [`${t.place.name || 'A trip'}, ${t.from} to ${t.to}, crosses the date line on the way there or back.`],
+      at: Date.parse(`${t.from}T12:00:00Z`),
+      holds: 'A mikvah night within a day of the trip waits for your rav. The onot are still shown.',
+      options: RESOLVED,
+    })
+    if (!r) tripHolds.push({ key, from: absOfCivil(t.from) - 1, to: absOfCivil(t.to) + 1 })
   }
 
   const cycles: Working[] = []
@@ -798,6 +825,8 @@ export function calculate(input: Input): Result {
       }
       break
     }
+
+    for (const h of tripHolds) if (h.from <= abs && w.day1 <= h.to) waitingOn.push(h.key)
 
     const evening = civilOf(abs - 1)
     const restBefore = z.isRestDay(evening)

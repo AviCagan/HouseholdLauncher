@@ -71,7 +71,7 @@ create table if not exists mk_events (
   kind        text not null check (kind in (
                 'flow', 'hefsek', 'moch', 'bedikah', 'stain', 'immersion',
                 'pregnancy', 'birth', 'miscarriage', 'kallah', 'medication',
-                'symptom', 'menopause', 'seed', 'kavua', 'ruling')),
+                'symptom', 'menopause', 'seed', 'kavua', 'ruling', 'nursing')),
   at          timestamptz not null,
   result      text check (result is null or result in ('clean', 'not_clean', 'question')),
   -- Kind-specific details: a ruling's flag and outcome, a moch forgotten, a note.

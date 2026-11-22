@@ -133,6 +133,17 @@ export const APPS: AppDef[] = [
     explicitGrant: true,
   },
   {
+    id: 'mikvah',
+    // Discreet on purpose: each of them can rename the tile and change its
+    // icon in the app (her settings, his view). Shown only where granted.
+    name: 'Calendar',
+    blurb: 'Dates and reminders',
+    icon: 'calendar',
+    color: '#5b6b8c',
+    platforms: ['android', 'web'],
+    explicitGrant: true,
+  },
+  {
     id: 'bluetooth',
     name: 'Bluetooth',
     blurb: 'Drop the car without digging through settings',

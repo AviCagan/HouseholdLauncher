@@ -37,6 +37,9 @@ const MedSchoolApp = lazy(() =>
   import('@/apps/medschool/MedSchoolApp').then((m) => ({ default: m.MedSchoolApp })),
 )
 
+/* The calendar is lazy as well: private, for two people, and nobody else's load. */
+const MikvahApp = lazy(() => import('@/apps/mikvah/MikvahApp').then((m) => ({ default: m.MikvahApp })))
+
 export function AppHost({ appId }: { appId: string }) {
   const app = appById(appId)
   const allowed = useHasApp(appId)
@@ -92,6 +95,12 @@ export function AppHost({ appId }: { appId: string }) {
       {appId === 'medschool' && (
         <Suspense fallback={<div className="h-full" style={{ background: '#02060c' }} />}>
           <MedSchoolApp />
+        </Suspense>
+      )}
+      {/* The calendar draws its own quiet header. */}
+      {appId === 'mikvah' && (
+        <Suspense fallback={<div className="h-full" />}>
+          <MikvahApp />
         </Suspense>
       )}
       {appId === 'owe' && (

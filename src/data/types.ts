@@ -1046,7 +1046,7 @@ export interface MkEventRow {
   owner_id: string
   kind:
     | 'flow' | 'hefsek' | 'moch' | 'bedikah' | 'stain' | 'immersion' | 'pregnancy' | 'birth'
-    | 'miscarriage' | 'kallah' | 'medication' | 'symptom' | 'menopause' | 'seed' | 'kavua' | 'ruling'
+    | 'miscarriage' | 'kallah' | 'medication' | 'symptom' | 'menopause' | 'seed' | 'kavua' | 'ruling' | 'nursing'
   at: string
   result: 'clean' | 'not_clean' | 'question' | null
   data: Record<string, unknown>

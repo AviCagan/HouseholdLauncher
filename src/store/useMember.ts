@@ -5,6 +5,7 @@ import { appKey, nowIso } from '@/data/adapter'
 import { APPS, type AppDef } from '@/launcher/registry'
 import { isNative } from '@/lib/platform'
 import type { AppNotification, AppNotifyPref, MemberRole, Profile } from '@/data/types'
+import type { IconName } from '@/components/primitives/Icon'
 
 /**
  * Identity, permission and per-app preference, read from what the session
@@ -97,11 +98,33 @@ export interface LauncherTile {
  * app you have access to with its switch in the right position — the home
  * screen does the filtering itself.
  */
+/**
+ * A member's own name and icon for an app whose tile is a setting.
+ *
+ * Only the Mikvah Calendar has one: discreet by default, renamed in the app —
+ * hers in her latest settings version, his in his partner row. Read from
+ * rows the session already has, so nothing extra is fetched.
+ */
+export function tileLook(
+  memberId: string,
+  settings: { owner_id: string; settings: Record<string, unknown>; effective_from: string }[],
+  partner: { id: string; prefs: Record<string, unknown> }[],
+): Record<string, { name?: string; icon?: IconName }> {
+  const mine = settings.filter((r) => r.owner_id === memberId).sort((a, b) => a.effective_from.localeCompare(b.effective_from))
+  const tile =
+    ((mine[mine.length - 1]?.settings as { tile?: { name?: string; icon?: IconName } } | undefined)?.tile) ??
+    (partner.find((p) => p.id === memberId)?.prefs as { tile?: { name?: string; icon?: IconName } } | undefined)?.tile
+  if (!tile) return {}
+  return { mikvah: { name: tile.name?.trim() || undefined, icon: tile.icon } }
+}
+
 export function useTiles(): LauncherTile[] {
   const member = useCurrentMember()
   const access = useData((s) => s.app_access)
   const prefs = useData((s) => s.app_prefs)
   const notifications = useData((s) => s.notifications)
+  const mkSettings = useData((s) => s.mk_settings)
+  const mkPartner = useData((s) => s.mk_partner)
 
   return useMemo(() => {
     if (!member) return []
@@ -112,11 +135,13 @@ export function useTiles(): LauncherTile[] {
       unread.set(n.app_id, (unread.get(n.app_id) ?? 0) + 1)
     }
 
+    const looks = tileLook(member.id, mkSettings, mkPartner)
     return APPS.filter((app) => memberCanUse(member, app.id, access))
       .map((app) => {
         const pref = prefs.find((p) => p.profile_id === member.id && p.app_id === app.id)
+        const look = looks[app.id]
         return {
-          app,
+          app: look ? { ...app, name: look.name ?? app.name, icon: look.icon ?? app.icon } : app,
           badge: unread.get(app.id) ?? 0,
           hidden: pref?.hidden ?? false,
           supported: appSupportedHere(app),
@@ -125,7 +150,7 @@ export function useTiles(): LauncherTile[] {
       })
       .sort((a, b) => a.sort - b.sort)
       .map(({ sort: _sort, ...tile }) => tile)
-  }, [member, access, prefs, notifications])
+  }, [member, access, prefs, notifications, mkSettings, mkPartner])
 }
 
 // --- notifications ----------------------------------------------------------

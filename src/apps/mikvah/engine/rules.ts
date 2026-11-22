@@ -485,6 +485,15 @@ export const RULES: Rule[] = [
     handling: 'feature',
   },
   {
+    id: 'HR',
+    title: 'Harchakot',
+    text:
+      'While she is niddah, until she immerses, the harchakot — the restrictions on contact between them — apply. The calendar shows this as a one-line note and does not track them.',
+    sources: [MO()],
+    confidence: 'H',
+    handling: 'feature',
+  },
+  {
     id: 'SEP',
     title: 'Separation days for everyone',
     text: "Yom Kippur, Tisha B'Av and shiva are days of separation for every couple.",

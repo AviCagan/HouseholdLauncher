@@ -24,6 +24,8 @@ export type EventKind =
   | 'seed'
   | 'kavua'
   | 'ruling'
+  /** Recorded for her history; the calculation doesn't use it. */
+  | 'nursing'
 
 export type CheckResult = 'clean' | 'not_clean' | 'question'
 
@@ -58,6 +60,8 @@ export interface EventData {
   /** ruling: a date her rav gave (L3: the earliest hefsek), civil 'YYYY-MM-DD'. */
   date?: string
   note?: string
+  /** nursing: she stopped. */
+  ended?: boolean
 }
 
 export interface KavuaRuling {

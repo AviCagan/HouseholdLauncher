@@ -153,6 +153,25 @@ describe('mikvah night', () => {
     })
     expect(r.cycles[0].mikvah!.waitingOn.some((k) => k.startsWith('M6'))).toBe(true)
   })
+
+  it('a trip across the date line: held for the rav, and a trip that does not cross is not', () => {
+    const p = period('2026-11-22')
+    const far: Place = { name: 'Far east', lat: 35.68, lng: 139.69, tz: 'Asia/Tokyo' }
+    const near: Place = { name: 'Not so far', lat: 51.5, lng: -0.12, tz: 'Europe/London' }
+    const trip = (place: Place) => [{ id: 't1', from: '2026-11-28', to: '2026-11-30', place }]
+    const go = (place: Place) =>
+      calculate({
+        events: [...p.events, ...bedikot(p.h)],
+        settings: { ...CHABAD, chodeshInPeriod: 'drop' },
+        zmanim: hebcalZmanim(CITY, trip(place)),
+        now: at('2026-11-27', 12, 0),
+        trips: trip(place),
+      })
+    const crossed = go(far)
+    expect(crossed.flags.find((f) => f.key === 'T1:t1')?.ruling).toBeNull()
+    expect(crossed.cycles[0].mikvah!.waitingOn).toContain('T1:t1')
+    expect(go(near).flags.some((f) => f.ruleId === 'T1')).toBe(false)
+  })
 })
 
 describe('the vestot', () => {
