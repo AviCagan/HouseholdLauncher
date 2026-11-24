@@ -12,6 +12,18 @@
 // Secrets: supabase secrets set HOUSEHOLD_CODE_PEPPER='<a long random string>'
 
 import { createClient } from 'jsr:@supabase/supabase-js@2'
+import {
+  clientAddress,
+  codeProblem,
+  GUESS_WINDOW_MS,
+  GUESSES_HOUSEHOLD,
+  GUESSES_PER_CLIENT,
+  guessWait,
+  MIN_CODE_LENGTH,
+  minCodeLength,
+  normaliseCode,
+  waitMessage,
+} from '../_shared/signin.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -26,11 +38,18 @@ const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!
   getting the environment means they already have the service-role key and
   don't need the codes.
 
-  There is a default so a half-configured deploy still runs rather than 500ing
-  on every sign-in, but it is a known constant and therefore no protection —
-  set the real secret.
+  There used to be a public default so a half-configured deploy still ran.
+  Now there isn't: without the secret, no code is issued and none is
+  accepted, and Settings tells the owners (see `whoami`). Nobody is locked
+  out by that — a code made without the secret was never protected — and the
+  shared PIN still works until the owners turn it off.
+
+  Set it once and leave it: changing it later turns every issued code into a
+  wrong one, and everybody needs a new code.
 */
-const PEPPER = Deno.env.get('HOUSEHOLD_CODE_PEPPER') ?? 'household-launcher-unset-pepper'
+const PEPPER = Deno.env.get('HOUSEHOLD_CODE_PEPPER') ?? ''
+const PEPPER_SET = PEPPER.length >= 16
+const NO_PEPPER = 'Codes are switched off until the code secret is set on the server (HOUSEHOLD_CODE_PEPPER)'
 
 const db = createClient(SUPABASE_URL, SERVICE_ROLE, {
   auth: { persistSession: false },
@@ -57,30 +76,27 @@ const json = (body: unknown, status = 200) =>
 
 // --- codes ------------------------------------------------------------------
 
-/**
- * Fold a typed code to its canonical form.
- *
- * Someone reading a code off a note types "sunset 42", "Sunset-42" or
- * "SUNSET42" and means the same thing every time, so none of those may be a
- * wrong code. Normalising before hashing is what allows that without storing
- * the code itself to compare loosely against.
- */
-function normaliseCode(raw: string): string {
-  return raw.toUpperCase().replace(/[^A-Z0-9]/g, '')
-}
-
-async function hashCode(raw: string): Promise<string> {
-  const data = new TextEncoder().encode(`${PEPPER}:${normaliseCode(raw)}`)
-  const digest = await crypto.subtle.digest('SHA-256', data)
+async function sha256(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
+const hashCode = (raw: string) => sha256(`${PEPPER}:${normaliseCode(raw)}`)
+
+/**
+ * Guesses are counted per device without keeping anyone's address: the
+ * table holds a peppered hash of it, which is only good for telling two
+ * requests apart.
+ */
+const guesserKey = (req: Request) => sha256(`${PEPPER}:guesser:${clientAddress(req.headers)}`)
+
 /** Codes are generated, not typed, when nobody supplies one. */
-function randomCode(): string {
+function randomCode(length: number): string {
   // No I/O/0/1: these are read off a screen and typed on a phone, and every
-  // one of them gets confused for another character by somebody.
+  // one of them gets confused for another character by somebody. 31 symbols,
+  // and 256 % 31 is small enough that the skew doesn't matter here.
   const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
-  const bytes = crypto.getRandomValues(new Uint8Array(8))
+  const bytes = crypto.getRandomValues(new Uint8Array(length))
   return [...bytes].map((b) => alphabet[b % alphabet.length]).join('')
 }
 
@@ -151,12 +167,15 @@ const isOwner = (caller: Caller) => caller.legacy || caller.profile?.role === 'o
  * its password is rewritten afterwards.
  */
 async function provision(profileId: string, code: string): Promise<{ code: string } | { error: string }> {
+  if (!PEPPER_SET) return { error: NO_PEPPER }
   const { data: profile } = await db
     .from('profiles')
-    .select('id, auth_user_id')
+    .select('id, auth_user_id, role')
     .eq('id', profileId)
     .maybeSingle()
   if (!profile) return { error: 'No such member' }
+  const problem = codeProblem(code, profile.role as string)
+  if (problem) return { error: problem }
 
   const codeHash = await hashCode(code)
 
@@ -215,8 +234,49 @@ async function provision(profileId: string, code: string): Promise<{ code: strin
 
 // --- actions ----------------------------------------------------------------
 
-async function redeem(code: string) {
+/**
+ * How long this device has to wait before another guess, from the wrong
+ * codes in the last quarter of an hour. Null when the count itself can't be
+ * read: then nobody gets to guess, rather than everybody getting to.
+ */
+async function guessesWait(key: string): Promise<number | null> {
+  const since = new Date(Date.now() - GUESS_WINDOW_MS).toISOString()
+  const [mine, all] = await Promise.all([
+    db.from('sign_in_failures').select('at').eq('client_key', key).gt('at', since).order('at', { ascending: false }).limit(GUESSES_PER_CLIENT),
+    db.from('sign_in_failures').select('at').gt('at', since).order('at', { ascending: false }).limit(GUESSES_HOUSEHOLD),
+  ])
+  if (mine.error || all.error) return null
+  const dates = (rows: { at: string }[]) => rows.map((r) => new Date(r.at))
+  return guessWait(dates(mine.data ?? []), dates(all.data ?? []), new Date())
+}
+
+async function recordWrongCode(key: string): Promise<void> {
+  await db.from('sign_in_failures').insert({ client_key: key })
+  // Nothing older than a day is ever read again. Trimmed now and then on the
+  // way past rather than by a scheduled job.
+  if (Math.random() < 0.1) {
+    await db.from('sign_in_failures').delete().lt('at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+  }
+}
+
+async function redeem(req: Request, code: string) {
   if (!code?.trim()) return json({ error: 'Enter your household code' }, 400)
+
+  // One message for "no such code", "that member is switched off" and "codes
+  // aren't on yet", so the response cannot be used to enumerate which codes
+  // are real. The owners see the last of those in Settings instead.
+  const denied = () => json({ error: 'That code did not work' }, 401)
+  if (!PEPPER_SET) return denied()
+
+  const key = await guesserKey(req)
+  const wait = await guessesWait(key)
+  if (wait === null) return json({ error: 'Signing in is unavailable right now. Try again in a minute.' }, 503)
+  if (wait > 0) {
+    return new Response(JSON.stringify({ error: waitMessage(wait), retry_after: wait }), {
+      status: 429,
+      headers: { ...CORS, 'Content-Type': 'application/json', 'Retry-After': String(wait) },
+    })
+  }
 
   const { data: cred } = await db
     .from('member_credentials')
@@ -224,17 +284,21 @@ async function redeem(code: string) {
     .eq('code_hash', await hashCode(code))
     .maybeSingle()
 
-  // One message for "no such code" and for "that member is switched off", so
-  // the response cannot be used to enumerate which codes are real.
-  const denied = () => json({ error: 'That code did not work' }, 401)
-  if (!cred) return denied()
+  const { data: profile } = cred
+    ? await db
+        .from('profiles')
+        .select('id, slug, display_name, avatar_emoji, avatar_url, color_hex, role, is_active')
+        .eq('id', cred.profile_id)
+        .maybeSingle()
+    : { data: null }
+  if (!cred || !profile || !profile.is_active) {
+    await recordWrongCode(key)
+    return denied()
+  }
 
-  const { data: profile } = await db
-    .from('profiles')
-    .select('id, slug, display_name, avatar_emoji, avatar_url, color_hex, role, is_active')
-    .eq('id', cred.profile_id)
-    .maybeSingle()
-  if (!profile || !profile.is_active) return denied()
+  // The right code clears this device's count, so a few typos earlier in
+  // the quarter-hour don't count against the next phone signed in from it.
+  await db.from('sign_in_failures').delete().eq('client_key', key)
 
   // Sign in on a throwaway anon client: `db` holds the service role, and a
   // service-role client does not mint user sessions.
@@ -282,7 +346,7 @@ async function createMember(caller: Caller, body: Record<string, unknown>) {
   })
   if (error) return json({ error: error.message }, 400)
 
-  const code = String(body.code ?? '').trim() || randomCode()
+  const code = String(body.code ?? '').trim() || randomCode(minCodeLength(role))
   const result = await provision(id, code)
   if ('error' in result) {
     // Roll the profile back: a member who exists but can never sign in is a
@@ -317,10 +381,10 @@ async function setCode(caller: Caller, body: Record<string, unknown>) {
   const self = caller.profile?.id === target
   if (!self && !isOwner(caller)) return json({ error: 'Not allowed' }, 403)
 
-  const code = String(body.code ?? '').trim() || randomCode()
-  if (normaliseCode(code).length < 4) {
-    return json({ error: 'Codes need at least 4 letters or numbers' }, 400)
-  }
+  const { data: member } = await db.from('profiles').select('role').eq('id', target).maybeSingle()
+  if (!member) return json({ error: 'No such member' }, 400)
+  // The length rule itself is checked in provision(), for every way in.
+  const code = String(body.code ?? '').trim() || randomCode(minCodeLength(member.role as string))
 
   const result = await provision(target, code)
   if ('error' in result) return json({ error: result.error }, 400)
@@ -459,7 +523,7 @@ Deno.serve(async (req: Request) => {
 
   // The one action that runs without a session, because it is the one that
   // hands sessions out.
-  if (action === 'redeem') return redeem(String(body.code ?? ''))
+  if (action === 'redeem') return redeem(req, String(body.code ?? ''))
 
   const caller = await identify(req)
   if (!caller) return json({ error: 'Sign in first' }, 401)
@@ -476,7 +540,13 @@ Deno.serve(async (req: Request) => {
     case 'close-legacy':
       return closeLegacy(caller)
     case 'whoami':
-      return json({ profile: caller.profile, legacy: caller.legacy })
+      return json({
+        profile: caller.profile,
+        legacy: caller.legacy,
+        // For the Security card in Settings. Owners only: nobody else can act
+        // on it, and it says something about how the server is set up.
+        security: isOwner(caller) ? { pepper_set: PEPPER_SET, min_code_length: MIN_CODE_LENGTH } : undefined,
+      })
     default:
       return json({ error: `Unknown action: ${action}` }, 400)
   }

@@ -409,7 +409,7 @@ function AddPersonForm({ onDone }: { onDone: () => void }) {
         <input
           value={code}
           onChange={(e) => setCode(e.target.value.toUpperCase())}
-          placeholder="Their code (blank to generate one)"
+          placeholder="Their code: 8 or more letters, or blank"
           autoCapitalize="characters"
           autoCorrect="off"
           spellCheck={false}

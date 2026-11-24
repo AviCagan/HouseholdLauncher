@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { SettingsGroup, SettingsRow, PrimaryButton, Notice } from './SettingsSheet'
 import { AvatarPicker } from './AvatarPicker'
 import { AppearanceSettings } from './AppearanceSettings'
 import { useCurrentMember, useIsOwner } from '@/store/useMember'
 import { useData } from '@/store/useData'
-import { closeLegacyAuth, setMemberCode, updateMember } from '@/lib/household'
+import { closeLegacyAuth, setMemberCode, updateMember, whoAmI, type SignInSecurity } from '@/lib/household'
 import { signOut } from '@/lib/supabase'
 import { useProfile } from '@/store/useProfile'
 import { isConfigured } from '@/lib/env'
@@ -72,7 +72,7 @@ export function GeneralSettings() {
         </SettingsGroup>
       )}
 
-      {member && isConfigured() && <CodeCard profileId={member.id} />}
+      {member && isConfigured() && <CodeCard profileId={member.id} owner={member.role === 'owner'} />}
 
       {/* Not a link out to an app's settings any more. Theme, accent, text
           size and vibration are applied to the document root and are felt in
@@ -80,8 +80,8 @@ export function GeneralSettings() {
           to live inside Things is that Things once was the whole app. */}
       <AppearanceSettings />
 
-      {isOwner && isConfigured() && household?.legacy_auth_enabled !== false && (
-        <LegacyCard />
+      {isOwner && isConfigured() && (
+        <SecurityCard legacyOpen={household?.legacy_auth_enabled !== false} />
       )}
 
       <SettingsGroup>
@@ -115,7 +115,7 @@ export function GeneralSettings() {
  * it reaches the database, so nothing can display it — which is the point. A
  * forgotten code is replaced, not recovered.
  */
-function CodeCard({ profileId }: { profileId: string }) {
+function CodeCard({ profileId, owner }: { profileId: string; owner: boolean }) {
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<{ text: string; tone: 'ok' | 'error' } | null>(null)
@@ -139,7 +139,7 @@ function CodeCard({ profileId }: { profileId: string }) {
   return (
     <SettingsGroup
       label="Your household code"
-      hint="Leave it blank to have one generated. Codes ignore spaces and capitals, so SUNSET42 and sunset 42 both work."
+      hint={`At least ${owner ? 12 : 8} letters or numbers. Leave it blank to have one generated. Codes ignore spaces and capitals, so SUNSET HARBOR 42 and sunsetharbor42 both work.`}
     >
       <div className="px-3.5 py-3">
         <input
@@ -163,49 +163,86 @@ function CodeCard({ profileId }: { profileId: string }) {
 }
 
 /**
- * The last step of setup.
+ * How sign-in stands, for the owners.
  *
- * While this is on, the pre-launcher shared PIN still opens every table — it
- * has to, because handing out the first personal code requires a session and
- * that PIN was the only one that existed. Once you and Jackie both have codes,
- * this is the switch that makes per-person access actually mean something.
+ * Two things can be wrong, and both are fixed in order: the server needs the
+ * secret that protects stored codes before any code can be issued, and the
+ * old shared PIN has to be turned off once Avi and Jackie have their own.
+ *
+ * While the PIN is on, it still opens every table — it has to, because
+ * handing out the first personal code requires a session and that PIN was
+ * the only one that existed. Turning it off is the switch that makes
+ * per-person access actually mean something.
  */
-function LegacyCard() {
-  const [busy, setBusy] = useState(false)
-  const [notice, setNotice] = useState<{ text: string; tone: 'ok' | 'error' } | null>(null)
+function SecurityCard({ legacyOpen }: { legacyOpen: boolean }) {
+  const [security, setSecurity] = useState<SignInSecurity | null>(null)
+
+  useEffect(() => {
+    let live = true
+    void whoAmI().then((result) => {
+      if (live && result.ok && result.data.security) setSecurity(result.data.security)
+    })
+    return () => {
+      live = false
+    }
+  }, [])
+
+  const noSecret = security?.pepper_set === false
+  if (!noSecret && !legacyOpen) return null
 
   return (
     <SettingsGroup
       label="Security"
-      hint="Until this is off, anyone with the old four-digit PIN can still see everything, whatever their app access says."
+      hint={
+        legacyOpen
+          ? 'Until the old PIN is off, anyone with those four digits can still see everything, whatever their app access says.'
+          : undefined
+      }
     >
-      <div className="px-3.5 py-3">
-        <p className="pb-2.5 text-[13px] leading-snug" style={{ color: 'var(--text-dim)' }}>
-          The old shared PIN still works. Turn it off once you and Jackie have both
-          set your own codes.
-        </p>
-        <PrimaryButton
-          danger
-          busy={busy}
-          onClick={() => {
-            setBusy(true)
-            setNotice(null)
-            void closeLegacyAuth().then((result) => {
-              setBusy(false)
-              if (result.ok) {
-                fire('success')
-                setNotice({ text: 'The old PIN no longer works.', tone: 'ok' })
-              } else {
-                fire('error')
-                setNotice({ text: result.error, tone: 'error' })
-              }
-            })
-          }}
-        >
-          Stop accepting the old PIN
-        </PrimaryButton>
-        {notice && <Notice text={notice.text} tone={notice.tone} />}
-      </div>
+      {noSecret && (
+        <div className="px-3.5 py-3" style={legacyOpen ? { borderBottom: '1px solid var(--border)' } : undefined}>
+          <p className="text-[13px] leading-snug" style={{ color: 'var(--danger)' }}>
+            The server can't issue household codes yet: the secret that protects them
+            (HOUSEHOLD_CODE_PEPPER) isn't set. Set it once, then set your codes.
+          </p>
+        </div>
+      )}
+      {legacyOpen && <LegacyOff />}
     </SettingsGroup>
+  )
+}
+
+function LegacyOff() {
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState<{ text: string; tone: 'ok' | 'error' } | null>(null)
+
+  return (
+    <div className="px-3.5 py-3">
+      <p className="pb-2.5 text-[13px] leading-snug" style={{ color: 'var(--text-dim)' }}>
+        The old shared PIN still works. Turn it off once you and Jackie have both
+        set your own codes.
+      </p>
+      <PrimaryButton
+        danger
+        busy={busy}
+        onClick={() => {
+          setBusy(true)
+          setNotice(null)
+          void closeLegacyAuth().then((result) => {
+            setBusy(false)
+            if (result.ok) {
+              fire('success')
+              setNotice({ text: 'The old PIN no longer works.', tone: 'ok' })
+            } else {
+              fire('error')
+              setNotice({ text: result.error, tone: 'error' })
+            }
+          })
+        }}
+      >
+        Stop accepting the old PIN
+      </PrimaryButton>
+      {notice && <Notice text={notice.text} tone={notice.tone} />}
+    </div>
   )
 }

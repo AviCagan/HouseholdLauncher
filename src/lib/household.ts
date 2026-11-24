@@ -101,11 +101,20 @@ export async function redeemCode(
   return { ok: true, data: result.data.profile }
 }
 
+/** How sign-in is set up on the server. Only owners are told. */
+export interface SignInSecurity {
+  /** Whether the secret that protects stored codes is set. No codes work without it. */
+  pepper_set: boolean
+  min_code_length: { owner: number; other: number }
+}
+
 /** Who the current session belongs to, straight from the server. */
 export const whoAmI = () =>
-  call<{ profile: { id: string; role: MemberRole; display_name: string } | null; legacy: boolean }>(
-    'whoami',
-  )
+  call<{
+    profile: { id: string; role: MemberRole; display_name: string } | null
+    legacy: boolean
+    security?: SignInSecurity
+  }>('whoami')
 
 // --- managing people --------------------------------------------------------
 
