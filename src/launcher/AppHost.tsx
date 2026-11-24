@@ -20,14 +20,7 @@ import { InventoryApp } from '@/apps/inventory/InventoryApp'
  * not exist any more, you might not be allowed to use it, or it might be
  * impossible on this device. Collapsing them into one "unavailable" screen is
  * what makes people retry the one case that will never work.
- *
- * The Bluetooth app is loaded lazily because it pulls in the Capacitor plugin
- * bridge, which has no business being in the initial bundle on an iPhone where
- * the app cannot run at all.
  */
-const BluetoothApp = lazy(() =>
-  import('@/apps/bluetooth/BluetoothApp').then((m) => ({ default: m.BluetoothApp })),
-)
 
 /*
   Med School is lazy too: it brings three typefaces of its own and is one
@@ -70,11 +63,7 @@ export function AppHost({ appId }: { appId: string }) {
       <Fallback
         icon={app.icon}
         title={`${app.name} needs the Android app`}
-        hint={
-          appId === 'bluetooth'
-            ? "iPhone doesn't let a web app see or change your Bluetooth pairings — only the Android build can do this."
-            : 'This one only works in the Android build.'
-        }
+        hint="This one only works in the Android build."
       />
     )
   }
@@ -106,13 +95,6 @@ export function AppHost({ appId }: { appId: string }) {
       {appId === 'owe' && (
         <AppFrame name={app.name} color={app.color} onBack={goHome}>
           <OweApp />
-        </AppFrame>
-      )}
-      {appId === 'bluetooth' && (
-        <AppFrame name={app.name} color={app.color} onBack={goHome}>
-          <Suspense fallback={<div className="h-full" />}>
-            <BluetoothApp />
-          </Suspense>
         </AppFrame>
       )}
     </>

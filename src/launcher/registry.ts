@@ -34,10 +34,10 @@ export interface AppDef {
   /**
    * Where this app can actually run.
    *
-   * Bluetooth control is the reason this exists: iOS gives a web app no way to
-   * see or change the phone's pairings, so on iPhone the app is not "broken",
-   * it is genuinely impossible. Listing the platforms lets the launcher say
-   * that plainly on the tile rather than opening a screen that cannot work.
+   * For an app that needs something only the Android build has. On iPhone
+   * such an app is not "broken", it is genuinely impossible, and listing the
+   * platforms lets the launcher say that plainly on the tile rather than
+   * opening a screen that cannot work. Every app today runs on both.
    */
   platforms: ('android' | 'web')[]
   /**
@@ -142,15 +142,6 @@ export const APPS: AppDef[] = [
     color: '#5b6b8c',
     platforms: ['android', 'web'],
     explicitGrant: true,
-  },
-  {
-    id: 'bluetooth',
-    name: 'Bluetooth',
-    blurb: 'Drop the car without digging through settings',
-    icon: 'bluetooth',
-    color: '#2f7fe0',
-    // Android only, and not by choice — see the platforms comment above.
-    platforms: ['android'],
   },
 ]
 

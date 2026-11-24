@@ -8,7 +8,7 @@ import { setAppHidden, useCurrentMember, useTiles } from '@/store/useMember'
  * not "hidden", it is not yours, and showing it here with a switch would
  * advertise something that turning the switch on cannot deliver.
  *
- * This is per-person. Jackie hiding Bluetooth on her phone does not take it
+ * This is per-person. Jackie hiding Watched on her phone does not take it
  * off Avi's.
  */
 export function AppsSettings() {

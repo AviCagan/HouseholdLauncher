@@ -62,38 +62,7 @@
         </intent>
     </queries>
 
-    <!--
-      Bluetooth, for the toggle app.
-
-      Two eras, both declared. Android 12 (API 31) replaced the install-time
-      BLUETOOTH grant with the runtime BLUETOOTH_CONNECT, so the old one is
-      capped with maxSdkVersion="30" — leaving it uncapped makes Play Console
-      demand a justification for a permission the app never uses on modern
-      devices.
-
-      usesPermissionFlags="neverForLocation" matters legally as much as
-      technically: without it Android treats any Bluetooth access as a possible
-      location signal and the app inherits a location-permission disclosure it
-      does not need. This app only ever reads the list of devices you have
-      already paired.
-    -->
-    <uses-permission
-        android:name="android.permission.BLUETOOTH"
-        android:maxSdkVersion="30" />
-    <uses-permission
-        android:name="android.permission.BLUETOOTH_ADMIN"
-        android:maxSdkVersion="30" />
-    <uses-permission
-        android:name="android.permission.BLUETOOTH_CONNECT"
-        android:usesPermissionFlags="neverForLocation" />
-
     <!-- Notifications on Android 13+. Without this the launcher can hold a
          valid FCM token and still never show anything. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-
-    <!-- Declared as not required so the app still installs on a device with no
-         Bluetooth radio; the Bluetooth app reports itself unsupported there. -->
-    <uses-feature
-        android:name="android.hardware.bluetooth"
-        android:required="false" />
 </manifest>

@@ -15,7 +15,7 @@ import type { HapticEventName, HapticIntensity, ThemeMode } from '@/data/types'
  * These lived in Things' settings sheet, which is where they were written —
  * back when Things was the entire app. They were never Things' to own: theme,
  * accent, text size and haptic strength are applied to the document root by
- * `applySettings` and take effect in Owe, Bluetooth, the home screen and every
+ * `applySettings` and take effect in Owe, Meals, the home screen and every
  * sheet alike. Reaching them by opening one particular app was the giveaway.
  *
  * Everything here is per person, not per household: Avi's OLED theme has no

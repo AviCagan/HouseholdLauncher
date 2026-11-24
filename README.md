@@ -23,7 +23,6 @@ from Safari on iPhone.
 | **Watched** | What the two of them watch, in the shape of an old CRT set. Each has a shelf and there's a shared one; the lineup plays forward at their pace — learned from when they actually finish seasons — to say when each show starts and when it's done, with a weekly show running alongside a binge. Finish a season and both rate it; the Watched channel ranks everything by each person's score and by the two together. Show data comes from TVmaze; a show it doesn't have can be typed in. "Watched" is a working title. |
 | **Inventory** | The stockroom: everything bought that's worth keeping the paperwork for, as cardboard boxes on a shelf with a stock label each. An item has an overall photo of the whole thing with everything that came with it, photos of its extra parts, its paperwork (paper ones scanned with Google's document scanner, the one in Google Drive, or a PDF added as it is), where it came from, what it cost and who paid, how long it's covered (to a date, or for life), where it's kept, and notes. The files live in Google Drive — one folder per item in *Joint Stuff › Warranties, manuals, extra parts* — so the folder is the record and the app is the nice way to look at it. Folders made in Drive by hand can be brought in. Every item has a real QR code, and **Print labels** makes a PDF of them — name and stock code under each, sized with a slider from ½″ to 6″, as many of each as you ask for — to stick on the thing, its box or its bag of spares; scanning one with a phone camera opens that item. See [Connecting Drive for Inventory](#connecting-drive-for-inventory). |
 | **Med School 2028** | One person's plan for medical school, drawn as a dark world of blue light: countdowns to the MCAT, the committee interview and AMCAS over a grid floor; every task to the first day of med school on one circuit, with the dates that hang off the MCAT moving when the test date does; the pre-health committee file (shadowing and service hours, club meetings, the eligibility checklist, letters, contacts); the MCAT date, what changing it costs, the study phases and practice scores; and the GPAs the applications will show, worked out from the courses. Shown only to whoever is granted it — owners included — and reminds of hard deadlines three days before and on the day. The plan comes in through **Import** and goes out through **Export**, both as JSON; nothing personal is in this repository. |
-| **Bluetooth** | One switch per paired device, so the car can be dropped without four taps into system settings. Android only — see below. |
 
 Adding another is one entry in [`src/launcher/registry.ts`](src/launcher/registry.ts)
 plus a screen component. Access control, badges, notification preferences and
@@ -157,18 +156,6 @@ and text size are all per person.
 
 Worth knowing up front rather than discovering later:
 
-- **The Bluetooth app cannot exist on iPhone.** iOS gives a web app no
-  visibility into the phone's pairings, let alone control of them. The tile says
-  so rather than opening a screen that can't work.
-- **On Android it uses hidden framework methods.** `connect` and `disconnect` on
-  the A2DP and Headset profiles are `@hide` — present and unchanged since API 11,
-  and what the Settings app itself calls, but absent from the public SDK, so they
-  are reached by reflection. If a future Android removes them the app reports a
-  normal failure rather than crashing.
-- **Turning a device off doesn't stop it reconnecting later.** Android offers an
-  app no such block. What the switch does is disconnect it *now*, which is what
-  the moment in the driveway actually calls for. The pairing is never touched, so
-  switching back on is instant.
 - **iOS can't do haptics from a web app.** No API, no polyfill, no workaround.
   Jackie's phone gets a visual pulse and optional sound instead.
 - **iOS Web Push is real but conditional** — Home Screen install required, and
@@ -334,13 +321,12 @@ src/
   apps/
     things/     to-dos, chores, shopping, wishlist
     owe/        the two money lists
-    bluetooth/  device switches + the Capacitor plugin binding
     inventory/  the stockroom, and its link to Google Drive
     medschool/  the med school plan: date logic, GPAs, import/export
   data/         adapters (local + Supabase), types, offline outbox
   store/        zustand state — data, member/access, navigation
   lib/          haptics, sound, notifications, household codes, platform
   components/   primitives (swipe rows, sheets, icons) and shared shell
-android/        Capacitor project, including the Bluetooth control plugin
+android/        Capacitor project
 supabase/       SQL migrations, Edge Functions, setup guide
 ```

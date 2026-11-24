@@ -21,7 +21,6 @@ export type IconName =
   | 'copy'
   | 'sparkle'
   | 'pencil'
-  | 'bluetooth'
   | 'wallet'
   | 'people'
   | 'grid'
@@ -68,8 +67,6 @@ const PATHS: Record<IconName, string> = {
     'M12 3l1.8 4.9L18.7 9.7l-4.9 1.8L12 16.4l-1.8-4.9L5.3 9.7l4.9-1.8L12 3Z M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2Z',
   pencil:
     'M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z',
-  // The Bluetooth rune: the bowtie plus the stem it hangs from.
-  bluetooth: 'M7 7.5 17 16.5 12 21V3l5 4.5L7 16.5',
   wallet:
     'M3 8a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8Z M3 8V6.5a1.5 1.5 0 0 1 1.5-1.5H16 M16.5 12.5h.01 M20 10.5h-3.5a2 2 0 0 0 0 4H20',
   people:
