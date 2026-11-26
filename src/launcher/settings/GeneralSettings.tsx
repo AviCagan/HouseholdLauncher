@@ -4,12 +4,13 @@ import { AvatarPicker } from './AvatarPicker'
 import { AppearanceSettings } from './AppearanceSettings'
 import { useCurrentMember, useIsOwner } from '@/store/useMember'
 import { useData } from '@/store/useData'
-import { closeLegacyAuth, setMemberCode, updateMember, whoAmI, type SignInSecurity } from '@/lib/household'
+import { closeLegacyAuth, setMemberCode, updateMember, whoAmI, type CodeFormat, type SignInSecurity } from '@/lib/household'
 import { signOut } from '@/lib/supabase'
 import { useProfile } from '@/store/useProfile'
 import { isConfigured } from '@/lib/env'
 import { fire } from '@/lib/haptics'
 import { NanoAuthenticator } from './NanoSettings'
+import { CodeField, codeReady } from './CodeField'
 
 /**
  * Your own settings: who you are, the code you sign in with, and the way out.
@@ -73,7 +74,7 @@ export function GeneralSettings() {
         </SettingsGroup>
       )}
 
-      {member && isConfigured() && <CodeCard profileId={member.id} owner={member.role === 'owner'} />}
+      {member && isConfigured() && <CodeCard profileId={member.id} />}
 
       {/* Not a link out to an app's settings any more. Theme, accent, text
           size and vibration are applied to the document root and are felt in
@@ -116,7 +117,8 @@ export function GeneralSettings() {
  * it reaches the database, so nothing can display it — which is the point. A
  * forgotten code is replaced, not recovered.
  */
-function CodeCard({ profileId, owner }: { profileId: string; owner: boolean }) {
+function CodeCard({ profileId }: { profileId: string }) {
+  const [format, setFormat] = useState<CodeFormat>('digits4')
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<{ text: string; tone: 'ok' | 'error' } | null>(null)
@@ -124,7 +126,7 @@ function CodeCard({ profileId, owner }: { profileId: string; owner: boolean }) {
   async function save() {
     setBusy(true)
     setNotice(null)
-    const result = await setMemberCode(profileId, code.trim())
+    const result = await setMemberCode(profileId, code.trim(), format)
     setBusy(false)
 
     if (result.ok) {
@@ -140,23 +142,15 @@ function CodeCard({ profileId, owner }: { profileId: string; owner: boolean }) {
   return (
     <SettingsGroup
       label="Your household code"
-      hint={`At least ${owner ? 12 : 8} letters or numbers. Leave it blank to have one generated. Codes ignore spaces and capitals, so SUNSET HARBOR 42 and sunsetharbor42 both work.`}
+      hint="4 digits, 6 digits, or 6 or more letters and numbers. Leave it blank to have one made up. After five wrong tries a phone has to wait, so a short code can't just be guessed."
     >
       <div className="px-3.5 py-3">
-        <input
-          value={code}
-          onChange={(e) => setCode(e.target.value.toUpperCase())}
-          placeholder="New code"
-          aria-label="New household code"
-          autoCapitalize="characters"
-          autoCorrect="off"
-          spellCheck={false}
-          className="mb-2.5 w-full rounded-xl px-3 py-2.5 text-[15px] font-semibold tracking-[0.1em] outline-none placeholder:tracking-normal placeholder:opacity-35"
-          style={{ background: 'var(--surface-3)' }}
-        />
-        <PrimaryButton onClick={() => void save()} busy={busy}>
-          {code.trim() ? 'Change my code' : 'Generate a new code'}
-        </PrimaryButton>
+        <CodeField format={format} onFormat={setFormat} code={code} onCode={setCode} label="New household code" />
+        <div className="mt-2.5">
+          <PrimaryButton onClick={() => void save()} busy={busy} disabled={!codeReady(format, code)}>
+            {code.trim() ? 'Change my code' : 'Make one up for me'}
+          </PrimaryButton>
+        </div>
         {notice && <Notice text={notice.text} tone={notice.tone} />}
       </div>
     </SettingsGroup>

@@ -10,8 +10,10 @@ import {
   setAppAccess,
   setMemberCode,
   updateMember,
+  type CodeFormat,
   type NewMember,
 } from '@/lib/household'
+import { CodeField, codeReady } from './CodeField'
 import { fire } from '@/lib/haptics'
 import type { MemberRole } from '@/data/types'
 import { NanoSettings } from './NanoSettings'
@@ -120,6 +122,8 @@ function PersonRow({
   const access = useData((s) => s.app_access)
   const [notice, setNotice] = useState<{ text: string; tone: 'ok' | 'error' } | null>(null)
   const [confirmRemove, setConfirmRemove] = useState(false)
+  const [codeFormat, setCodeFormat] = useState<CodeFormat>('digits4')
+  const [newCode, setNewCode] = useState('')
 
   const role: MemberRole = person.role ?? 'owner'
   const grantedApps = APPS.filter((app) => memberCanUse({ id: person.id, role }, app.id, access))
@@ -201,12 +205,28 @@ function PersonRow({
 
               {role !== 'owner' && <OweNameField person={person} />}
 
+              <p
+                className="pb-1.5 pt-3 text-[11px] font-semibold uppercase tracking-wide"
+                style={{ color: 'var(--text-faint)' }}
+              >
+                Their code
+              </p>
+              <CodeField
+                format={codeFormat}
+                onFormat={setCodeFormat}
+                code={newCode}
+                onCode={setNewCode}
+                label={`New code for ${person.display_name}`}
+              />
+
               <div className="flex gap-2 pt-3">
                 <button
+                  disabled={!codeReady(codeFormat, newCode)}
                   onClick={() => {
-                    void setMemberCode(person.id, '').then((result) => {
+                    void setMemberCode(person.id, newCode.trim(), codeFormat).then((result) => {
                       if (result.ok) {
                         fire('success')
+                        setNewCode('')
                         setNotice({ text: `New code: ${result.data.code}`, tone: 'ok' })
                       } else {
                         fire('error')
@@ -214,11 +234,11 @@ function PersonRow({
                       }
                     })
                   }}
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-semibold"
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-semibold disabled:opacity-40"
                   style={{ background: 'var(--surface-2)', color: 'var(--text-dim)' }}
                 >
                   <Icon name="key" size={14} />
-                  New code
+                  {newCode ? 'Set code' : 'Make one up'}
                 </button>
 
                 {!isSelf && (
@@ -269,6 +289,7 @@ function AddPersonForm({ onDone }: { onDone: () => void }) {
   const [emoji, setEmoji] = useState('🙂')
   const [role, setRole] = useState<MemberRole>('guest')
   const [code, setCode] = useState('')
+  const [format, setFormat] = useState<CodeFormat>('digits4')
   const [apps, setApps] = useState<string[]>(
     APPS.filter((a) => a.defaultForEveryone).map((a) => a.id),
   )
@@ -285,6 +306,7 @@ function AddPersonForm({ onDone }: { onDone: () => void }) {
       avatar_emoji: emoji,
       role,
       code: code.trim(),
+      format,
       apps,
     }
     const result = await createMember(payload)
@@ -416,18 +438,9 @@ function AddPersonForm({ onDone }: { onDone: () => void }) {
           </div>
         )}
 
-        <input
-          value={code}
-          onChange={(e) => setCode(e.target.value.toUpperCase())}
-          placeholder="Their code: 8 or more letters, or blank"
-          autoCapitalize="characters"
-          autoCorrect="off"
-          spellCheck={false}
-          className="w-full rounded-xl px-3 py-2.5 text-[14px] tracking-[0.08em] outline-none placeholder:tracking-normal placeholder:opacity-35"
-          style={{ background: 'var(--surface-3)' }}
-        />
+        <CodeField format={format} onFormat={setFormat} code={code} onCode={setCode} label="Their code" />
 
-        <PrimaryButton onClick={() => void submit()} disabled={!name.trim()} busy={busy}>
+        <PrimaryButton onClick={() => void submit()} disabled={!name.trim() || !codeReady(format, code)} busy={busy}>
           Create and get their code
         </PrimaryButton>
 

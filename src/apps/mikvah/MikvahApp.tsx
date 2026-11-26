@@ -23,6 +23,7 @@ import { BedikotSheet, EventSheet, FlowSheet, HefsekSheet, MikvahSheet } from '.
 import { DaySheet, FlagSheet, HelpSheet, SourcesSheet, WhySheet } from './sheets/info'
 import { ContactsSheet, EventsSheet, KavuaSheet, MemosSheet, PrintSheet, TripsSheet } from './sheets/lists'
 import { ExportSheet, PartnerSheet, SettingsSheet, Setup } from './sheets/settings'
+import { onSharedPin } from '@/lib/supabase'
 
 /**
  * The Mikvah Calendar. Her phone keeps the calendar; his shows what hers
@@ -145,13 +146,41 @@ export function MikvahApp() {
 
 const tabTitle = (t: MkTab) => (t === 'onot' ? S.onot.title : '')
 
+/**
+ * Under the shared PIN the database can't tell her from him, so her records
+ * can't be saved as hers. Said plainly here rather than as a failed save.
+ */
+function NeedsOwnCode() {
+  return (
+    <div className="flex flex-col gap-3 pt-4">
+      <Card>
+        <p className="text-[16px] font-semibold">Sign in with your own code</p>
+        <p className="mk-dim mt-1 text-[13.5px]">
+          This calendar is kept to the person it belongs to, so it only works when this phone is signed in with your
+          own household code, not the shared PIN. Avi can set codes in Settings › People. Then sign out in Settings ›
+          General and sign back in with yours.
+        </p>
+      </Card>
+    </div>
+  )
+}
+
 function NewOrSetup({ cal }: { cal: Calendar }) {
   // A calendar row with no settings yet (setup stopped half way) goes
   // straight back to setup. Otherwise ask first: the partner opens this app
   // too, and must not start a calendar of his own by mistake. Only a member
   // granted the app can start one (027) — the database has the last word.
   const [starting, setStarting] = useState(cal.role === 'her')
+  const [sharedPin, setSharedPin] = useState(false)
+  useEffect(() => {
+    let live = true
+    void onSharedPin().then((yes) => live && setSharedPin(yes))
+    return () => {
+      live = false
+    }
+  }, [])
   if (cal.role === 'him') return null
+  if (sharedPin) return <NeedsOwnCode />
   if (starting) return <Setup />
   return (
     <div className="flex flex-col gap-3 pt-4">

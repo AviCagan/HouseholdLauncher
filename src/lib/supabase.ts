@@ -86,6 +86,18 @@ export async function unlockWithPin(pin: string): Promise<UnlockResult> {
   return { ok: false, reason: 'bad-pin' }
 }
 
+/**
+ * Is this phone signed in with the old shared PIN rather than a person's own
+ * code? Under the shared PIN the database can't tell who is who, so anything
+ * kept to one person (the Calendar) can't be saved.
+ */
+export async function onSharedPin(): Promise<boolean> {
+  const sb = supabase()
+  if (!sb) return false
+  const { data } = await sb.auth.getSession()
+  return data.session?.user.email?.toLowerCase() === HOUSEHOLD_EMAIL.toLowerCase()
+}
+
 export async function signOut(): Promise<void> {
   await supabase()?.auth.signOut()
 }

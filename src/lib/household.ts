@@ -105,7 +105,6 @@ export async function redeemCode(
 export interface SignInSecurity {
   /** Whether the secret that protects stored codes is set. No codes work without it. */
   pepper_set: boolean
-  min_code_length: { owner: number; other: number }
 }
 
 /** Who the current session belongs to, straight from the server. */
@@ -123,8 +122,9 @@ export interface NewMember {
   avatar_emoji?: string
   color_hex?: string
   role?: MemberRole
-  /** Blank asks the server to generate one. */
+  /** Blank asks the server to generate one, in `format`. */
   code?: string
+  format?: CodeFormat
   /** App ids to grant on creation. */
   apps?: string[]
 }
@@ -136,12 +136,14 @@ export interface NewMember {
  * reaches the database — so the UI has to show it now. Losing it means
  * rotating to a new one, not looking the old one up.
  */
+export type CodeFormat = 'digits4' | 'digits6' | 'letters'
+
 export const createMember = (member: NewMember) =>
   call<{ profile_id: string; code: string }>('create-member', { ...member })
 
-/** Set or rotate a code. Blank generates one. Owners may target anyone. */
-export const setMemberCode = (profileId: string, code: string) =>
-  call<{ code: string }>('set-code', { profile_id: profileId, code })
+/** Set or rotate a code. Blank generates one in `format`. Owners may target anyone. */
+export const setMemberCode = (profileId: string, code: string, format: CodeFormat = 'digits4') =>
+  call<{ code: string }>('set-code', { profile_id: profileId, code, format })
 
 export const updateMember = (
   profileId: string,

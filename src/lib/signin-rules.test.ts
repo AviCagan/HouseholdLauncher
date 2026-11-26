@@ -8,7 +8,8 @@ import {
   GUESSES_HOUSEHOLD,
   GUESSES_PER_CLIENT,
   guessWait,
-  minCodeLength,
+  codeFormat,
+  makeCode,
   normaliseCode,
   waitMessage,
 } from '../../supabase/functions/_shared/signin'
@@ -27,30 +28,49 @@ describe('codes', () => {
     expect(normaliseCode('sunset harbor-42')).toBe('SUNSETHARBOR42')
   })
 
-  it('asks owners for longer codes than everyone else', () => {
-    expect(minCodeLength('owner')).toBe(12)
-    expect(minCodeLength('member')).toBe(8)
-    expect(minCodeLength('guest')).toBe(8)
-    expect(minCodeLength(null)).toBe(8)
+  it('takes 4 or 6 digits, for anyone', () => {
+    expect(codeProblem('1234', 'owner')).toBeNull()
+    expect(codeProblem('12 34', 'guest')).toBeNull()
+    expect(codeProblem('123456', 'member')).toBeNull()
+    expect(codeProblem('12345', 'owner')).toMatch(/4 or 6 digits/)
+    expect(codeProblem('1234567', 'owner')).toMatch(/4 or 6 digits/)
+  })
+
+  it('takes letters and numbers from 6 characters', () => {
+    expect(codeProblem('sunset', 'owner')).toBeNull()
+    expect(codeProblem('ab-12-c', 'guest')).toMatch(/at least 6/)
+    expect(codeProblem('sunset harbor 42', 'member')).toBeNull()
   })
 
   it("makes Nano's code as long as a key", () => {
-    expect(minCodeLength('agent')).toBe(40)
-    expect(codeProblem('A'.repeat(39), 'agent')).toMatch(/Nano's code needs at least 40/)
+    expect(codeProblem('1234', 'agent')).toMatch(/Nano's code needs at least 40/)
     expect(codeProblem('A'.repeat(40), 'agent')).toBeNull()
   })
 
-  it('counts length after normalising', () => {
-    // 11 letters and numbers once the spaces go: one short for an owner.
-    expect(codeProblem('sunset 42 abc', 'owner')).toMatch(/at least 12/)
-    expect(codeProblem('sunset harbor 42', 'owner')).toBeNull()
-    expect(codeProblem('ab-cd-ef-g', 'guest')).toMatch(/at least 8/)
-    expect(codeProblem('abcd efgh', 'guest')).toBeNull()
+  it('makes codes up in the format asked for', () => {
+    let n = 0
+    const bytes = (k: number) => Uint8Array.from({ length: k }, () => (n = (n * 97 + 31) % 256))
+    expect(makeCode('digits4', bytes)).toMatch(/^\d{4}$/)
+    expect(makeCode('digits6', bytes)).toMatch(/^\d{6}$/)
+    expect(makeCode('letters', bytes)).toMatch(/^[A-HJ-NP-Z2-9]{8}$/)
+    expect(makeCode('nano', bytes)).toHaveLength(40)
+    for (const format of ['digits4', 'digits6', 'letters', 'nano'] as const) {
+      expect(codeProblem(makeCode(format, bytes), format === 'nano' ? 'agent' : 'owner')).toBeNull()
+    }
   })
 
-  it('no longer takes the old four-character codes', () => {
-    expect(codeProblem('1234', 'member')).not.toBeNull()
-    expect(codeProblem('1234', 'owner')).not.toBeNull()
+  it('never makes a digit from a byte that would skew it', () => {
+    // 250-255 are skipped, so 0-5 aren't more likely than 6-9.
+    const seq = [255, 251, 250, 3, 249, 7, 9]
+    let i = 0
+    const bytes = (k: number) => Uint8Array.from({ length: k }, () => seq[i++ % seq.length])
+    expect(makeCode('digits4', bytes)).toBe('3979')
+  })
+
+  it('falls back to 6 digits when no format is given', () => {
+    expect(codeFormat(undefined)).toBe('digits6')
+    expect(codeFormat('digits4')).toBe('digits4')
+    expect(codeFormat('nonsense')).toBe('digits6')
   })
 })
 

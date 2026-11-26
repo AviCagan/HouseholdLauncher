@@ -20,8 +20,8 @@ import {
   GUESSES_HOUSEHOLD,
   GUESSES_PER_CLIENT,
   guessWait,
-  MIN_CODE_LENGTH,
-  minCodeLength,
+  codeFormat,
+  makeCode,
   normaliseCode,
   waitMessage,
 } from '../_shared/signin.ts'
@@ -92,14 +92,8 @@ const hashCode = (raw: string) => sha256(`${PEPPER}:${normaliseCode(raw)}`)
 const guesserKey = (req: Request) => sha256(`${PEPPER}:guesser:${clientAddress(req.headers)}`)
 
 /** Codes are generated, not typed, when nobody supplies one. */
-function randomCode(length: number): string {
-  // No I/O/0/1: these are read off a screen and typed on a phone, and every
-  // one of them gets confused for another character by somebody. 31 symbols,
-  // and 256 % 31 is small enough that the skew doesn't matter here.
-  const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
-  const bytes = crypto.getRandomValues(new Uint8Array(length))
-  return [...bytes].map((b) => alphabet[b % alphabet.length]).join('')
-}
+const randomCode = (format: Parameters<typeof makeCode>[0]) =>
+  makeCode(format, (n) => crypto.getRandomValues(new Uint8Array(n)))
 
 function randomPassword(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(32))
@@ -408,7 +402,7 @@ async function createMember(caller: Caller, body: Record<string, unknown>) {
   })
   if (error) return json({ error: error.message }, 400)
 
-  const code = String(body.code ?? '').trim() || randomCode(minCodeLength(role))
+  const code = String(body.code ?? '').trim() || randomCode(codeFormat(body.format))
   const result = await provision(id, code)
   if ('error' in result) {
     // Roll the profile back: a member who exists but can never sign in is a
@@ -447,7 +441,7 @@ async function setCode(caller: Caller, body: Record<string, unknown>) {
   if (!member) return json({ error: 'No such member' }, 400)
   if (member.role === 'agent') return json({ error: "Make Nano's code in Settings › People › Nano" }, 400)
   // The length rule itself is checked in provision(), for every way in.
-  const code = String(body.code ?? '').trim() || randomCode(minCodeLength(member.role as string))
+  const code = String(body.code ?? '').trim() || randomCode(codeFormat(body.format))
 
   const result = await provision(target, code)
   if ('error' in result) return json({ error: result.error }, 400)
@@ -630,7 +624,7 @@ async function nanoCode(caller: Caller) {
     await db.from('member_credentials').delete().eq('profile_id', nano.id)
   }
 
-  const result = await provision(nano.id as string, randomCode(minCodeLength('agent')))
+  const result = await provision(nano.id as string, randomCode('nano'))
   if ('error' in result) return json({ error: result.error }, 400)
   return json({ profile_id: nano.id, code: result.code })
 }
@@ -687,7 +681,7 @@ Deno.serve(async (req: Request) => {
         legacy: caller.legacy,
         // For the Security card in Settings. Owners only: nobody else can act
         // on it, and it says something about how the server is set up.
-        security: isOwner(caller) ? { pepper_set: PEPPER_SET, min_code_length: MIN_CODE_LENGTH } : undefined,
+        security: isOwner(caller) ? { pepper_set: PEPPER_SET } : undefined,
       })
     default:
       return json({ error: `Unknown action: ${action}` }, 400)

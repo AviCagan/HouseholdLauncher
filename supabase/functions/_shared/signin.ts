@@ -17,34 +17,57 @@ export function normaliseCode(raw: string): string {
 }
 
 /**
- * How long a code has to be, counted after normalising.
+ * What a household code may look like, counted after normalising.
  *
- * Owners can do everything, including handing out codes and closing the
- * shared PIN, so theirs are the ones worth the most to a guesser. Everyone
- * else's open only their own items in the apps they were granted. A
- * generated code is the minimum for the role, drawn from 31 characters.
+ * Avi's call, Nov 26: people pick 4 digits, 6 digits, or letters and
+ * numbers. The guess limit below is what keeps a 4-digit code from being
+ * worked through: five tries per device per quarter hour, fifty for the
+ * whole household. Nano's code is never typed by a person (it is made by
+ * the server and pasted onto the brain), so it stays as long as a key.
  */
-export const MIN_CODE_LENGTH = { owner: 12, other: 8, agent: 40 } as const
-
-/**
- * Nano's code is never typed by a person: it is made by the server, shown
- * once, and pasted onto the brain, so it can be as long as a key.
- */
-export function minCodeLength(role: string | null | undefined): number {
-  if (role === 'agent') return MIN_CODE_LENGTH.agent
-  return role === 'owner' ? MIN_CODE_LENGTH.owner : MIN_CODE_LENGTH.other
-}
+export type CodeFormat = 'digits4' | 'digits6' | 'letters'
+export const CODE_FORMATS: readonly CodeFormat[] = ['digits4', 'digits6', 'letters']
+export const LETTERS_MIN = 6
+export const NANO_CODE_LENGTH = 40
 
 /** Why a chosen code can't be used, or null when it can. */
 export function codeProblem(raw: string, role: string | null | undefined): string | null {
-  const min = minCodeLength(role)
-  if (normaliseCode(raw).length < min) {
-    if (role === 'agent') return `Nano's code needs at least ${min} letters or numbers`
-    return role === 'owner'
-      ? `Codes for Avi and Jackie need at least ${min} letters or numbers`
-      : `Codes need at least ${min} letters or numbers`
+  const code = normaliseCode(raw)
+  if (role === 'agent') {
+    return code.length >= NANO_CODE_LENGTH ? null : `Nano's code needs at least ${NANO_CODE_LENGTH} letters or numbers`
   }
+  if (/^\d+$/.test(code)) {
+    return code.length === 4 || code.length === 6 ? null : 'A number code is 4 or 6 digits'
+  }
+  if (code.length < LETTERS_MIN) return `A code with letters needs at least ${LETTERS_MIN} letters or numbers`
   return null
+}
+
+/** The format to make up a code in, from whatever the caller asked for. */
+export function codeFormat(asked: unknown): CodeFormat {
+  return CODE_FORMATS.includes(asked as CodeFormat) ? (asked as CodeFormat) : 'digits6'
+}
+
+/**
+ * Make up a code. `bytes` is a source of random bytes (crypto in the
+ * function, anything in a test). Digits use every byte below 250 so each
+ * digit is equally likely; letters skip I, O, 0 and 1, which get read as
+ * each other off a screen.
+ */
+export function makeCode(format: CodeFormat | 'nano', bytes: (n: number) => Uint8Array): string {
+  if (format === 'digits4' || format === 'digits6') {
+    const want = format === 'digits4' ? 4 : 6
+    let out = ''
+    while (out.length < want) {
+      for (const b of bytes(want * 2)) {
+        if (b < 250 && out.length < want) out += String(b % 10)
+      }
+    }
+    return out
+  }
+  const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+  const length = format === 'nano' ? NANO_CODE_LENGTH : 8
+  return [...bytes(length)].map((b) => alphabet[b % alphabet.length]).join('')
 }
 
 /*
