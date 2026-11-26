@@ -124,7 +124,7 @@ export const S = {
     title: 'Set up the calendar',
     intro: 'Rules default to the Chabad practice (mikvah.org / My Mikvah Calendar). Each one is a setting her kallah teacher or rav can change.',
     location: 'Where you live',
-    locationHint: 'Worked out on this phone and stored only in your calendar. Nothing is sent anywhere.',
+    locationHint: 'Only used to work out sunset and nightfall, and kept only in your calendar. Searching sends what you type to OpenStreetMap’s place search, and nothing else.',
     useHere: 'Use this phone’s location',
     partner: 'Who sees his view',
     partnerHint: 'He sees the status, the onot and mikvah night — never your checks, stains or notes unless you share them.',

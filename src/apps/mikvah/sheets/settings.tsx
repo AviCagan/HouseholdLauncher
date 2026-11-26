@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { Icon, type IconName } from '@/components/primitives/Icon'
+import { AddressInput } from '@/components/primitives/AddressInput'
 import { useData } from '@/store/useData'
 import { logEvent, saveSettings, setPartner, setShareDetails, startCalendar } from '../actions'
 import { SETUP_ORDER, type Place } from '../engine'
@@ -27,22 +28,25 @@ const TILE_ICONS: IconName[] = ['calendar', 'clock', 'star', 'book', 'sparkle', 
 
 function LocationFields({ value, onChange }: { value: Place | null; onChange: (p: Place) => void }) {
   const [busy, setBusy] = useState(false)
+  const [query, setQuery] = useState('')
+  const [exact, setExact] = useState(false)
   const p = value ?? { name: '', lat: NaN, lng: NaN, tz: Intl.DateTimeFormat().resolvedOptions().timeZone }
   const num = (v: number) => (Number.isFinite(v) ? String(v) : '')
+  // Three decimals is ~100 m: plenty for zmanim, and no more precise than needed.
+  const round = (x: number) => Math.round(x * 1000) / 1000
+  const set = Number.isFinite(p.lat) && Number.isFinite(p.lng)
 
   function here() {
-    if (!navigator.geolocation) return toast.error('This phone can’t share its location here — enter it by hand.')
+    if (!navigator.geolocation) return toast.error('This phone can’t share its location here. Type your town instead.')
     setBusy(true)
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setBusy(false)
-        // Three decimals is ~100 m: plenty for zmanim, and no more precise than needed.
-        const round = (x: number) => Math.round(x * 1000) / 1000
         onChange({ ...p, name: p.name || 'Home', lat: round(pos.coords.latitude), lng: round(pos.coords.longitude), tz: Intl.DateTimeFormat().resolvedOptions().timeZone })
       },
       () => {
         setBusy(false)
-        toast.error('Couldn’t get the location — enter it by hand.')
+        toast.error('Couldn’t get this phone’s location. Type your town instead.')
       },
       { enableHighAccuracy: false, timeout: 15_000 },
     )
@@ -50,23 +54,46 @@ function LocationFields({ value, onChange }: { value: Place | null; onChange: (p
 
   return (
     <div className="flex flex-col gap-3">
+      <Field label="Your town or address">
+        <AddressInput
+          value={query}
+          onChange={setQuery}
+          fillWith="address"
+          placeholder="Start typing, then pick it from the list"
+          className="mk-input"
+          style={{}}
+          onPick={(place) => {
+            // A town search names the town; an address search gives "street, town, …".
+            const town = place.name || place.address.split(',')[1]?.trim() || place.address.split(',')[0]?.trim() || 'Home'
+            onChange({ ...p, name: p.name || town, lat: round(place.lat), lng: round(place.lng), tz: p.tz || Intl.DateTimeFormat().resolvedOptions().timeZone })
+          }}
+        />
+      </Field>
       <Btn onClick={here} disabled={busy}>
         <Icon name="pin" size={16} /> {busy ? 'Finding…' : S.setup.useHere}
       </Btn>
-      <div className="grid grid-cols-2 gap-2">
-        <Field label="Latitude">
-          <input className="mk-input" inputMode="decimal" value={num(p.lat)} onChange={(e) => onChange({ ...p, lat: Number(e.target.value) })} />
-        </Field>
-        <Field label="Longitude">
-          <input className="mk-input" inputMode="decimal" value={num(p.lng)} onChange={(e) => onChange({ ...p, lng: Number(e.target.value) })} />
-        </Field>
-      </div>
+      <p className="mk-dim text-[13px]">
+        {set ? `Set${p.name ? `: ${p.name}` : ''}. Sunset and nightfall are worked out for this spot.` : 'Not set yet.'}
+      </p>
       <Field label="Time zone">
         <TzSelect value={p.tz} onChange={(tz) => onChange({ ...p, tz })} />
       </Field>
       <Field label="Name (only you see it)">
         <input className="mk-input" value={p.name} onChange={(e) => onChange({ ...p, name: e.target.value })} />
       </Field>
+      <button type="button" className="mk-faint self-start text-[12px] underline" onClick={() => setExact((x) => !x)}>
+        {exact ? 'Hide the exact coordinates' : 'Exact coordinates'}
+      </button>
+      {exact && (
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="Latitude">
+            <input className="mk-input" inputMode="decimal" value={num(p.lat)} onChange={(e) => onChange({ ...p, lat: Number(e.target.value) })} />
+          </Field>
+          <Field label="Longitude">
+            <input className="mk-input" inputMode="decimal" value={num(p.lng)} onChange={(e) => onChange({ ...p, lng: Number(e.target.value) })} />
+          </Field>
+        </div>
+      )}
       <p className="mk-faint text-[12px]">{S.setup.locationHint}</p>
     </div>
   )

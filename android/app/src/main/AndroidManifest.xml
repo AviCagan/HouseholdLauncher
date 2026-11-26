@@ -51,6 +51,15 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!--
+      Location, for "Use this phone's location" in the Calendar (sunset and
+      nightfall where you live). Asked for only when that button is tapped.
+      Both are declared because the web view asks for both; on Android 12 and
+      later the person can still choose "approximate", which is all it needs.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
     <!-- Lets the app see a camera app. Since Android 11 an app can't find
          another app's activities unless it says which it needs, and without
          this Capacitor's WebView finds no camera for a photo input marked
