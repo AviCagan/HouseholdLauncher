@@ -17,6 +17,7 @@ import { ShowSheet } from './ShowSheet'
 import { RateSheet } from './RateSheet'
 import { DatesSheet, FinishSheet, LogSheet, ManualSheet, PaceSheet, PosterSheet, SlotSheet } from './sheets'
 import { needsRefresh, refreshShow } from './actions'
+import { useNanoScreen } from '@/launcher/nano/context'
 
 /**
  * Watched (working title).
@@ -35,6 +36,7 @@ const CHANNELS: { id: WatchTab; n: number; label: string }[] = [
 export function WatchedApp() {
   const tab = useWatchUI((s) => s.tab)
   const setTab = useWatchUI((s) => s.setTab)
+  useNanoScreen(tab)
   const stack = useWatchUI((s) => s.stack)
   const open = useWatchUI((s) => s.open)
   const goHome = useLauncher((s) => s.goHome)

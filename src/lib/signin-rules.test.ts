@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  APPROVAL_TTL_MS,
+  approvalProblem,
   clientAddress,
   codeProblem,
   GUESS_WINDOW_MS,
@@ -30,6 +32,12 @@ describe('codes', () => {
     expect(minCodeLength('member')).toBe(8)
     expect(minCodeLength('guest')).toBe(8)
     expect(minCodeLength(null)).toBe(8)
+  })
+
+  it("makes Nano's code as long as a key", () => {
+    expect(minCodeLength('agent')).toBe(40)
+    expect(codeProblem('A'.repeat(39), 'agent')).toMatch(/Nano's code needs at least 40/)
+    expect(codeProblem('A'.repeat(40), 'agent')).toBeNull()
   })
 
   it('counts length after normalising', () => {
@@ -93,5 +101,42 @@ describe('which device is guessing', () => {
   it('falls back when nothing names an address', () => {
     expect(clientAddress(headers({}))).toBe('unknown')
     expect(clientAddress(headers({ 'x-forwarded-for': '10.0.0.1', 'x-real-ip': '192.0.2.4' }))).toBe('192.0.2.4')
+  })
+})
+
+describe("Nano's approvals in the household function", () => {
+  const approved = (over: Partial<Parameters<typeof approvalProblem>[0] & object> = {}) => ({
+    kind: 'code' as const,
+    status: 'approved',
+    approved_at: ago(minutes(1)).toISOString(),
+    target_profile: 'p1',
+    ...over,
+  })
+
+  it('lets an approved, unused, matching approval through', () => {
+    expect(approvalProblem(approved(), 'set-code', 'p1', now)).toBeNull()
+    expect(approvalProblem(approved({ kind: 'member', target_profile: null }), 'create-member', null, now)).toBeNull()
+  })
+
+  it('needs an approval at all', () => {
+    expect(approvalProblem(null, 'set-code', 'p1', now)).toMatch(/Avi's code/)
+  })
+
+  it('is spent once', () => {
+    expect(approvalProblem(approved({ status: 'used' }), 'set-code', 'p1', now)).toMatch(/already been used/)
+  })
+
+  it('covers only the action and the person it names', () => {
+    expect(approvalProblem(approved({ kind: 'access' }), 'set-code', 'p1', now)).toMatch(/something else/)
+    expect(approvalProblem(approved(), 'set-code', 'p2', now)).toMatch(/someone else/)
+  })
+
+  it('runs out ten minutes after Avi approves it', () => {
+    const stale = approved({ approved_at: ago(APPROVAL_TTL_MS + 1000).toISOString() })
+    expect(approvalProblem(stale, 'set-code', 'p1', now)).toMatch(/ran out/)
+  })
+
+  it('is never enough for actions outside the list', () => {
+    expect(approvalProblem(approved(), 'close-legacy', null, now)).toMatch(/can't do that/)
   })
 })

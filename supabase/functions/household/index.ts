@@ -13,6 +13,7 @@
 
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import {
+  approvalProblem,
   clientAddress,
   codeProblem,
   GUESS_WINDOW_MS,
@@ -137,12 +138,17 @@ async function identify(req: Request): Promise<Caller | null> {
 
   const { data: profile } = await db
     .from('profiles')
-    .select('id, role, display_name')
+    .select('id, role, display_name, is_active')
     .eq('auth_user_id', data.user.id)
-    .eq('is_active', true)
     .maybeSingle()
 
-  if (profile) return { profile, legacy: false }
+  if (profile) {
+    // A member who was switched off (or Nano, turned off) is nobody. They
+    // must not fall through to the legacy branch below, which would treat
+    // their still-valid session as the shared owner account.
+    if (!profile.is_active) return null
+    return { profile: { id: profile.id, role: profile.role, display_name: profile.display_name }, legacy: false }
+  }
 
   const { data: settings } = await db
     .from('household_settings')
@@ -155,6 +161,62 @@ async function identify(req: Request): Promise<Caller | null> {
 }
 
 const isOwner = (caller: Caller) => caller.legacy || caller.profile?.role === 'owner'
+const isNano = (caller: Caller) => caller.profile?.role === 'agent'
+const MEMBER_ROLES = ['owner', 'member', 'guest']
+
+/**
+ * Nano asking for an owner action.
+ *
+ * She gets it only with an approval Avi gave with his code: one row in
+ * nano_approvals, of the right kind, naming the right person, approved in the
+ * last ten minutes and not used yet. It is used up here, before the action
+ * runs, by a conditional update, so the same approval can't be spent twice by
+ * two calls at once. The action then runs as the owner she asked for.
+ */
+async function nanoGate(
+  caller: Caller,
+  body: Record<string, unknown>,
+  action: string,
+): Promise<{ caller: Caller } | { refused: Response }> {
+  if (!isNano(caller)) return { caller }
+  const target = body.profile_id ? String(body.profile_id) : null
+  const approvalId = String(body.approval ?? '')
+  const { data: approval } = approvalId
+    ? await db
+        .from('nano_approvals')
+        .select('id, kind, status, approved_at, target_profile, asked_for')
+        .eq('id', approvalId)
+        .maybeSingle()
+    : { data: null }
+  const problem = approvalProblem(approval, action, target, new Date())
+  if (problem) return { refused: json({ error: problem }, 403) }
+  if (target && (await isAgentProfile(target))) return { refused: json({ error: "Nano can't change her own account" }, 403) }
+
+  const { data: owner } = await db
+    .from('profiles')
+    .select('id, role, display_name, is_active')
+    .eq('id', approval!.asked_for)
+    .maybeSingle()
+  if (!owner || owner.role !== 'owner' || !owner.is_active) {
+    return { refused: json({ error: 'Only an approval for Avi or Jackie can do that' }, 403) }
+  }
+
+  const { data: spent } = await db
+    .from('nano_approvals')
+    .update({ status: 'used', used_at: new Date().toISOString() })
+    .eq('id', approvalId)
+    .eq('status', 'approved')
+    .select('id')
+  if (!spent || spent.length === 0) return { refused: json({ error: 'That approval has already been used' }, 403) }
+
+  return { caller: { profile: { id: owner.id, role: 'owner', display_name: owner.display_name }, legacy: false } }
+}
+
+/** True when this member is Nano, whom only the Nano settings may change. */
+async function isAgentProfile(id: string): Promise<boolean> {
+  const { data } = await db.from('profiles').select('role').eq('id', id).maybeSingle()
+  return data?.role === 'agent'
+}
 
 // --- provisioning -----------------------------------------------------------
 
@@ -383,6 +445,7 @@ async function setCode(caller: Caller, body: Record<string, unknown>) {
 
   const { data: member } = await db.from('profiles').select('role').eq('id', target).maybeSingle()
   if (!member) return json({ error: 'No such member' }, 400)
+  if (member.role === 'agent') return json({ error: "Make Nano's code in Settings › People › Nano" }, 400)
   // The length rule itself is checked in provision(), for every way in.
   const code = String(body.code ?? '').trim() || randomCode(minCodeLength(member.role as string))
 
@@ -406,8 +469,27 @@ async function updateMember(caller: Caller, body: Record<string, unknown>) {
   }
   if (!self && !isOwner(caller)) return json({ error: 'Not allowed' }, 403)
 
+  // Which Owe & Owed name is them, so Nano can answer a friend about their
+  // own balance and nobody else's. An owner's call, never a member's own.
+  if ('owe_name' in body) {
+    if (!isOwner(caller)) return json({ error: 'Not allowed' }, 403)
+    const name = String(body.owe_name ?? '').trim()
+    patch.owe_name = name || null
+  }
+
+  // Nano's row: only an owner, in person, switches her on or off. Nothing
+  // else about it changes here, and never by Nano herself.
+  if (await isAgentProfile(target)) {
+    if (!isOwner(caller) || caller.legacy) return json({ error: 'Not allowed' }, 403)
+    if (typeof body.is_active !== 'boolean') return json({ error: 'Only on or off' }, 400)
+    const { error } = await db.from('profiles').update({ is_active: body.is_active }).eq('id', target)
+    if (error) return json({ error: error.message }, 400)
+    return json({ ok: true })
+  }
+
   if ('role' in body || 'is_active' in body) {
     if (!isOwner(caller)) return json({ error: 'Not allowed' }, 403)
+    if ('role' in body && !MEMBER_ROLES.includes(String(body.role))) return json({ error: 'Unknown role' }, 400)
     if ('role' in body) patch.role = body.role
     if ('is_active' in body) patch.is_active = body.is_active
 
@@ -458,6 +540,8 @@ async function setAccess(caller: Caller, body: Record<string, unknown>) {
   const appId = String(body.app_id ?? '')
   const granted = body.granted !== false
   if (!target || !appId) return json({ error: 'Which member, which app?' }, 400)
+  // Nano's reach comes from row-level security, never from app grants.
+  if (await isAgentProfile(target)) return json({ error: 'Nano has no app grants' }, 400)
 
   const { error } = await db.from('app_access').upsert(
     {
@@ -506,6 +590,51 @@ async function closeLegacy(caller: Caller) {
   return json({ ok: true })
 }
 
+/**
+ * Make Nano's code, creating her member row the first time.
+ *
+ * A new code replaces the old one completely: her sign-in account is deleted
+ * and made again, so every session the old code started stops working at
+ * once, not when its token runs out. Owners only, in person: the shared PIN
+ * can't do it, and neither can Nano.
+ */
+async function nanoCode(caller: Caller) {
+  if (!isOwner(caller) || caller.legacy || isNano(caller)) {
+    return json({ error: "Only Avi or Jackie, signed in with their own code, can make Nano's code" }, 403)
+  }
+  if (!PEPPER_SET) return json({ error: NO_PEPPER }, 400)
+
+  let { data: nano } = await db
+    .from('profiles')
+    .select('id, auth_user_id')
+    .eq('role', 'agent')
+    .maybeSingle()
+
+  if (!nano) {
+    const id = crypto.randomUUID()
+    const { error } = await db.from('profiles').insert({
+      id,
+      slug: `nano-${id.slice(0, 4)}`,
+      display_name: 'Nano',
+      avatar_emoji: '✨',
+      color_hex: '#ff7ac6',
+      role: 'agent',
+      is_active: true,
+    })
+    if (error) return json({ error: error.message }, 400)
+    nano = { id, auth_user_id: null }
+  } else if (nano.auth_user_id) {
+    const { error } = await db.auth.admin.deleteUser(nano.auth_user_id as string)
+    if (error) return json({ error: `Couldn't stop the old code: ${error.message}` }, 500)
+    await db.from('profiles').update({ auth_user_id: null }).eq('id', nano.id)
+    await db.from('member_credentials').delete().eq('profile_id', nano.id)
+  }
+
+  const result = await provision(nano.id as string, randomCode(minCodeLength('agent')))
+  if ('error' in result) return json({ error: result.error }, 400)
+  return json({ profile_id: nano.id, code: result.code })
+}
+
 // --- entrypoint -------------------------------------------------------------
 
 Deno.serve(async (req: Request) => {
@@ -528,15 +657,28 @@ Deno.serve(async (req: Request) => {
   const caller = await identify(req)
   if (!caller) return json({ error: 'Sign in first' }, 401)
 
+  // Nano gets the owner actions only through an approval; everything else
+  // below refuses her by role.
+  if (isNano(caller) && !['create-member', 'set-code', 'update-member', 'set-access', 'whoami'].includes(action)) {
+    return json({ error: "Nano can't do that" }, 403)
+  }
+  const gated = ['create-member', 'set-code', 'update-member', 'set-access'].includes(action)
+    ? await nanoGate(caller, body, action)
+    : { caller }
+  if ('refused' in gated) return gated.refused
+  const acting = gated.caller
+
   switch (action) {
     case 'create-member':
-      return createMember(caller, body)
+      return createMember(acting, body)
     case 'set-code':
-      return setCode(caller, body)
+      return setCode(acting, body)
     case 'update-member':
-      return updateMember(caller, body)
+      return updateMember(acting, body)
     case 'set-access':
-      return setAccess(caller, body)
+      return setAccess(acting, body)
+    case 'nano-code':
+      return nanoCode(caller)
     case 'close-legacy':
       return closeLegacy(caller)
     case 'whoami':

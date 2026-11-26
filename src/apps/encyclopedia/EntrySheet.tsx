@@ -5,6 +5,7 @@ import { fire } from '@/lib/haptics'
 import { PARTS_OF_SPEECH, type LexiconEntry, type PartOfSpeech } from '@/data/types'
 import { addEntry, removeEntry, updateEntry, type EntryInput } from './actions'
 import { POS_ABBR, POS_LABEL, citation, formatPronunciation } from './lexicon'
+import { useNanoItem } from '@/launcher/nano/context'
 
 export type SheetMode = 'view' | 'edit'
 
@@ -34,6 +35,7 @@ export function EntrySheet({
   onEdit: () => void
   onClose: () => void
 }) {
+  useNanoItem(open && entry ? { table: 'lexicon_entries', id: entry.id, title: entry.term } : null)
   const profileId = useProfile((s) => s.profileId)
   const [term, setTerm] = useState('')
   const [pronunciation, setPronunciation] = useState('')

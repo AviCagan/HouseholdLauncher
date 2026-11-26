@@ -13,6 +13,7 @@ import { domainOf } from '@/lib/unfurl'
 import { openExternal } from '@/apps/things/routing/deeplink'
 import { StoresSheet } from './StoresSheet'
 import { TripSheet } from './TripSheet'
+import { StockSheet } from './StockSheet'
 import type { ShoppingItem, Store } from '@/data/types'
 
 const UNSORTED = '__unsorted__'
@@ -23,6 +24,7 @@ export function ShoppingTab() {
   const profiles = useData((s) => s.profiles)
   const profileId = useProfile((s) => s.profileId)
   const openSheet = useUI((s) => s.openSheet)
+  const [stockOpen, setStockOpen] = useState(false)
 
   const sortBy = useUI((s) => s.sortBy.shopping)
   const desc = useUI((s) => s.sortDesc.shopping)
@@ -59,11 +61,24 @@ export function ShoppingTab() {
 
   return (
     <>
+      <StockSheet open={stockOpen} onClose={() => setStockOpen(false)} />
       <Screen
         title="Shopping"
         count={groups.activeCount}
         action={
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                fire('tap')
+                setStockOpen(true)
+              }}
+              aria-label="Stock: what's in the house"
+              title="Stock"
+              className="rail-btn grid h-9 w-9 place-items-center rounded-full"
+              style={{ background: 'var(--surface)', border: 'var(--card-border)' }}
+            >
+              <Icon name="box" size={16} />
+            </button>
             <button
               onClick={() => {
                 fire('tap')

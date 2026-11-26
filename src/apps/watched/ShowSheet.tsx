@@ -43,6 +43,7 @@ import {
 import { timeToWatch } from './schedule'
 import { useHold } from './hold'
 import { formatScore, seasonScores, showScores } from './ratings'
+import { useNanoItem } from '@/launcher/nano/context'
 
 /**
  * One show: everything known about it, the estimate, its seasons, its
@@ -52,6 +53,7 @@ export function ShowSheet({ showId }: { showId: string }) {
   const close = useWatchUI((s) => s.close)
   const { shows } = useWatched()
   const show = shows.find((s) => s.id === showId)
+  useNanoItem(show ? { table: 'watch_shows', id: show.id, title: show.title } : null)
 
   return (
     <Sheet open onClose={close} maxHeight="92vh" title={<span className="tv-osd tv-amber text-[18px]">▸ ON THE GUIDE</span>}>

@@ -152,8 +152,17 @@ export const updateMember = (
     color_hex: string
     role: MemberRole
     is_active: boolean
+    /** Their name as Owe & Owed writes it. Owners only. */
+    owe_name: string | null
   }>,
 ) => call<{ ok: true }>('update-member', { profile_id: profileId, ...patch })
+
+/**
+ * Make Nano's code, creating her member row the first time. Shown once:
+ * Avi puts it on the brain himself. A new code stops the old one and every
+ * session it started.
+ */
+export const makeNanoCode = () => call<{ profile_id: string; code: string }>('nano-code')
 
 export const setAppAccess = (profileId: string, appId: string, granted: boolean) =>
   call<{ ok: true }>('set-access', { profile_id: profileId, app_id: appId, granted })

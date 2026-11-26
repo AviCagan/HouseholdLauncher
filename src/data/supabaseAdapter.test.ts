@@ -68,6 +68,7 @@ describe('supabase adapter: realtime', () => {
     const medschool = channels.find((c) => c.name === 'household-medschool')!
     const experiences = channels.find((c) => c.name === 'household-medschool-experiences')!
     const mikvah = channels.find((c) => c.name === 'household-mikvah')!
+    const nano = channels.find((c) => c.name === 'household-nano')!
     expect(views.tables).toEqual(VIEWS)
     expect(watched.tables.sort()).toEqual([...WATCH].sort())
     expect(main.tables.some((t) => WATCH.includes(t) || VIEWS.includes(t))).toBe(false)
@@ -81,8 +82,12 @@ describe('supabase adapter: realtime', () => {
     expect(mikvah.tables.length).toBe(9)
     expect(mikvah.tables.every((t) => t.startsWith('mk_'))).toBe(true)
     expect(main.tables.some((t) => t.startsWith('mk_'))).toBe(false)
+    // Nano (029) on her own channel too.
+    expect(nano.tables.sort()).toEqual(['mk_nano', 'nano_asks', 'nano_settings', 'nano_status', 'things_stock'])
     // Every table is listened to exactly once.
-    expect([...main.tables, ...watched.tables, ...views.tables, ...medschool.tables, ...experiences.tables, ...mikvah.tables].sort()).toEqual([...TABLES].sort())
+    expect(
+      [...main.tables, ...watched.tables, ...views.tables, ...medschool.tables, ...experiences.tables, ...mikvah.tables, ...nano.tables].sort(),
+    ).toEqual([...TABLES].sort())
     stop()
   })
 

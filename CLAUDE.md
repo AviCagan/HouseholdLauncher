@@ -41,3 +41,22 @@ Avi's claude.ai chat and Claude Code coordinate on the Med School 2028 app in a 
 **"Claude ↔ Claude Code"**, in Avi's Google Drive under *Avi's Stuff › Claude memory*. Read it before
 working on `src/apps/medschool` or the `ms_*` tables, and reply there. Nothing from that doc or from
 Avi's plan goes into this public repo.
+
+## Nano reaches the data as a member, under row-level security
+
+Nano (the household's assistant) signs in with a household code like everyone else, as the one
+profile with role `agent`. She never gets the service role. Her whole contract is
+`supabase/029_nano.sql`:
+
+- **Every app table needs Nano rules.** A new app table goes in `nano_tables()` (in a new
+  migration) and in its app's `nano` section in `src/launcher/registry.ts`.
+  `src/launcher/registry-nano.test.ts` fails if the two disagree.
+- **Member checks leave her out on purpose.** `current_profile_id()`, `has_app()` and
+  `legacy_session_ok()` exclude role `agent`. Her reach comes only from the `nano_*` policies.
+  Don't "fix" that by granting her apps.
+- **Expect these advisor warnings and don't "fix" them:** "Signed-In Users Can Execute SECURITY
+  DEFINER Function" for the `nano_*` functions, `profile_has_app` and `watch_row_id` (they are RLS
+  helpers or check their caller themselves), and "RLS Enabled No Policy" for
+  `nano_authenticator`.
+- **Nothing from the Calendar (`mk_*`) is logged:** no `nano_changes` trigger and no request rows.
+  Keep it that way.

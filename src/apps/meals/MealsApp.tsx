@@ -18,6 +18,7 @@ import { TemplateSheet, TemplatesTab } from './TemplatesTab'
 import { useMealsUI, type MealsTab as TabKey } from './store'
 import { POP, useReduceMotion } from './ui'
 import './meals.css'
+import { useNanoScreen } from '@/launcher/nano/context'
 
 /**
  * Meals.
@@ -50,6 +51,7 @@ const ADD_OPTIONS: { key: AddKind; label: string; emoji: string; tone: string }[
 export function MealsApp() {
   const tab = useMealsUI((s) => s.tab)
   const setTab = useMealsUI((s) => s.setTab)
+  useNanoScreen(tab)
   const sheet = useMealsUI((s) => s.sheet)
   const openSheet = useMealsUI((s) => s.openSheet)
   const closeSheet = useMealsUI((s) => s.closeSheet)

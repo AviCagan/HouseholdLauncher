@@ -13,6 +13,7 @@ import { UNKNOWN_REASON, dishMacros, isUnknown, lineMacros } from './macros'
 import { SHELF_TAG, isShelved } from './shelf'
 import { useMealsUI } from './store'
 import { BigButton, Chip, EmojiPicker, Field, KIND_META, POP, Stepper, TextArea, TextInput } from './ui'
+import { useNanoItem } from '@/launcher/nano/context'
 
 /**
  * One dish, to look at or to change.
@@ -38,6 +39,7 @@ export function DishSheet({
   /** Told about the saved row — how a meal gets the dish it asked for. */
   onSaved?: (dish: Dish) => void
 }) {
+  useNanoItem(open && dish ? { table: 'dishes', id: dish.id, title: dish.name } : null)
   const profileId = useProfile((s) => s.profileId)
   const celebrate = useMealsUI((s) => s.celebrate)
 

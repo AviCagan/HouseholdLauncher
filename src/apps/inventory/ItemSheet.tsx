@@ -18,6 +18,7 @@ import { FileTile, PhotoButtons, PickButton, SectionHead, WarrantyBadge } from '
 import { QrCode } from './QrCode'
 import { itemUrl } from './links'
 import { usePreview } from './hooks'
+import { useNanoItem } from '@/launcher/nano/context'
 
 /**
  * One item, everything about it: the overall photo, the extra parts, the
@@ -31,6 +32,7 @@ export function ItemSheet({ itemId, onClose, onPrintLabel }: { itemId: string | 
   const last = useRef<InventoryItem | null>(null)
   if (live) last.current = live
   const item = live ?? last.current
+  useNanoItem(itemId && live ? { table: 'inventory_items', id: live.id, title: live.name } : null)
 
   return (
     <Sheet open={itemId !== null && live !== null} onClose={onClose} height="94vh" title={item ? <Title item={item} /> : null}>

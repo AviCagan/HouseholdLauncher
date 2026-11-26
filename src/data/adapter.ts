@@ -17,6 +17,11 @@ import type {
   MkMemo,
   MkPartner,
   MkReminder,
+  MkNano,
+  NanoAsk,
+  NanoSettings,
+  NanoStatus,
+  ThingsStock,
   MkSettingsRow,
   MkShared,
   MkSourceNote,
@@ -105,6 +110,13 @@ export const TABLES = [
   'mk_source_notes',
   'mk_partner',
   'mk_reminders',
+  // Nano (029). Her change log and approvals are read on demand instead
+  // (src/lib/nano.ts): they only grow, and only Settings shows them.
+  'mk_nano',
+  'nano_asks',
+  'nano_status',
+  'nano_settings',
+  'things_stock',
 ] as const
 
 export type TableName = (typeof TABLES)[number]
@@ -156,6 +168,11 @@ export interface TableMap {
   mk_source_notes: MkSourceNote
   mk_partner: MkPartner
   mk_reminders: MkReminder
+  mk_nano: MkNano
+  nano_asks: NanoAsk
+  nano_status: NanoStatus
+  nano_settings: NanoSettings
+  things_stock: ThingsStock
 }
 
 export type ChangeEvent<T extends TableName = TableName> =
@@ -251,7 +268,7 @@ export function rowKey(table: TableName, row: unknown): string {
 }
 
 /** One-row tables, keyed on a `singleton boolean` column that is always true. */
-export const SINGLETON_TABLES = ['household_settings', 'watch_settings', 'ms_settings'] as const
+export const SINGLETON_TABLES = ['household_settings', 'watch_settings', 'ms_settings', 'nano_status', 'nano_settings'] as const
 
 export const isSingleton = (table: TableName): boolean =>
   (SINGLETON_TABLES as readonly string[]).includes(table)

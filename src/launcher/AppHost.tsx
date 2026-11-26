@@ -11,6 +11,7 @@ import { MealsApp } from '@/apps/meals/MealsApp'
 import { EncyclopediaApp } from '@/apps/encyclopedia/EncyclopediaApp'
 import { WatchedApp } from '@/apps/watched/WatchedApp'
 import { InventoryApp } from '@/apps/inventory/InventoryApp'
+import { NanoButton } from './nano/NanoButton'
 
 /**
  * Renders whichever app is open, with the guards that every app shares.
@@ -97,6 +98,7 @@ export function AppHost({ appId }: { appId: string }) {
           <OweApp />
         </AppFrame>
       )}
+      <NanoButton appId={appId} />
     </>
   )
 }

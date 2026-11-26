@@ -7,9 +7,11 @@ import { parsePrice, priceToInput } from '@/lib/money'
 import { fire } from '@/lib/haptics'
 import { removeDebt, updateDebt } from './actions'
 import type { Debt } from '@/data/types'
+import { useNanoItem } from '@/launcher/nano/context'
 
 /** Edit or delete one entry. Opened by tapping the body of a row. */
 export function DebtEditSheet({ debt, onClose }: { debt: Debt | null; onClose: () => void }) {
+  useNanoItem(debt ? { table: 'debts', id: debt.id, title: debt.counterparty } : null)
   const profileId = useProfile((s) => s.profileId)
   const profiles = useData((s) => s.profiles)
   const [name, setName] = useState('')

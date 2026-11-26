@@ -14,6 +14,8 @@ import {
 } from '@/lib/household'
 import { fire } from '@/lib/haptics'
 import type { MemberRole } from '@/data/types'
+import { NanoSettings } from './NanoSettings'
+import { isConfigured } from '@/lib/env'
 
 /**
  * Add people, hand out codes, and decide what each of them can open.
@@ -93,6 +95,12 @@ export function PeopleSettings() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {isConfigured() && (
+        <div className="mt-6">
+          <NanoSettings />
+        </div>
+      )}
     </>
   )
 }
@@ -190,6 +198,8 @@ function PersonRow({
                   </div>
                 )
               })}
+
+              {role !== 'owner' && <OweNameField person={person} />}
 
               <div className="flex gap-2 pt-3">
                 <button
@@ -432,5 +442,32 @@ function AddPersonForm({ onDone }: { onDone: () => void }) {
         {error && <Notice text={error} tone="error" />}
       </div>
     </SettingsGroup>
+  )
+}
+
+/**
+ * Which name in Owe & Owed is this person, so Nano can tell a friend their
+ * own balance and nobody else's. Owners only, like everything on this page.
+ */
+function OweNameField({ person }: { person: Member }) {
+  const saved = (person as Member & { owe_name?: string | null }).owe_name ?? ''
+  const [value, setValue] = useState(saved)
+  return (
+    <div className="pt-2">
+      <p className="pb-1.5 pt-1 text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-faint)' }}>
+        Their name in Owe &amp; Owed
+      </p>
+      <input
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={() => {
+          if (value.trim() !== saved) void updateMember(person.id, { owe_name: value.trim() || null })
+        }}
+        placeholder="As it's written on the debts, if any"
+        aria-label={`${person.display_name}'s name in Owe & Owed`}
+        className="w-full rounded-xl px-3 py-2 text-[14px] outline-none placeholder:opacity-40"
+        style={{ background: 'var(--surface)' }}
+      />
+    </div>
   )
 }

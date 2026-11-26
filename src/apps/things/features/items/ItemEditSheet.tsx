@@ -21,6 +21,7 @@ import {
   type Weekday,
   type Desire,
 } from '@/data/types'
+import { useNanoItem } from '@/launcher/nano/context'
 
 const URGENCY_COLORS: Record<Urgency, string> = {
   0: 'var(--u-low)',
@@ -67,6 +68,7 @@ export function ItemEditSheet() {
           ? shoppingItems.find((i) => i.id === item.id)
           : wishlistItems.find((w) => w.id === item.id)
 
+  useNanoItem(item && row ? { table: item.table, id: item.id, title: row.title } : null)
   const [title, setTitle] = useState('')
   const [notes, setNotes] = useState('')
   const [urgency, setUrgency] = useState<Urgency>(1)

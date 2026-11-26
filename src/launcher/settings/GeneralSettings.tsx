@@ -9,6 +9,7 @@ import { signOut } from '@/lib/supabase'
 import { useProfile } from '@/store/useProfile'
 import { isConfigured } from '@/lib/env'
 import { fire } from '@/lib/haptics'
+import { NanoAuthenticator } from './NanoSettings'
 
 /**
  * Your own settings: who you are, the code you sign in with, and the way out.
@@ -188,7 +189,7 @@ function SecurityCard({ legacyOpen }: { legacyOpen: boolean }) {
   }, [])
 
   const noSecret = security?.pepper_set === false
-  if (!noSecret && !legacyOpen) return null
+  const me = useCurrentMember()
 
   return (
     <SettingsGroup
@@ -199,6 +200,9 @@ function SecurityCard({ legacyOpen }: { legacyOpen: boolean }) {
           : undefined
       }
     >
+      {/* Only with your own code: the shared PIN can't set the key Nano's
+          approvals are checked against, and the database refuses it too. */}
+      {me && <NanoAuthenticator />}
       {noSecret && (
         <div className="px-3.5 py-3" style={legacyOpen ? { borderBottom: '1px solid var(--border)' } : undefined}>
           <p className="text-[13px] leading-snug" style={{ color: 'var(--danger)' }}>

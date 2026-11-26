@@ -244,6 +244,11 @@ export interface WishlistItem {
   image_url: string | null
   desire_level: Desire
   owner_id: string | null
+  /**
+   * Someone this item is kept from, enforced by the database: their phone
+   * never receives the row. Null for everyone.
+   */
+  hidden_from?: string | null
   is_purchased: boolean
   purchased_at: string | null
   created_by: string | null
@@ -319,7 +324,7 @@ export type TabKey = 'todos' | 'chores' | 'shopping' | 'wishlist'
  * explicit grant per app, and the label just says which of the two kinds of
  * person you are looking at in the people list.
  */
-export type MemberRole = 'owner' | 'member' | 'guest'
+export type MemberRole = 'owner' | 'member' | 'guest' | 'agent'
 
 /** Permission. Absent row means "no", except for owners. */
 export interface AppAccess {
@@ -1145,5 +1150,99 @@ export interface MkReminder {
   cancelled: boolean
   sent_at: string | null
   created_at: string
+  updated_at: string
+}
+
+// --- Nano (029_nano.sql) -------------------------------------------------------
+
+/** A request handed to Nano from an app's Nano button. */
+export interface NanoAsk {
+  id: string
+  /** Set by the database to the signed-in member: never trusted from a client. */
+  asked_by: string
+  app_id: string
+  screen: string | null
+  item_table: string | null
+  item_id: string | null
+  item_title: string | null
+  body: string
+  status: 'waiting' | 'working' | 'answered' | 'failed' | 'cancelled' | 'expired'
+  answer: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** Nano's heartbeat, one row, touched by the brain every 30 seconds. */
+export interface NanoStatus {
+  singleton: true
+  last_seen_at: string | null
+  version: string | null
+  updated_at: string
+}
+
+/** Household-wide Nano settings, one row, changed by Avi or Jackie. */
+export interface NanoSettings {
+  singleton: true
+  /** Off until Avi moves the Med School data role to her. */
+  medschool_writes: boolean
+  /** Her WhatsApp number, for the Calendar's button. */
+  whatsapp: string | null
+  updated_by: string | null
+  updated_at: string
+}
+
+/** One row of Nano's change log. Read on demand, never synced whole. */
+export interface NanoChange {
+  id: string
+  at: string
+  table_name: string
+  row_key: string
+  op: 'insert' | 'update' | 'delete'
+  before: Record<string, unknown> | null
+  after: Record<string, unknown> | null
+  acting_for: string | null
+  ask_id: string | null
+  undone_at: string | null
+  undone_by: string | null
+}
+
+/** Something Nano wants to do that needs Avi's code first. */
+export interface NanoApproval {
+  id: string
+  created_at: string
+  kind: 'delete' | 'update' | 'member' | 'access' | 'code'
+  /** What it will do, in her words: what Avi sees where he approves it. */
+  summary: string
+  table_name: string | null
+  max_rows: number | null
+  target_profile: string | null
+  status: 'waiting' | 'approved' | 'used' | 'cancelled'
+  approved_at: string | null
+  used_at: string | null
+}
+
+/** A count of something the household uses up (Things › Stock). */
+export interface ThingsStock {
+  id: string
+  name: string
+  unit: string | null
+  on_hand: number
+  /** At or below this, it goes on the shopping list. Null: never automatically. */
+  low_at: number | null
+  store_id: string | null
+  auto_add: boolean
+  /** The open shopping item this count put on the list, so it isn't added twice. */
+  shopping_item_id: string | null
+  sort_order: number
+  created_by: string | null
+  updated_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** Her switch for Nano reading her calendar. id is her profile. */
+export interface MkNano {
+  id: string
+  can_read: boolean
   updated_at: string
 }

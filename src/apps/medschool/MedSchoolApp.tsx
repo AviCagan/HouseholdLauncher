@@ -23,6 +23,7 @@ import { RecordTab } from './RecordTab'
 import { SettingsSheet } from './SettingsSheet'
 import { CourseSheet, DateSheet, LetterSheet, LogSheet, PracticeSheet, TaskSheet, TotalSheet } from './sheets'
 import { Panel, TabGlyph } from './ui'
+import { useNanoScreen } from '@/launcher/nano/context'
 
 /**
  * Med School 2028 — one person's plan, from the MCAT to the first day of
@@ -58,6 +59,7 @@ function firstOpen(): boolean {
 export function MedSchoolApp() {
   const tab = useMsUI((s) => s.tab)
   const setTab = useMsUI((s) => s.setTab)
+  useNanoScreen(tab)
   const stack = useMsUI((s) => s.stack)
   const open = useMsUI((s) => s.open)
   const goHome = useLauncher((s) => s.goHome)

@@ -58,6 +58,35 @@ export interface AppDef {
    * and the alerts where they belong, not the data from someone determined.
    */
   explicitGrant?: boolean
+  /**
+   * How Nano reaches this app. Required: every app is planned with Nano
+   * access from the start, and a test fails for one without it.
+   *
+   * The rules themselves are the database's (029_nano.sql): this names the
+   * tables they must cover, so a table added here and forgotten there fails
+   * the same test.
+   */
+  nano: NanoAccess
+}
+
+export interface NanoAccess {
+  /** Every table this app keeps its data in. */
+  tables: string[]
+  /**
+   * What a friend's request may reach: their own rows, their own rows to read
+   * only, or nothing at all. Avi and Jackie reach everything either way.
+   */
+  friends: 'own' | 'own-read' | 'never'
+  /**
+   * Pixels from the bottom for the floating Nano button, to clear whatever
+   * the app draws there (a tab dock, an add bar).
+   */
+  buttonBottom: number
+  /**
+   * The button opens a private WhatsApp chat instead of saving a request,
+   * so nothing from this app is ever written to a table on Nano's behalf.
+   */
+  private?: boolean
 }
 
 export const APPS: AppDef[] = [
@@ -69,6 +98,7 @@ export const APPS: AppDef[] = [
     color: '#7c5cff',
     platforms: ['android', 'web'],
     defaultForEveryone: true,
+    nano: { tables: ['todos', 'chores', 'shopping_items', 'stores', 'wishlist_items', 'things_stock'], friends: 'own', buttonBottom: 150 },
   },
   {
     id: 'owe',
@@ -77,6 +107,7 @@ export const APPS: AppDef[] = [
     icon: 'wallet',
     color: '#3fa96b',
     platforms: ['android', 'web'],
+    nano: { tables: ['debts'], friends: 'own-read', buttonBottom: 96 },
   },
   {
     id: 'meals',
@@ -86,6 +117,7 @@ export const APPS: AppDef[] = [
     color: '#ff7a59',
     platforms: ['android', 'web'],
     defaultForEveryone: true,
+    nano: { tables: ['dishes', 'meals', 'meal_templates'], friends: 'own', buttonBottom: 150 },
   },
   {
     id: 'encyclopedia',
@@ -96,6 +128,8 @@ export const APPS: AppDef[] = [
     platforms: ['android', 'web'],
     // Not for everyone by default: a private vocabulary is exactly the kind
     // of personal history the comment on `defaultForEveryone` is about.
+
+    nano: { tables: ['lexicon_entries'], friends: 'never', buttonBottom: 96 },
   },
   {
     id: 'watched',
@@ -109,6 +143,8 @@ export const APPS: AppDef[] = [
     platforms: ['android', 'web'],
     // Not for everyone by default: what two people watch, and what they
     // thought of it, is theirs.
+
+    nano: { tables: ['watch_shows', 'watch_seasons', 'watch_ratings', 'watch_views', 'watch_settings'], friends: 'own', buttonBottom: 96 },
   },
   {
     id: 'inventory',
@@ -119,6 +155,8 @@ export const APPS: AppDef[] = [
     platforms: ['android', 'web'],
     // Not for everyone by default: what the household owns and what it paid
     // is the owners' to share.
+
+    nano: { tables: ['inventory_items'], friends: 'own', buttonBottom: 96 },
   },
   {
     id: 'medschool',
@@ -131,6 +169,14 @@ export const APPS: AppDef[] = [
     // One person's plan: granted to them, and shown to nobody else — not
     // even the other owner — unless they're granted it too.
     explicitGrant: true,
+    nano: {
+      tables: [
+        'ms_settings', 'ms_tasks', 'ms_counters', 'ms_counter_logs', 'ms_eligibility', 'ms_letters',
+        'ms_courses', 'ms_practice', 'ms_questions', 'ms_experiences', 'ms_experience_logs', 'ms_experience_steps',
+      ],
+      friends: 'never',
+      buttonBottom: 96,
+    },
   },
   {
     id: 'mikvah',
@@ -142,6 +188,15 @@ export const APPS: AppDef[] = [
     color: '#5b6b8c',
     platforms: ['android', 'web'],
     explicitGrant: true,
+    nano: {
+      tables: [
+        'mk_shared', 'mk_events', 'mk_settings', 'mk_trips', 'mk_memos', 'mk_contacts',
+        'mk_source_notes', 'mk_partner', 'mk_reminders', 'mk_nano',
+      ],
+      friends: 'never',
+      buttonBottom: 24,
+      private: true,
+    },
   },
 ]
 

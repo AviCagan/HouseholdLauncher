@@ -10,6 +10,7 @@ import { describe, parse, SETTINGS_UI, type SettingUi } from '../settingsUi'
 import { S } from '../strings'
 import { Btn, Card, Choice, Field, Section, Toggle, Why } from '../ui'
 import { useCalendar, useHer } from '../useMikvah'
+import type { MkNano } from '@/data/types'
 
 const REMINDER_LABEL: Record<ReminderKind, string> = {
   hefsek: 'Hefsek day',
@@ -190,6 +191,8 @@ export function SettingsSheet({ onDone }: { onDone: () => void }) {
         </div>
       </Section>
 
+      <NanoSwitch />
+
       <Section title="Other">
         <div className="mk-card px-4 py-1">
           <Toggle
@@ -223,6 +226,50 @@ export function SettingsSheet({ onDone }: { onDone: () => void }) {
         Each save is kept as a new version, so a past date can be explained under the settings then. {history.length} version{history.length === 1 ? '' : 's'} so far.
       </p>
     </div>
+  )
+}
+
+// --- Nano ------------------------------------------------------------------------------------
+
+/**
+ * Her switch for Nano reading this calendar. Off until she turns it on, and
+ * enforced by the database next to the sharing switch, so turning it off
+ * cuts Nano off at once. Saved straight away, not as a settings version: it
+ * says who may look, not how the calendar is worked out.
+ */
+function NanoSwitch() {
+  const c = useCalendar()
+  const nano = useData((st) => st.nano)
+  const row = useData((st) => st.mk_nano.find((r) => r.id === c.me))
+  if (!nano || !c.me) return null
+  const me = c.me
+  const on = row?.can_read === true
+
+  async function set(next: boolean) {
+    const adapter = useData.getState().adapter
+    const nextRow: MkNano = { id: me, can_read: next, updated_at: new Date().toISOString() }
+    useData.getState().applyChange({ table: 'mk_nano', type: row ? 'update' : 'insert', row: nextRow })
+    try {
+      if (row) await adapter.update('mk_nano', me, { can_read: next })
+      else await adapter.insert('mk_nano', nextRow)
+    } catch {
+      if (row) useData.getState().applyChange({ table: 'mk_nano', type: 'update', row })
+      else useData.getState().applyChange({ table: 'mk_nano', type: 'delete', id: me })
+      toast.error("Couldn't save that")
+    }
+  }
+
+  return (
+    <Section title="Nano">
+      <div className="mk-card px-4 py-1">
+        <Toggle
+          on={on}
+          onChange={(v) => void set(v)}
+          label="Let Nano read this calendar"
+          hint="She talks about it only with you and your partner, privately on WhatsApp, and never writes here on her own. Nothing from it goes in her logs. Turn it off and she can't see it any more."
+        />
+      </div>
+    </Section>
   )
 }
 

@@ -50,6 +50,8 @@ const OWN_CHANNEL: Record<string, readonly TableName[]> = {
     'mk_partner',
     'mk_reminders',
   ],
+  // Nano (029), with the stock counts and the Calendar switch that came with her.
+  nano: ['nano_asks', 'nano_status', 'nano_settings', 'things_stock', 'mk_nano'],
 }
 
 function realtimeChannels(): [name: string, tables: readonly TableName[]][] {

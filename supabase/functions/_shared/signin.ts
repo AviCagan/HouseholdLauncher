@@ -24,9 +24,14 @@ export function normaliseCode(raw: string): string {
  * else's open only their own items in the apps they were granted. A
  * generated code is the minimum for the role, drawn from 31 characters.
  */
-export const MIN_CODE_LENGTH = { owner: 12, other: 8 } as const
+export const MIN_CODE_LENGTH = { owner: 12, other: 8, agent: 40 } as const
 
+/**
+ * Nano's code is never typed by a person: it is made by the server, shown
+ * once, and pasted onto the brain, so it can be as long as a key.
+ */
 export function minCodeLength(role: string | null | undefined): number {
+  if (role === 'agent') return MIN_CODE_LENGTH.agent
   return role === 'owner' ? MIN_CODE_LENGTH.owner : MIN_CODE_LENGTH.other
 }
 
@@ -34,6 +39,7 @@ export function minCodeLength(role: string | null | undefined): number {
 export function codeProblem(raw: string, role: string | null | undefined): string | null {
   const min = minCodeLength(role)
   if (normaliseCode(raw).length < min) {
+    if (role === 'agent') return `Nano's code needs at least ${min} letters or numbers`
     return role === 'owner'
       ? `Codes for Avi and Jackie need at least ${min} letters or numbers`
       : `Codes need at least ${min} letters or numbers`
@@ -115,4 +121,64 @@ export function clientAddress(headers: HeaderSource): string {
     if (!isPrivate(hops[i])) return hops[i]
   }
   return headers.get('x-real-ip')?.trim() || 'unknown'
+}
+
+/*
+  Nano's approvals.
+
+  Nano is a member of the household (role `agent`) with none of an owner's
+  powers. Adding people, changing what someone can open and setting codes
+  are owner actions, and the household function does them for her only with
+  an approval: a row she asked for, which Avi approved with a code from his
+  authenticator, which names the one thing it allows, and which is used up
+  by doing it. The database checks the code (nano_approve in 029_nano.sql);
+  this decides whether an approval in hand covers the action asked for.
+*/
+export const APPROVAL_TTL_MS = 10 * 60 * 1000
+
+export type ApprovalKind = 'delete' | 'update' | 'member' | 'access' | 'code'
+
+export interface ApprovalRow {
+  kind: ApprovalKind
+  status: string
+  approved_at: string | null
+  target_profile: string | null
+}
+
+/** Which kind of approval a household action needs from Nano. */
+export function approvalKindFor(action: string): ApprovalKind | null {
+  switch (action) {
+    case 'create-member':
+    case 'update-member':
+      return 'member'
+    case 'set-access':
+      return 'access'
+    case 'set-code':
+      return 'code'
+    default:
+      return null
+  }
+}
+
+/** Why this approval doesn't cover this action, or null when it does. */
+export function approvalProblem(
+  approval: ApprovalRow | null,
+  action: string,
+  target: string | null,
+  now: Date,
+): string | null {
+  const kind = approvalKindFor(action)
+  if (!kind) return 'Nano can\'t do that'
+  if (!approval) return 'That needs Avi\'s code first'
+  if (approval.kind !== kind) return 'That approval was for something else'
+  if (approval.status === 'used') return 'That approval has already been used'
+  if (approval.status !== 'approved' || !approval.approved_at) return 'That needs Avi\'s code first'
+  if (now.getTime() - new Date(approval.approved_at).getTime() > APPROVAL_TTL_MS) {
+    return 'That approval ran out. Ask Avi again.'
+  }
+  // Adding someone has nobody to name yet; everything else names its person.
+  if (action !== 'create-member' && approval.target_profile !== target) {
+    return 'That approval was for someone else'
+  }
+  return null
 }

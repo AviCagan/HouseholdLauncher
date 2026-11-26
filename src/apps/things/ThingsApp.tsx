@@ -23,6 +23,7 @@ import { useLauncher } from '@/store/useLauncher'
 import { useDesktop } from '@/lib/useDesktop'
 import type { TabKey } from '@/data/types'
 import './things.css'
+import { useNanoScreen } from '@/launcher/nano/context'
 
 /**
  * Things, as a launcher app.
@@ -41,6 +42,7 @@ export function ThingsApp() {
   const profileId = useProfile((s) => s.profileId)
   const tab = useUI((s) => s.tab)
   const setTab = useUI((s) => s.setTab)
+  useNanoScreen(tab)
   const consumeDeepLink = useLauncher((s) => s.consumeDeepLink)
   const desktop = useDesktop()
 

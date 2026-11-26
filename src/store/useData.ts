@@ -5,6 +5,8 @@ import { TABLES, newId, nowIso, rowKey } from '@/data/adapter'
 import { createLocalAdapter, computeNextDue } from '@/data/localAdapter'
 import type {
   Chore,
+  MemberRole,
+  Profile,
   RecurrenceUnit,
   ShoppingItem,
   Store as ShopStore,
@@ -58,6 +60,12 @@ interface DataState extends Collections {
    * from "the Owe list was never created".
    */
   missingTables: TableName[]
+  /**
+   * Nano's own profile row, when the household has one. Kept out of
+   * `profiles` on purpose: that list is the household's people, and every
+   * picker, avatar row and "the other one" lookup reads it as such.
+   */
+  nano: (Profile & { role?: MemberRole; is_active?: boolean }) | null
 
   init: () => Promise<void>
   setAdapter: (adapter: DataAdapter) => Promise<void>
@@ -92,6 +100,7 @@ export const useData = create<DataState>((set, get) => ({
   connection: 'local',
   pendingCount: 0,
   missingTables: [],
+  nano: null,
 
   async init() {
     await get().refetchAll()
@@ -144,14 +153,23 @@ export const useData = create<DataState>((set, get) => ({
         `[data] backend is missing ${missing.join(', ')} — run the latest SQL migration`,
       )
     }
+    const collections = Object.fromEntries(entries) as unknown as Collections
+    const { people, nano } = splitAgents(collections.profiles)
     set({
-      ...(Object.fromEntries(entries) as unknown as Collections),
+      ...collections,
+      profiles: people,
+      nano,
       missingTables: missing,
     })
   },
 
   applyChange(event) {
     const table = event.table
+    if (table === 'profiles') {
+      const nano = get().nano
+      if (event.type === 'delete' && nano && event.id === nano.id) return set({ nano: null })
+      if (event.type !== 'delete' && isAgent(event.row)) return set({ nano: event.row as DataState['nano'] })
+    }
     const current = get()[table] as unknown[]
 
     if (event.type === 'delete') {
@@ -173,6 +191,14 @@ export const useData = create<DataState>((set, get) => ({
     set({ [table]: next } as unknown as Partial<DataState>)
   },
 }))
+
+const isAgent = (row: unknown) => (row as { role?: string } | null)?.role === 'agent'
+
+/** Nano's row out of the people list, into its own slot. */
+export function splitAgents(rows: Profile[]): { people: Profile[]; nano: DataState['nano'] } {
+  const agent = rows.find(isAgent) ?? null
+  return { people: agent ? rows.filter((r) => !isAgent(r)) : rows, nano: agent as DataState['nano'] }
+}
 
 // --- mutation helpers -------------------------------------------------------
 

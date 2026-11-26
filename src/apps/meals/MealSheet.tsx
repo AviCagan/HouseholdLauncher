@@ -15,6 +15,7 @@ import { DEFAULT_PEOPLE, NUTRITION_LABEL, batchesFor, lineText, shoppingList, sh
 import { cookable } from './shelf'
 import { useMealsUI } from './store'
 import { BigButton, Chip, EmojiPicker, Field, Headcount, KIND_META, OCCASION_META, POP, Stat, TextArea, TextInput, occasionEmoji } from './ui'
+import { useNanoItem } from '@/launcher/nano/context'
 
 /**
  * Build a meal: pick a shape, fill the slots, see what it adds up to.
@@ -51,6 +52,7 @@ export function MealSheet({
   open: boolean
   onClose: () => void
 }) {
+  useNanoItem(open && meal ? { table: 'meals', id: meal.id, title: meal.name } : null)
   const profileId = useProfile((s) => s.profileId)
   const dishes = useData((s) => s.dishes)
   const templates = useData((s) => s.meal_templates)
