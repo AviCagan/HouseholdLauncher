@@ -4,6 +4,7 @@ import { Icon, type IconName } from '@/components/primitives/Icon'
 import { Sheet } from '@/components/primitives/Sheet'
 import { useData } from '@/store/useData'
 import { useLauncher } from '@/store/useLauncher'
+import { useCurrentMember } from '@/store/useMember'
 import { fire } from '@/lib/haptics'
 import { useDesktop } from '@/lib/useDesktop'
 import { publish } from './actions'
@@ -171,6 +172,7 @@ function NewOrSetup({ cal }: { cal: Calendar }) {
   // granted the app can start one (027) — the database has the last word.
   const [starting, setStarting] = useState(cal.role === 'her')
   const [sharedPin, setSharedPin] = useState(false)
+  const myName = useCurrentMember()?.display_name ?? null
   useEffect(() => {
     let live = true
     void onSharedPin().then((yes) => live && setSharedPin(yes))
@@ -185,7 +187,10 @@ function NewOrSetup({ cal }: { cal: Calendar }) {
     <div className="flex flex-col gap-3 pt-4">
       <Card onClick={() => setStarting(true)}>
         <p className="text-[16px] font-semibold">{S.setup.title}</p>
-        <p className="mk-dim mt-1 text-[13.5px]">For the one who keeps the calendar: her dates, checks and reminders.</p>
+        <p className="mk-dim mt-1 text-[13.5px]">
+          For the one who keeps the calendar: her dates, checks and reminders.
+          {myName ? ` This makes it ${myName}’s calendar, so do it on her phone.` : ''}
+        </p>
       </Card>
       <Card>
         <p className="text-[16px] font-semibold">{S.him.waiting}</p>
