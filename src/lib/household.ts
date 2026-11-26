@@ -63,6 +63,14 @@ async function call<T>(
   }
 
   if (!response.ok) {
+    // The server no longer recognises this phone's sign-in (it was ended, or
+    // it ran out). Say what fixes it rather than "Sign in first".
+    if (response.status === 401 && action !== 'redeem') {
+      return {
+        ok: false,
+        error: "This phone's sign-in has ended. Sign out of this device below, then sign back in with your code.",
+      }
+    }
     return { ok: false, error: String(payload.error ?? `Something went wrong (${response.status})`) }
   }
   return { ok: true, data: payload as T }

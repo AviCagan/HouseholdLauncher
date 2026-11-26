@@ -247,14 +247,32 @@ async function provision(profileId: string, code: string): Promise<{ code: strin
     return { error: 'That code is already taken by someone else' }
   }
 
-  const password = randomPassword()
   let authUserId = profile.auth_user_id as string | null
   const email = `member-${profileId}@household.local`
 
+  /*
+    The sign-in password behind a code is internal: nobody types it, the
+    redeem action reads it from member_credentials. So a new code keeps it.
+    Rewriting it made Supabase end every session the member had, so changing
+    your own code signed you out of the phone you were changing it on, and
+    the next thing you tapped said "Sign in first".
+  */
+  const { data: existing } = await db
+    .from('member_credentials')
+    .select('auth_password')
+    .eq('profile_id', profileId)
+    .maybeSingle()
+  let password = (existing?.auth_password as string | undefined) ?? ''
+
   if (authUserId) {
-    const { error } = await db.auth.admin.updateUserById(authUserId, { password })
-    if (error) return { error: error.message }
+    if (!password) {
+      // An account with no stored password (half-made earlier): give it one.
+      password = randomPassword()
+      const { error } = await db.auth.admin.updateUserById(authUserId, { password })
+      if (error) return { error: error.message }
+    }
   } else {
+    password = randomPassword()
     const { data: created, error } = await db.auth.admin.createUser({
       email,
       password,
