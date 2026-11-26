@@ -343,7 +343,13 @@ async function recordWrongCode(key: string): Promise<void> {
 }
 
 /** Sign a member in and hand back their session, as every sign-in does. */
-async function sessionFor(profileId: string): Promise<Response> {
+interface Started {
+  session: { access_token: string; refresh_token: string }
+  profile: Record<string, unknown>
+}
+
+/** Sign a member in, or null when they have no account or are switched off. */
+async function startSession(profileId: string): Promise<Started | null | 'failed'> {
   const { data: cred } = await db
     .from('member_credentials')
     .select('auth_email, auth_password')
@@ -354,7 +360,7 @@ async function sessionFor(profileId: string): Promise<Response> {
     .select('id, slug, display_name, avatar_emoji, avatar_url, color_hex, role, is_active')
     .eq('id', profileId)
     .maybeSingle()
-  if (!cred || !profile || !profile.is_active) return json({ error: 'That code did not work' }, 401)
+  if (!cred || !profile || !profile.is_active) return null
 
   // Sign in on a throwaway anon client: `db` holds the service role, and a
   // service-role client does not mint user sessions.
@@ -363,15 +369,19 @@ async function sessionFor(profileId: string): Promise<Response> {
     email: cred.auth_email,
     password: cred.auth_password,
   })
-  if (error || !session.session) return json({ error: 'Could not start your session' }, 500)
-
-  return json({
-    session: {
-      access_token: session.session.access_token,
-      refresh_token: session.session.refresh_token,
-    },
+  if (error || !session.session) return 'failed'
+  return {
+    session: { access_token: session.session.access_token, refresh_token: session.session.refresh_token },
     profile,
-  })
+  }
+}
+
+/** Sign a member in and hand back their session, as every sign-in does. */
+async function sessionFor(profileId: string): Promise<Response> {
+  const started = await startSession(profileId)
+  if (started === null) return json({ error: 'That code did not work' }, 401)
+  if (started === 'failed') return json({ error: 'Could not start your session' }, 500)
+  return json(started)
 }
 
 /** Run the guess limit, or say how long to wait. Null means go ahead. */
@@ -785,11 +795,13 @@ async function closeLegacy(caller: Caller) {
  * once, not when its token runs out. Owners only, in person: the shared PIN
  * can't do it, and neither can Nano.
  */
-async function nanoCode(caller: Caller) {
-  if (!isOwner(caller) || caller.legacy || isNano(caller)) {
-    return json({ error: "Only Avi or Jackie, signed in with their own code, can make Nano's code" }, 403)
-  }
-  if (!PEPPER_SET) return json({ error: NO_PEPPER }, 400)
+/**
+ * Give Nano a new code, making her member row the first time. A new code
+ * replaces the old one completely: her sign-in account is deleted and made
+ * again, so every session the old code started stops working at once.
+ */
+async function issueNanoCode(): Promise<{ profile_id: string; code: string } | { error: string }> {
+  if (!PEPPER_SET) return { error: NO_PEPPER }
 
   let { data: nano } = await db
     .from('profiles')
@@ -808,18 +820,88 @@ async function nanoCode(caller: Caller) {
       role: 'agent',
       is_active: true,
     })
-    if (error) return json({ error: error.message }, 400)
+    if (error) return { error: error.message }
     nano = { id, auth_user_id: null }
   } else if (nano.auth_user_id) {
     const { error } = await db.auth.admin.deleteUser(nano.auth_user_id as string)
-    if (error) return json({ error: `Couldn't stop the old code: ${error.message}` }, 500)
+    if (error) return { error: `Couldn't stop the old code: ${error.message}` }
     await db.from('profiles').update({ auth_user_id: null }).eq('id', nano.id)
     await db.from('member_credentials').delete().eq('profile_id', nano.id)
   }
 
   const result = await provision(nano.id as string, randomCode('nano'))
-  if ('error' in result) return json({ error: result.error }, 400)
-  return json({ profile_id: nano.id, code: result.code })
+  if ('error' in result) return { error: result.error }
+  return { profile_id: nano.id as string, code: result.code }
+}
+
+/** Make Nano's code by hand. Kept for older copies of the app; pairing replaced it. */
+async function nanoCode(caller: Caller) {
+  if (!isOwner(caller) || caller.legacy || isNano(caller)) {
+    return json({ error: "Only Avi or Jackie, signed in as themselves, can make Nano's code" }, 403)
+  }
+  const issued = await issueNanoCode()
+  if ('error' in issued) return json({ error: issued.error }, 400)
+  return json(issued)
+}
+
+/*
+  Pairing Nano, like a TV.
+
+  An owner asks for a pairing code (Settings › People › Nano › Pair Nano):
+  6 digits, good once, for ten minutes. He texts it to Nano; her app catches
+  "pair launcher 123456" before her chat sees it and calls `pair` here,
+  which gives the brain her long code and a session. One pending code at a
+  time, kept as a peppered hash. Wrong codes count against the same guess
+  limit as every other sign-in. Pairing again replaces her code.
+*/
+const PAIRING_TTL_MS = 10 * 60 * 1000
+const pairingHash = (raw: string) => sha256(`${PEPPER}:pair:${normaliseCode(raw)}`)
+
+async function nanoPairStart(caller: Caller) {
+  if (!isOwner(caller) || caller.legacy || isNano(caller)) {
+    return json({ error: 'Only Avi or Jackie, signed in as themselves, can pair Nano' }, 403)
+  }
+  if (!PEPPER_SET) return json({ error: NO_PEPPER }, 400)
+  const code = randomCode('digits6')
+  const expires = new Date(Date.now() + PAIRING_TTL_MS).toISOString()
+  const { error } = await db.from('nano_pairing').upsert({
+    singleton: true,
+    code_hash: await pairingHash(code),
+    expires_at: expires,
+    created_by: caller.profile!.id,
+    created_at: new Date().toISOString(),
+  })
+  if (error) return json({ error: error.message }, 400)
+  return json({ code, expires_at: expires })
+}
+
+async function pairNano(req: Request, code: string) {
+  const denied = () => json({ error: 'That pairing code did not work. Ask for a new one in Settings › People › Nano.' }, 401)
+  if (!PEPPER_SET || !normaliseCode(code)) return denied()
+
+  const gate = await guessGate(req)
+  if ('refused' in gate) return gate.refused
+
+  const hash = await pairingHash(code)
+  const { data: row } = await db.from('nano_pairing').select('code_hash, expires_at').eq('singleton', true).maybeSingle()
+  if (!row || row.code_hash !== hash || new Date(row.expires_at).getTime() < Date.now()) {
+    await recordWrongCode(gate.key)
+    return denied()
+  }
+  // Used up before anything else happens, so two calls can't both pair.
+  const { data: spent } = await db.from('nano_pairing').delete().eq('singleton', true).eq('code_hash', hash).select('singleton')
+  if (!spent || spent.length === 0) return denied()
+  await db.from('sign_in_failures').delete().eq('client_key', gate.key)
+
+  const issued = await issueNanoCode()
+  if ('error' in issued) return json({ error: issued.error }, 500)
+  // No session while she's switched off: the code works once she's back on.
+  const started = await startSession(issued.profile_id)
+  return json({
+    code: issued.code,
+    profile_id: issued.profile_id,
+    session: started && started !== 'failed' ? started.session : null,
+  })
 }
 
 // --- entrypoint -------------------------------------------------------------
@@ -842,6 +924,7 @@ Deno.serve(async (req: Request) => {
   if (action === 'redeem') return redeem(req, String(body.code ?? ''))
   if (action === 'sign-in') return signIn(req, String(body.code ?? ''))
   if (action === 'pick') return pick(req, body)
+  if (action === 'pair') return pairNano(req, String(body.code ?? ''))
 
   const caller = await identify(req)
   if (!caller) return json({ error: 'Sign in first' }, 401)
@@ -868,6 +951,8 @@ Deno.serve(async (req: Request) => {
       return setAccess(acting, body)
     case 'nano-code':
       return nanoCode(caller)
+    case 'nano-pair-start':
+      return nanoPairStart(caller)
     case 'set-household-code':
       return setHouseholdCode(caller, body)
     case 'close-legacy':

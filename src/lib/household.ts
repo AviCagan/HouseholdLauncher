@@ -217,6 +217,13 @@ export const updateMember = (
  */
 export const makeNanoCode = () => call<{ profile_id: string; code: string }>('nano-code')
 
+/**
+ * Pair Nano: a 6-digit code, good once for ten minutes, that Avi texts to
+ * her ("pair launcher 123456"). Her app sends it to the `pair` action and
+ * gets her long code and a session. Pairing again replaces her old link.
+ */
+export const startNanoPairing = () => call<{ code: string; expires_at: string }>('nano-pair-start')
+
 export const setAppAccess = (profileId: string, appId: string, granted: boolean) =>
   call<{ ok: true }>('set-access', { profile_id: profileId, app_id: appId, granted })
 

@@ -89,15 +89,31 @@ jobs:
             FCM_SERVICE_ACCOUNT="$FCM_SERVICE_ACCOUNT"
 
       # The pepper mixed into every household-code hash. Without one the
-      # household function issues no codes and accepts none (it used to fall
-      # back to a public default), so this is a warning rather than a silent
-      # skip. Set it once and keep it: a different value later turns every
-      # code already issued into a wrong one.
-      - name: Push household code pepper
+      # household function issues no codes and accepts none.
+      #
+      # Set once and never changed: a different value later turns every code
+      # already issued into a wrong one. So this only ever fills a gap. If
+      # Supabase already has it, nothing happens, whatever GitHub holds. If
+      # it's missing, the repository secret is used when there is one, and
+      # otherwise a random 48-character value is made here. Never printed:
+      # it goes straight from a variable to the CLI.
+      - name: Make sure the household code pepper exists
         run: |
-          if [ -z "$HOUSEHOLD_CODE_PEPPER" ]; then
-            echo "::warning::HOUSEHOLD_CODE_PEPPER is not set as a repository secret. Unless it was set in Supabase directly, household codes are switched off until it is."
-          else
-            supabase secrets set --yes --project-ref "$PROJECT_REF" \
-              HOUSEHOLD_CODE_PEPPER="$HOUSEHOLD_CODE_PEPPER"
+          if ! names=$(supabase secrets list --project-ref "$PROJECT_REF" -o json 2>/dev/null); then
+            echo "::warning::Couldn't list the function secrets, so the household code pepper was left alone."
+            exit 0
           fi
+          if printf '%s' "$names" | grep -q '"HOUSEHOLD_CODE_PEPPER"'; then
+            echo "The household code pepper is set. Leaving it alone."
+            exit 0
+          fi
+          value="$HOUSEHOLD_CODE_PEPPER"
+          if [ -z "$value" ]; then
+            value=$(openssl rand -base64 64 | tr -dc 'A-Za-z0-9' | head -c 48)
+          fi
+          if [ "${#value}" -lt 16 ]; then
+            echo "::error::Couldn't make a household code pepper."
+            exit 1
+          fi
+          supabase secrets set --yes --project-ref "$PROJECT_REF" HOUSEHOLD_CODE_PEPPER="$value" > /dev/null
+          echo "Set a household code pepper (it was missing)."
