@@ -15,12 +15,15 @@ export function CodeField({
   code,
   onCode,
   label,
+  allowBlank = true,
 }: {
   format: CodeFormat
   onFormat: (next: CodeFormat) => void
   code: string
   onCode: (next: string) => void
   label: string
+  /** Whether leaving it blank makes one up. */
+  allowBlank?: boolean
 }) {
   const digits = format !== 'letters'
   const length = format === 'digits4' ? 4 : 6
@@ -48,7 +51,11 @@ export function CodeField({
         autoCorrect="off"
         autoComplete="off"
         spellCheck={false}
-        placeholder={digits ? `${length} digits, or blank to make one up` : '6 or more letters and numbers, or blank'}
+        placeholder={
+          digits
+            ? `${length} digits${allowBlank ? ', or blank to make one up' : ''}`
+            : `6 or more letters and numbers${allowBlank ? ', or blank' : ''}`
+        }
         aria-label={label}
         className={`w-full rounded-xl px-3 py-2.5 text-[15px] font-semibold outline-none placeholder:font-normal placeholder:tracking-normal placeholder:opacity-35 ${
           digits ? 'tracking-[0.3em]' : 'tracking-[0.1em]'

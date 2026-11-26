@@ -328,12 +328,12 @@ export function NanoAuthenticator() {
       <p className="pb-2.5 text-[13px] leading-snug" style={{ color: 'var(--text-dim)' }}>
         {setAt
           ? `Nano's approvals are checked against Avi's authenticator, set ${relativeTime(setAt)}. To swap it for another entry, enter the new setup key and a current code from the old one.`
-          : "Nano's bulk deletes and changes to people, access or codes need a code from Avi's authenticator. Enter the authenticator's setup key once to switch that on."}
+          : "Nano's bulk deletes and changes to people, access or codes need a code from Avi's authenticator. To switch that on, enter the setup key of Nano's entry in the authenticator once. It's the long secret the entry was made from (16 or more letters and numbers, often in groups of four), not the 6-digit code. Nano keeps it on the brain, so ask her to show it, or paste its otpauth:// link here."}
       </p>
       <input
         value={key}
-        onChange={(e) => setKey(e.target.value.toUpperCase())}
-        placeholder="Setup key"
+        onChange={(e) => setKey(setupKeyFrom(e.target.value))}
+        placeholder="Setup key, like JBSW Y3DP EHPK 3PXP"
         aria-label="Authenticator setup key"
         autoCapitalize="characters"
         autoCorrect="off"
@@ -341,6 +341,12 @@ export function NanoAuthenticator() {
         className={`${inputClass} mb-2.5 font-mono`}
         style={{ background: 'var(--surface-3)' }}
       />
+      {/^\d{6,8}$/.test(key.replace(/\s/g, '')) && (
+        <p className="pb-2.5 text-[12.5px] leading-snug" style={{ color: 'var(--danger)' }}>
+          That&rsquo;s one of the 6-digit codes. This needs the setup key instead: the long one the entry was made
+          from. Ask Nano to show it.
+        </p>
+      )}
       {setAt && (
         <input
           value={current}
@@ -378,4 +384,17 @@ export function NanoAuthenticator() {
       {note && <Notice text={note.text} tone={note.tone} />}
     </div>
   )
+}
+
+/**
+ * What was typed or pasted, as a setup key. Takes an otpauth:// link (what
+ * the QR code holds) as well as the key itself.
+ */
+export function setupKeyFrom(input: string): string {
+  const text = input.trim()
+  if (/^otpauth:\/\//i.test(text)) {
+    const match = text.match(/[?&]secret=([^&]+)/i)
+    return match ? decodeURIComponent(match[1]).toUpperCase() : ''
+  }
+  return text.toUpperCase()
 }

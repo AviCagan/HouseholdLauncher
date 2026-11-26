@@ -49,3 +49,12 @@ describe('stock counts', () => {
     expect(isLow({ on_hand: 0, low_at: null })).toBe(false)
   })
 })
+
+describe('the authenticator setup key', () => {
+  it('takes the key typed, or the secret out of an otpauth link', async () => {
+    const { setupKeyFrom } = await import('@/launcher/settings/NanoSettings')
+    expect(setupKeyFrom('jbsw y3dp ehpk 3pxp')).toBe('JBSW Y3DP EHPK 3PXP')
+    expect(setupKeyFrom('otpauth://totp/Nano:Avi?secret=jbswy3dpehpk3pxp&issuer=Nano')).toBe('JBSWY3DPEHPK3PXP')
+    expect(setupKeyFrom('otpauth://totp/Nano?issuer=Nano')).toBe('')
+  })
+})

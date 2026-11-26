@@ -157,7 +157,14 @@ function CodeCard({ profileId, owner }: { profileId: string; owner: boolean }) {
       }
     >
       <div className="px-3.5 py-3">
-        <CodeField format={format} onFormat={setFormat} code={code} onCode={setCode} label="New household code" />
+        <CodeField
+        format={format}
+        onFormat={setFormat}
+        code={code}
+        onCode={setCode}
+        label="New household code"
+        allowBlank={false}
+      />
         <div className="mt-2.5">
           <PrimaryButton onClick={() => void save()} busy={busy} disabled={!codeReady(format, code)}>
             {code.trim() ? 'Change my code' : 'Make one up for me'}
