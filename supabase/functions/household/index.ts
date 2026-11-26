@@ -756,7 +756,10 @@ async function closeLegacy(caller: Caller) {
   // account off would take the code with it.
   const { data: household } = await db.from('household_code').select('singleton').eq('singleton', true).maybeSingle()
   if (!household) {
-    return json({ error: 'Sign in once with the household code first, or set it under Household code above' }, 400)
+    return json(
+      { error: 'Sign out and back in once with the household code first, so it keeps working after this. Then try again.' },
+      400,
+    )
   }
 
   const { error } = await db

@@ -202,7 +202,7 @@ function SecurityCard({ legacyOpen }: { legacyOpen: boolean }) {
       label="Security"
       hint={
         legacyOpen
-          ? 'Until the old sign-in is off, an old copy of the app can still get in with the household code without saying who it is, and see everything.'
+          ? 'Until the old shared account is retired, an old copy of the app can still get in with the household code without saying who it is, and see everything.'
           : undefined
       }
     >
@@ -230,8 +230,8 @@ function LegacyOff() {
   return (
     <div className="px-3.5 py-3">
       <p className="pb-2.5 text-[13px] leading-snug" style={{ color: 'var(--text-dim)' }}>
-        Old copies of the app sign in with the household code without asking who you are. Turn that off once both
-        phones are updated. The household code keeps working, with &ldquo;Who&rsquo;s this?&rdquo;.
+        Your household code keeps working exactly as it does now. This only retires the old shared account that older
+        copies of the app used to get in without saying who you are.
       </p>
       <PrimaryButton
         danger
@@ -243,7 +243,7 @@ function LegacyOff() {
             setBusy(false)
             if (result.ok) {
               fire('success')
-              setNotice({ text: "The old sign-in is off. The household code still works, with Who's this?", tone: 'ok' })
+              setNotice({ text: 'Done. The household code still works the same way.', tone: 'ok' })
             } else {
               fire('error')
               setNotice({ text: result.error, tone: 'error' })
@@ -251,7 +251,7 @@ function LegacyOff() {
           })
         }}
       >
-        Turn off the old sign-in
+        Retire the old shared account
       </PrimaryButton>
       {notice && <Notice text={notice.text} tone={notice.tone} />}
     </div>
