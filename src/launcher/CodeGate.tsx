@@ -34,15 +34,14 @@ export function CodeGate({ onUnlocked }: { onUnlocked: (profileId: string | null
     setMessage(null)
 
     const result = await signInWithCode(entered)
-    if (result.ok && result.data.kind === 'member') {
+    if (result.ok) {
       fire('success')
-      onUnlocked(result.data.profile.id)
-      return
-    }
-    if (result.ok && result.data.kind === 'pick') {
-      fire('success')
-      setState('idle')
-      setPeople(result.data.people)
+      if (result.data.kind === 'member') {
+        onUnlocked(result.data.profile.id)
+      } else {
+        setState('idle')
+        setPeople(result.data.people)
+      }
       return
     }
 
@@ -60,7 +59,7 @@ export function CodeGate({ onUnlocked }: { onUnlocked: (profileId: string | null
 
     fire('error')
     setState('error')
-    setMessage(!result.ok ? result.error : "That code did not work")
+    setMessage(result.error)
     setCode('')
     inputRef.current?.focus()
   }
