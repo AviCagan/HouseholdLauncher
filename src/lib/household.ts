@@ -65,7 +65,7 @@ async function call<T>(
   if (!response.ok) {
     // The server no longer recognises this phone's sign-in (it was ended, or
     // it ran out). Say what fixes it rather than "Sign in first".
-    if (response.status === 401 && action !== 'redeem') {
+    if (response.status === 401 && !['redeem', 'sign-in', 'pick'].includes(action)) {
       return {
         ok: false,
         error: "This phone's sign-in has ended. Sign out of this device below, then sign back in with your code.",
@@ -91,23 +91,66 @@ export interface RedeemedSession {
  * and starts the refresh timer, and skipping it means the app appears signed
  * in until the first reload.
  */
+async function installSession(session: RedeemedSession['session']): Promise<string | null> {
+  const sb = supabase()
+  if (!sb) return 'This device is not connected to the household yet'
+  const { error } = await sb.auth.setSession({
+    access_token: session.access_token,
+    refresh_token: session.refresh_token,
+  })
+  return error ? error.message : null
+}
+
 export async function redeemCode(
   code: string,
 ): Promise<HouseholdResult<RedeemedSession['profile']>> {
   const result = await call<RedeemedSession>('redeem', { code })
   if (!result.ok) return result
-
-  const sb = supabase()
-  if (!sb) return { ok: false, error: 'This device is not connected to the household yet' }
-
-  const { error } = await sb.auth.setSession({
-    access_token: result.data.session.access_token,
-    refresh_token: result.data.session.refresh_token,
-  })
-  if (error) return { ok: false, error: error.message }
-
+  const problem = await installSession(result.data.session)
+  if (problem) return { ok: false, error: problem }
   return { ok: true, data: result.data.profile }
 }
+
+/** Someone the household code can sign in as. */
+export interface Pickable {
+  id: string
+  display_name: string
+  avatar_emoji: string
+  avatar_url: string | null
+  color_hex: string
+}
+
+export type SignInResult =
+  | { kind: 'member'; profile: RedeemedSession['profile'] }
+  | { kind: 'pick'; people: Pickable[] }
+
+/**
+ * What the code screen sends. The household code answers with who it can
+ * sign in as (then `pickPerson`); a member's own code signs them straight in.
+ */
+export async function signInWithCode(code: string): Promise<HouseholdResult<SignInResult>> {
+  const result = await call<RedeemedSession | { pick: Pickable[] }>('sign-in', { code })
+  if (!result.ok) return result
+  if ('pick' in result.data) return { ok: true, data: { kind: 'pick', people: result.data.pick } }
+  const problem = await installSession(result.data.session)
+  if (problem) return { ok: false, error: problem }
+  return { ok: true, data: { kind: 'member', profile: result.data.profile } }
+}
+
+/** "Who's this?": the household code and the name tapped. The phone is them from then on. */
+export async function pickPerson(
+  code: string,
+  profileId: string,
+): Promise<HouseholdResult<RedeemedSession['profile']>> {
+  const result = await call<RedeemedSession>('pick', { code, profile_id: profileId })
+  if (!result.ok) return result
+  const problem = await installSession(result.data.session)
+  if (problem) return { ok: false, error: problem }
+  return { ok: true, data: result.data.profile }
+}
+
+/** Change the shared household code. Avi or Jackie, signed in as themselves. */
+export const setHouseholdCode = (code: string) => call<{ ok: true }>('set-household-code', { code })
 
 /** How sign-in is set up on the server. Only owners are told. */
 export interface SignInSecurity {

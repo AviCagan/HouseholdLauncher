@@ -154,11 +154,10 @@ function NeedsOwnCode() {
   return (
     <div className="flex flex-col gap-3 pt-4">
       <Card>
-        <p className="text-[16px] font-semibold">Sign in with your own code</p>
+        <p className="text-[16px] font-semibold">Sign in as yourself</p>
         <p className="mk-dim mt-1 text-[13.5px]">
-          This calendar is kept to the person it belongs to, so it only works when this phone is signed in with your
-          own household code, not the shared PIN. Avi can set codes in Settings › People. Then sign out in Settings ›
-          General and sign back in with yours.
+          This calendar is kept to the person it belongs to, so this phone has to be signed in as you. Sign out in
+          Settings › General, enter the household code again, and tap your name.
         </p>
       </Card>
     </div>

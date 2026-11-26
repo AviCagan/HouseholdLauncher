@@ -4,7 +4,15 @@ import { AvatarPicker } from './AvatarPicker'
 import { AppearanceSettings } from './AppearanceSettings'
 import { useCurrentMember, useIsOwner } from '@/store/useMember'
 import { useData } from '@/store/useData'
-import { closeLegacyAuth, setMemberCode, updateMember, whoAmI, type CodeFormat, type SignInSecurity } from '@/lib/household'
+import {
+  closeLegacyAuth,
+  setHouseholdCode,
+  setMemberCode,
+  updateMember,
+  whoAmI,
+  type CodeFormat,
+  type SignInSecurity,
+} from '@/lib/household'
 import { signOut } from '@/lib/supabase'
 import { useProfile } from '@/store/useProfile'
 import { isConfigured } from '@/lib/env'
@@ -74,7 +82,7 @@ export function GeneralSettings() {
         </SettingsGroup>
       )}
 
-      {member && isConfigured() && <CodeCard profileId={member.id} />}
+      {member && isConfigured() && <CodeCard profileId={member.id} owner={member.role === 'owner'} />}
 
       {/* Not a link out to an app's settings any more. Theme, accent, text
           size and vibration are applied to the document root and are felt in
@@ -117,7 +125,7 @@ export function GeneralSettings() {
  * it reaches the database, so nothing can display it — which is the point. A
  * forgotten code is replaced, not recovered.
  */
-function CodeCard({ profileId }: { profileId: string }) {
+function CodeCard({ profileId, owner }: { profileId: string; owner: boolean }) {
   const [format, setFormat] = useState<CodeFormat>('digits4')
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
@@ -141,8 +149,12 @@ function CodeCard({ profileId }: { profileId: string }) {
 
   return (
     <SettingsGroup
-      label="Your household code"
-      hint="4 digits, 6 digits, or 6 or more letters and numbers. Leave it blank to have one made up. After five wrong tries a phone has to wait, so a short code can't just be guessed."
+      label={owner ? 'Your own code' : 'Your code'}
+      hint={
+        owner
+          ? 'Optional. The household code and tapping your name get you in. Your own code signs you straight in instead. 4 digits, 6 digits, or 6 or more letters and numbers.'
+          : '4 digits, 6 digits, or 6 or more letters and numbers. Leave it blank to have one made up.'
+      }
     >
       <div className="px-3.5 py-3">
         <CodeField format={format} onFormat={setFormat} code={code} onCode={setCode} label="New household code" />
@@ -190,10 +202,11 @@ function SecurityCard({ legacyOpen }: { legacyOpen: boolean }) {
       label="Security"
       hint={
         legacyOpen
-          ? 'Until the old PIN is off, anyone with those four digits can still see everything, whatever their app access says.'
+          ? 'Until the old sign-in is off, an old copy of the app can still get in with the household code without saying who it is, and see everything.'
           : undefined
       }
     >
+      {me && <HouseholdCodeCard />}
       {/* Only with your own code: the shared PIN can't set the key Nano's
           approvals are checked against, and the database refuses it too. */}
       {me && <NanoAuthenticator />}
@@ -217,8 +230,8 @@ function LegacyOff() {
   return (
     <div className="px-3.5 py-3">
       <p className="pb-2.5 text-[13px] leading-snug" style={{ color: 'var(--text-dim)' }}>
-        The old shared PIN still works. Turn it off once you and Jackie have both
-        set your own codes.
+        Old copies of the app sign in with the household code without asking who you are. Turn that off once both
+        phones are updated. The household code keeps working, with &ldquo;Who&rsquo;s this?&rdquo;.
       </p>
       <PrimaryButton
         danger
@@ -230,7 +243,7 @@ function LegacyOff() {
             setBusy(false)
             if (result.ok) {
               fire('success')
-              setNotice({ text: 'The old PIN no longer works.', tone: 'ok' })
+              setNotice({ text: "The old sign-in is off. The household code still works, with Who's this?", tone: 'ok' })
             } else {
               fire('error')
               setNotice({ text: result.error, tone: 'error' })
@@ -238,8 +251,56 @@ function LegacyOff() {
           })
         }}
       >
-        Stop accepting the old PIN
+        Turn off the old sign-in
       </PrimaryButton>
+      {notice && <Notice text={notice.text} tone={notice.tone} />}
+    </div>
+  )
+}
+
+/**
+ * The shared household code: entered on the code screen, then "who's this?".
+ * It starts as the old shared PIN. Avi or Jackie can change it here.
+ */
+function HouseholdCodeCard() {
+  const [format, setFormat] = useState<CodeFormat>('digits4')
+  const [code, setCode] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState<{ text: string; tone: 'ok' | 'error' } | null>(null)
+
+  return (
+    <div className="px-3.5 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
+      <p className="pb-2.5 text-[13px] leading-snug" style={{ color: 'var(--text-dim)' }}>
+        <span className="font-semibold" style={{ color: 'var(--text)' }}>
+          Household code.
+        </span>{' '}
+        What you and Jackie type to get in, before tapping your name. It starts as the old shared PIN. Phones already
+        signed in stay signed in when it changes.
+      </p>
+      <CodeField format={format} onFormat={setFormat} code={code} onCode={setCode} label="New household code" />
+      <div className="mt-2.5">
+        <PrimaryButton
+          busy={busy}
+          disabled={!code || !codeReady(format, code)}
+          onClick={() => {
+            setBusy(true)
+            setNotice(null)
+            void setHouseholdCode(code.trim()).then((result) => {
+              setBusy(false)
+              if (result.ok) {
+                fire('success')
+                setNotice({ text: `The household code is now ${code.trim()}`, tone: 'ok' })
+                setCode('')
+              } else {
+                fire('error')
+                setNotice({ text: result.error, tone: 'error' })
+              }
+            })
+          }}
+        >
+          Change the household code
+        </PrimaryButton>
+      </div>
       {notice && <Notice text={notice.text} tone={notice.tone} />}
     </div>
   )

@@ -52,6 +52,11 @@ const PEPPER = Deno.env.get('HOUSEHOLD_CODE_PEPPER') ?? ''
 const PEPPER_SET = PEPPER.length >= 16
 const NO_PEPPER = 'Codes are switched off until the code secret is set on the server (HOUSEHOLD_CODE_PEPPER)'
 
+// The old shared account. Its password was the household PIN, so it is how
+// the household code is recognised the first time (see householdCodeMatches).
+const LEGACY_EMAIL = (Deno.env.get('HOUSEHOLD_EMAIL') ?? 'household@things.local').toLowerCase()
+const legacyPassword = (pin: string) => `things-household-${pin.trim()}`
+
 const db = createClient(SUPABASE_URL, SERVICE_ROLE, {
   auth: { persistSession: false },
 })
@@ -246,6 +251,10 @@ async function provision(profileId: string, code: string): Promise<{ code: strin
   if (clash && clash.profile_id !== profileId) {
     return { error: 'That code is already taken by someone else' }
   }
+  const { data: household } = await db.from('household_code').select('code_hash').eq('singleton', true).maybeSingle()
+  if (household && household.code_hash === (await sha256(`${PEPPER}:household:${normaliseCode(code)}`))) {
+    return { error: "That's the household code. Pick a different one." }
+  }
 
   let authUserId = profile.auth_user_id as string | null
   const email = `member-${profileId}@household.local`
@@ -333,46 +342,19 @@ async function recordWrongCode(key: string): Promise<void> {
   }
 }
 
-async function redeem(req: Request, code: string) {
-  if (!code?.trim()) return json({ error: 'Enter your household code' }, 400)
-
-  // One message for "no such code", "that member is switched off" and "codes
-  // aren't on yet", so the response cannot be used to enumerate which codes
-  // are real. The owners see the last of those in Settings instead.
-  const denied = () => json({ error: 'That code did not work' }, 401)
-  if (!PEPPER_SET) return denied()
-
-  const key = await guesserKey(req)
-  const wait = await guessesWait(key)
-  if (wait === null) return json({ error: 'Signing in is unavailable right now. Try again in a minute.' }, 503)
-  if (wait > 0) {
-    return new Response(JSON.stringify({ error: waitMessage(wait), retry_after: wait }), {
-      status: 429,
-      headers: { ...CORS, 'Content-Type': 'application/json', 'Retry-After': String(wait) },
-    })
-  }
-
+/** Sign a member in and hand back their session, as every sign-in does. */
+async function sessionFor(profileId: string): Promise<Response> {
   const { data: cred } = await db
     .from('member_credentials')
-    .select('profile_id, auth_email, auth_password')
-    .eq('code_hash', await hashCode(code))
+    .select('auth_email, auth_password')
+    .eq('profile_id', profileId)
     .maybeSingle()
-
-  const { data: profile } = cred
-    ? await db
-        .from('profiles')
-        .select('id, slug, display_name, avatar_emoji, avatar_url, color_hex, role, is_active')
-        .eq('id', cred.profile_id)
-        .maybeSingle()
-    : { data: null }
-  if (!cred || !profile || !profile.is_active) {
-    await recordWrongCode(key)
-    return denied()
-  }
-
-  // The right code clears this device's count, so a few typos earlier in
-  // the quarter-hour don't count against the next phone signed in from it.
-  await db.from('sign_in_failures').delete().eq('client_key', key)
+  const { data: profile } = await db
+    .from('profiles')
+    .select('id, slug, display_name, avatar_emoji, avatar_url, color_hex, role, is_active')
+    .eq('id', profileId)
+    .maybeSingle()
+  if (!cred || !profile || !profile.is_active) return json({ error: 'That code did not work' }, 401)
 
   // Sign in on a throwaway anon client: `db` holds the service role, and a
   // service-role client does not mint user sessions.
@@ -390,6 +372,182 @@ async function redeem(req: Request, code: string) {
     },
     profile,
   })
+}
+
+/** Run the guess limit, or say how long to wait. Null means go ahead. */
+async function guessGate(req: Request): Promise<{ key: string } | { refused: Response }> {
+  const key = await guesserKey(req)
+  const wait = await guessesWait(key)
+  if (wait === null) {
+    return { refused: json({ error: 'Signing in is unavailable right now. Try again in a minute.' }, 503) }
+  }
+  if (wait > 0) {
+    return {
+      refused: new Response(JSON.stringify({ error: waitMessage(wait), retry_after: wait }), {
+        status: 429,
+        headers: { ...CORS, 'Content-Type': 'application/json', 'Retry-After': String(wait) },
+      }),
+    }
+  }
+  return { key }
+}
+
+const householdHash = (raw: string) => sha256(`${PEPPER}:household:${normaliseCode(raw)}`)
+
+/**
+ * Is this the household code?
+ *
+ * Once set, it is a peppered hash in `household_code`. Until then the
+ * household code is the old shared PIN, which only the old shared account
+ * knows (its password), so it is checked against that account once and its
+ * hash kept from then on.
+ */
+async function householdCodeMatches(raw: string): Promise<boolean> {
+  if (!normaliseCode(raw)) return false
+  const { data: row } = await db.from('household_code').select('code_hash').eq('singleton', true).maybeSingle()
+  if (row) return row.code_hash === (await householdHash(raw))
+
+  const probe = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false } })
+  const { data, error } = await probe.auth.signInWithPassword({ email: LEGACY_EMAIL, password: legacyPassword(raw) })
+  if (error || !data.session) return false
+  // The check needed a session; don't leave one lying around.
+  // `local`: only this check's session. The default would sign out every
+  // phone still on the old shared account.
+  await probe.auth.signOut({ scope: 'local' }).catch(() => {})
+  await db.from('household_code').upsert({ singleton: true, code_hash: await householdHash(raw) })
+  return true
+}
+
+/** The people the household code can sign in as: Avi and Jackie. */
+async function pickable() {
+  const { data } = await db
+    .from('profiles')
+    .select('id, display_name, avatar_emoji, avatar_url, color_hex')
+    .eq('role', 'owner')
+    .eq('is_active', true)
+    .order('display_name')
+  return data ?? []
+}
+
+/**
+ * A member's own code: their session. Kept for Nano and for older copies of
+ * the app; the app itself now signs in with `sign-in`.
+ */
+async function redeem(req: Request, code: string) {
+  if (!code?.trim()) return json({ error: 'Enter your household code' }, 400)
+
+  // One message for "no such code", "that member is switched off" and "codes
+  // aren't on yet", so the response cannot be used to enumerate which codes
+  // are real. The owners see the last of those in Settings instead.
+  const denied = () => json({ error: 'That code did not work' }, 401)
+  if (!PEPPER_SET) return denied()
+
+  const gate = await guessGate(req)
+  if ('refused' in gate) return gate.refused
+
+  const { data: cred } = await db
+    .from('member_credentials')
+    .select('profile_id')
+    .eq('code_hash', await hashCode(code))
+    .maybeSingle()
+  const { data: profile } = cred
+    ? await db.from('profiles').select('is_active').eq('id', cred.profile_id).maybeSingle()
+    : { data: null }
+  if (!cred || !profile?.is_active) {
+    await recordWrongCode(gate.key)
+    return denied()
+  }
+
+  // The right code clears this device's count, so a few typos earlier in
+  // the quarter-hour don't count against the next phone signed in from it.
+  await db.from('sign_in_failures').delete().eq('client_key', gate.key)
+  return sessionFor(cred.profile_id as string)
+}
+
+/**
+ * What the app's code screen sends: either the household code, answered
+ * with who it can sign in as (the app then asks "who's this?" and calls
+ * `pick`), or a member's own code, answered with their session.
+ *
+ * The household code is checked first, so if someone's own code ever equals
+ * it, the household meaning wins and nobody is signed in as somebody else.
+ */
+async function signIn(req: Request, code: string) {
+  if (!code?.trim()) return json({ error: 'Enter your household code' }, 400)
+  const denied = () => json({ error: 'That code did not work' }, 401)
+  if (!PEPPER_SET) return denied()
+
+  const gate = await guessGate(req)
+  if ('refused' in gate) return gate.refused
+
+  if (await householdCodeMatches(code)) {
+    await db.from('sign_in_failures').delete().eq('client_key', gate.key)
+    return json({ pick: await pickable() })
+  }
+
+  const { data: cred } = await db
+    .from('member_credentials')
+    .select('profile_id')
+    .eq('code_hash', await hashCode(code))
+    .maybeSingle()
+  const { data: profile } = cred
+    ? await db.from('profiles').select('role, is_active').eq('id', cred.profile_id).maybeSingle()
+    : { data: null }
+  // Nano signs in with `redeem` on the brain, never from the code screen.
+  if (!cred || !profile?.is_active || profile.role === 'agent') {
+    await recordWrongCode(gate.key)
+    return denied()
+  }
+  await db.from('sign_in_failures').delete().eq('client_key', gate.key)
+  return sessionFor(cred.profile_id as string)
+}
+
+/**
+ * "Who's this?": the household code again, and the name tapped. Gives that
+ * person's own session, so the phone is them from then on. Only Avi and
+ * Jackie are on the list.
+ */
+async function pick(req: Request, body: Record<string, unknown>) {
+  const code = String(body.code ?? '')
+  const target = String(body.profile_id ?? '')
+  if (!PEPPER_SET) return json({ error: 'That code did not work' }, 401)
+
+  const gate = await guessGate(req)
+  if ('refused' in gate) return gate.refused
+  if (!(await householdCodeMatches(code))) {
+    await recordWrongCode(gate.key)
+    return json({ error: 'That code did not work' }, 401)
+  }
+  if (!(await pickable()).some((p: { id: string }) => p.id === target)) {
+    return json({ error: 'Pick Avi or Jackie' }, 400)
+  }
+
+  // Their sign-in account, made the first time they're picked. The code it
+  // gets is never shown: the household code is how they get in.
+  const { data: cred } = await db.from('member_credentials').select('profile_id').eq('profile_id', target).maybeSingle()
+  if (!cred) {
+    const made = await provision(target, randomCode('letters'))
+    if ('error' in made) return json({ error: made.error }, 400)
+  }
+  return sessionFor(target)
+}
+
+/** Change the household code. Avi or Jackie, signed in as themselves. */
+async function setHouseholdCode(caller: Caller, body: Record<string, unknown>) {
+  if (!isOwner(caller) || caller.legacy) return json({ error: 'Only Avi or Jackie, signed in as themselves' }, 403)
+  if (!PEPPER_SET) return json({ error: NO_PEPPER }, 400)
+  const code = String(body.code ?? '')
+  const problem = codeProblem(code, 'member')
+  if (problem) return json({ error: problem }, 400)
+  // Not anyone's own code too: the code screen would read it as the
+  // household code, and that person would have to pick their name.
+  const { data: clash } = await db.from('member_credentials').select('profile_id').eq('code_hash', await hashCode(code)).maybeSingle()
+  if (clash) return json({ error: "That's already someone's own code. Pick another." }, 400)
+  const { error } = await db
+    .from('household_code')
+    .upsert({ singleton: true, code_hash: await householdHash(code), set_at: new Date().toISOString(), set_by: caller.profile!.id })
+  if (error) return json({ error: error.message }, 400)
+  return json({ ok: true })
 }
 
 async function createMember(caller: Caller, body: Record<string, unknown>) {
@@ -594,11 +752,25 @@ async function closeLegacy(caller: Caller) {
     return json({ error: 'Set a household code for yourself first' }, 400)
   }
 
+  // The household code must already be known here, or turning the old
+  // account off would take the code with it.
+  const { data: household } = await db.from('household_code').select('singleton').eq('singleton', true).maybeSingle()
+  if (!household) {
+    return json({ error: 'Sign in once with the household code first, or set it under Household code above' }, 400)
+  }
+
   const { error } = await db
     .from('household_settings')
     .update({ legacy_auth_enabled: false })
     .eq('singleton', true)
   if (error) return json({ error: error.message }, 400)
+
+  // Scramble the old account's password: the household code can then only
+  // be tried here, under the guess limit, never against the account itself.
+  // This also ends any phone still signed in to it.
+  const { data: users } = await db.auth.admin.listUsers({ perPage: 1000 })
+  const legacy = users?.users.find((u) => u.email?.toLowerCase() === LEGACY_EMAIL)
+  if (legacy) await db.auth.admin.updateUserById(legacy.id, { password: randomPassword() })
   return json({ ok: true })
 }
 
@@ -665,6 +837,8 @@ Deno.serve(async (req: Request) => {
   // The one action that runs without a session, because it is the one that
   // hands sessions out.
   if (action === 'redeem') return redeem(req, String(body.code ?? ''))
+  if (action === 'sign-in') return signIn(req, String(body.code ?? ''))
+  if (action === 'pick') return pick(req, body)
 
   const caller = await identify(req)
   if (!caller) return json({ error: 'Sign in first' }, 401)
@@ -691,6 +865,8 @@ Deno.serve(async (req: Request) => {
       return setAccess(acting, body)
     case 'nano-code':
       return nanoCode(caller)
+    case 'set-household-code':
+      return setHouseholdCode(caller, body)
     case 'close-legacy':
       return closeLegacy(caller)
     case 'whoami':
